@@ -17,6 +17,7 @@ import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { loadKaizenLogo, drawReportHeader, addStandardFooters } from '@/lib/pdf/reportKit';
 
 type SalesMirrorForm = {
+  diretoria: string;
   constInvest: string;
   empreendimento: string;
   cliente1: string;
@@ -43,7 +44,7 @@ type SalesMirrorForm = {
 };
 
 const EMPTY_SALES_MIRROR: SalesMirrorForm = {
-  constInvest: '', empreendimento: '', cliente1: '', cpf1: '', cliente2: '', cpf2: '', vgv: '', origem: '', unidade: '', gerente: '', bloco: '', coordenador: '', corretor: '', dataAto: '', valorAto: '', pagoPelaKaizen: '', cca: '', dataContrato: '', assGerente: '', assDiretorVenda: '', assSetorAvulso: '', assDiretorFinanceiro: '', assDiretorComercial: '',
+  diretoria: '', constInvest: '', empreendimento: '', cliente1: '', cpf1: '', cliente2: '', cpf2: '', vgv: '', origem: '', unidade: '', gerente: '', bloco: '', coordenador: '', corretor: '', dataAto: '', valorAto: '', pagoPelaKaizen: '', cca: '', dataContrato: '', assGerente: '', assDiretorVenda: '', assSetorAvulso: '', assDiretorFinanceiro: '', assDiretorComercial: '',
 };
 
 const formatCurrencyInput = (raw: string) => {
@@ -445,6 +446,7 @@ export default function ClientDetails() {
         return normalized ? normalized : fallback;
       };
       setSalesMirrorForm({
+        diretoria: pick(data.diretoria, defaults.diretoria),
         constInvest: pick(data.const_invest, defaults.constInvest),
         empreendimento: pick(data.empreendimento, defaults.empreendimento),
         cliente1: pick(data.cliente_1, defaults.cliente1),
@@ -479,6 +481,7 @@ export default function ClientDetails() {
     setSalesMirrorSaving(true);
     const { error } = await supabase.from('sales_mirrors').upsert({
       client_id: id,
+      diretoria: salesMirrorForm.diretoria,
       const_invest: salesMirrorForm.constInvest,
       empreendimento: salesMirrorForm.empreendimento,
       cliente_1: salesMirrorForm.cliente1,
@@ -573,6 +576,7 @@ export default function ClientDetails() {
     drawCell({ label: 'BLOCO', value: salesMirrorForm.bloco, x: leftX, y, w: colW });
     drawCell({ label: 'COORDENADOR', value: salesMirrorForm.coordenador, x: rightX, y, w: colW });
     y -= 43;
+    drawCell({ label: 'DIRETORIA', value: salesMirrorForm.diretoria, x: leftX, y, w: colW });
     drawCell({ label: 'CORRETOR', value: salesMirrorForm.corretor, x: rightX, y, w: colW });
 
     y -= 50;
@@ -1154,6 +1158,23 @@ export default function ClientDetails() {
               <div className="rounded-xl border border-surface-300 bg-card-bg p-0 overflow-hidden">
                 <div className="px-4 py-3 border-b border-surface-200 bg-surface-50">
                   <p className="text-sm font-semibold text-text-primary">Processo de venda</p>
+                </div>
+                <div className="p-3 border-b border-surface-200">
+                  <label className="text-[10px] text-text-secondary uppercase tracking-[0.08em] block mb-1">DIRETORIA</label>
+                  <select
+                    value={salesMirrorForm.diretoria || ''}
+                    onChange={(e) => setSalesMirrorForm((prev) => ({ ...prev, diretoria: e.target.value }))}
+                    className="w-full h-10 px-3 bg-surface-50 rounded-md border border-surface-200 focus:ring-2 focus:ring-gold-400/70 focus:border-gold-300 text-sm text-text-primary"
+                  >
+                    <option value="">Selecione a diretoria</option>
+                    {directorates.map((d) => (
+                      <option key={d.id} value={d.name}>{d.name}</option>
+                    ))}
+                    {/* Mantém o valor salvo mesmo que a diretoria não exista mais na lista */}
+                    {salesMirrorForm.diretoria && !directorates.some((d) => d.name === salesMirrorForm.diretoria) && (
+                      <option value={salesMirrorForm.diretoria}>{salesMirrorForm.diretoria}</option>
+                    )}
+                  </select>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2">
                   {[['CONST./INVEST.', 'constInvest'], ['EMPREENDIMENTO', 'empreendimento'], ['CLIENTE 1', 'cliente1'], ['CPF 1', 'cpf1'], ['CLIENTE 2', 'cliente2'], ['CPF 2', 'cpf2'], ['VGV', 'vgv'], ['ORIGEM', 'origem'], ['UNIDADE', 'unidade'], ['GERENTE', 'gerente'], ['BLOCO', 'bloco'], ['COORDENADOR', 'coordenador']].map(([label, key]) => (

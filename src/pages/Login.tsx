@@ -571,16 +571,25 @@ export default function Login() {
                       const captchaTokenValue = getCaptchaTokenIfRequired();
 
                       setLoading(true);
-                      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                        redirectTo: `${window.location.origin}/reset-password`,
-                        ...(captchaTokenValue ? { captchaToken: captchaTokenValue } : {}),
+                      // Reset entregue pela edge function via Resend (e-mail nativo do
+                      // Supabase Auth não estava entregando os links de recuperação).
+                      const { data, error } = await supabase.functions.invoke('send-password-reset', {
+                        body: { email, captchaToken: captchaTokenValue },
                       });
-                      if (error) {
-                        alert('Erro ao enviar e-mail: ' + error.message);
-                      } else {
-                        alert('E-mail de redefinição de senha enviado! Verifique sua caixa de entrada.');
-                      }
                       resetCaptcha();
+                      if (error) {
+                        let message = 'Não foi possível enviar o e-mail agora. Tente novamente em instantes.';
+                        try {
+                          const response = (error as any).context;
+                          if (response) {
+                            const errData = await response.json().catch(() => ({}));
+                            message = errData?.message || message;
+                          }
+                        } catch { /* mantém mensagem genérica */ }
+                        alert(message);
+                      } else {
+                        alert(data?.message || 'Se o e-mail estiver cadastrado, você receberá o link de redefinição em instantes.');
+                      }
                     } catch (error: any) {
                       alert(error?.message || 'Falha ao iniciar redefinicao de senha.');
                       resetCaptcha();
