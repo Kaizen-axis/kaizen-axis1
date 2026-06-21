@@ -86,6 +86,37 @@ Deno.serve(async (req: Request) => {
     { auth: { persistSession: false } },
   );
 
+  // ── Config de check-in (fonte de verdade no banco; fallback aos defaults) ──
+  const cfg = {
+    startMinutes: 8 * 60,            // 08:00
+    endMinutes:   13 * 60 + 30,      // 13:30
+    officeLat:    OFFICE_LAT,
+    officeLng:    OFFICE_LNG,
+    maxRadius:    MAX_RADIUS,
+    maxAccuracy:  MAX_ACCURACY,
+  };
+  try {
+    const { data: settings } = await supabase
+      .from('checkin_settings')
+      .select('start_minutes, end_minutes, office_latitude, office_longitude, max_radius_meters, max_accuracy_meters')
+      .eq('id', 1)
+      .maybeSingle();
+    if (settings) {
+      cfg.startMinutes = settings.start_minutes ?? cfg.startMinutes;
+      cfg.endMinutes   = settings.end_minutes ?? cfg.endMinutes;
+      cfg.officeLat    = settings.office_latitude ?? cfg.officeLat;
+      cfg.officeLng    = settings.office_longitude ?? cfg.officeLng;
+      cfg.maxRadius    = settings.max_radius_meters ?? cfg.maxRadius;
+      cfg.maxAccuracy  = settings.max_accuracy_meters ?? cfg.maxAccuracy;
+    }
+  } catch (e) {
+    console.warn('[checkin-geo] falha ao ler checkin_settings, usando defaults:', (e as any)?.message);
+  }
+
+  // Formata minutos (desde 00:00 BRT) em HH:MM para mensagens.
+  const fmtHHMM = (min: number) =>
+    `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+
   // ── 2. Rate limit: 3 tentativas por minuto por usuário ───────────────────
   const checkinWindowStart = new Date(
     Math.floor(Date.now() / 60_000) * 60_000,
@@ -121,7 +152,7 @@ Deno.serve(async (req: Request) => {
   }
 
   // ── 4. Validar precisão do GPS ────────────────────────────────────────────
-  if (typeof accuracy === 'number' && accuracy > MAX_ACCURACY) {
+  if (typeof accuracy === 'number' && accuracy > cfg.maxAccuracy) {
     return json({
       error:    'gps_impreciso',
       message:  `GPS impreciso (±${Math.round(accuracy)}m). Vá para um local aberto e tente novamente.`,
@@ -151,18 +182,22 @@ Deno.serve(async (req: Request) => {
     }, 403);
   }
 
-  // ── 6. Janela de horário: 08:00–13:30 BRT ────────────────────────────────
+  // ── 6. Janela de horário (configurável via checkin_settings) ─────────────
   const brtMinutes = getBRTMinutes();
-  if (brtMinutes < (8 * 60) || brtMinutes > (13 * 60 + 30)) {
-    return json({ error: 'fora_do_horario', message: 'Check-in permitido apenas entre 08:00 e 13:30.', brt_minutes: brtMinutes }, 403);
+  if (brtMinutes < cfg.startMinutes || brtMinutes > cfg.endMinutes) {
+    return json({
+      error: 'fora_do_horario',
+      message: `Check-in permitido apenas entre ${fmtHHMM(cfg.startMinutes)} e ${fmtHHMM(cfg.endMinutes)}.`,
+      brt_minutes: brtMinutes,
+    }, 403);
   }
 
   // ── 7. Geolocalização (Haversine) ─────────────────────────────────────────
-  const distance = haversineMeters(latitude, longitude, OFFICE_LAT, OFFICE_LNG);
-  if (distance > MAX_RADIUS) {
+  const distance = haversineMeters(latitude, longitude, cfg.officeLat, cfg.officeLng);
+  if (distance > cfg.maxRadius) {
     return json({
       error:    'fora_do_raio',
-      message:  `Você está a ${Math.round(distance)}m da imobiliária. Máximo permitido: ${MAX_RADIUS}m.`,
+      message:  `Você está a ${Math.round(distance)}m da imobiliária. Máximo permitido: ${cfg.maxRadius}m.`,
       distance: Math.round(distance),
     }, 403);
   }
