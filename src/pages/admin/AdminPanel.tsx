@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PageHeader, PremiumCard, RoundedButton } from '@/components/ui/PremiumComponents';
-import { Users, Shield, ShieldCheck, Target, Megaphone, BarChart3, Plus, Search, Trophy, Download, FileSpreadsheet, FileText, Trash2, Edit2, ChevronDown, ChevronLeft, Calendar, Loader2, Building2, TrendingUp, Printer, Star, Award, Zap, Flame, MoreHorizontal, FileDown, MapPin } from 'lucide-react';
+import { Users, Shield, ShieldCheck, Target, Megaphone, BarChart3, Plus, Search, Trophy, Download, FileSpreadsheet, FileText, Trash2, Edit2, ChevronDown, ChevronLeft, Calendar, Loader2, Building2, TrendingUp, Printer, Star, Award, Zap, Flame, MoreHorizontal, FileDown, MapPin, Clock } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { useApp, Team, Goal, Announcement, Directorate } from '@/context/AppContext';
 import { useAuthorization } from '@/hooks/useAuthorization';
@@ -14,7 +14,7 @@ import { useReportsData } from '@/hooks/useReportsData';
 import { parseDateOnlyLocal, parseDateOnlyLocalEnd, toDateOnlyLocal, toPtBrDate } from '@/lib/dateRange';
 import { CLIENT_STAGES } from '@/data/clients';
 
-type Tab = 'users' | 'teams' | 'goals' | 'announcements' | 'reports' | 'directorates' | 'gamification';
+type Tab = 'users' | 'teams' | 'goals' | 'announcements' | 'reports' | 'directorates' | 'gamification' | 'checkin';
 
 export default function AdminPanel() {
   // ── Hard role guard: only ADMIN and DIRETOR can access this page ────────────
@@ -27,6 +27,7 @@ export default function AdminPanel() {
     goals, addGoal, updateGoal, deleteGoal,
     announcements, addAnnouncement, updateAnnouncement, deleteAnnouncement,
     directorates, addDirectorate, updateDirectorate, deleteDirectorate,
+    checkinSettings, updateCheckinSettings,
     clients, leads, appointments,
     developments,
     loading, user
@@ -65,6 +66,96 @@ export default function AdminPanel() {
   const [editingDir, setEditingDir] = useState<Directorate | null>(null);
   const [dirForm, setDirForm] = useState<Partial<Directorate>>({ name: '', description: '' });
   const [isSavingDir, setIsSavingDir] = useState(false);
+
+  // Check-in settings form
+  const [checkinForm, setCheckinForm] = useState({
+    start: '08:00',
+    end: '13:30',
+    lat: '-23.5505',
+    lng: '-46.6333',
+    radius: '1000',
+    accuracy: '120',
+  });
+  const [isSavingCheckin, setIsSavingCheckin] = useState(false);
+  const [isLocatingCheckin, setIsLocatingCheckin] = useState(false);
+
+  const minutesToHHMM = (min: number) =>
+    `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+  const hhmmToMinutes = (hhmm: string) => {
+    const [h, m] = hhmm.split(':').map((n) => parseInt(n, 10));
+    return (h || 0) * 60 + (m || 0);
+  };
+
+  useEffect(() => {
+    if (!checkinSettings) return;
+    setCheckinForm({
+      start: minutesToHHMM(checkinSettings.start_minutes),
+      end: minutesToHHMM(checkinSettings.end_minutes),
+      lat: String(checkinSettings.office_latitude),
+      lng: String(checkinSettings.office_longitude),
+      radius: String(checkinSettings.max_radius_meters),
+      accuracy: String(checkinSettings.max_accuracy_meters),
+    });
+  }, [checkinSettings]);
+
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      alert('Geolocalização não suportada neste dispositivo.');
+      return;
+    }
+    setIsLocatingCheckin(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCheckinForm((prev) => ({
+          ...prev,
+          lat: pos.coords.latitude.toFixed(6),
+          lng: pos.coords.longitude.toFixed(6),
+        }));
+        setIsLocatingCheckin(false);
+      },
+      (err) => {
+        setIsLocatingCheckin(false);
+        alert(
+          err.code === err.PERMISSION_DENIED
+            ? 'Permissão de localização negada. Permita o acesso ao GPS ou digite as coordenadas manualmente.'
+            : 'Não foi possível obter a localização. Tente novamente ou digite manualmente.',
+        );
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+
+  const handleSaveCheckin = async () => {
+    const startMin = hhmmToMinutes(checkinForm.start);
+    const endMin = hhmmToMinutes(checkinForm.end);
+    const lat = parseFloat(checkinForm.lat);
+    const lng = parseFloat(checkinForm.lng);
+    const radius = parseInt(checkinForm.radius, 10);
+    const accuracy = parseInt(checkinForm.accuracy, 10);
+
+    if (endMin <= startMin) { alert('O horário de fim deve ser maior que o de início.'); return; }
+    if (!Number.isFinite(lat) || lat < -90 || lat > 90) { alert('Latitude inválida (deve estar entre -90 e 90).'); return; }
+    if (!Number.isFinite(lng) || lng < -180 || lng > 180) { alert('Longitude inválida (deve estar entre -180 e 180).'); return; }
+    if (!Number.isFinite(radius) || radius < 50 || radius > 50000) { alert('Raio inválido (50 a 50000 metros).'); return; }
+    if (!Number.isFinite(accuracy) || accuracy < 10 || accuracy > 1000) { alert('Precisão inválida (10 a 1000 metros).'); return; }
+
+    setIsSavingCheckin(true);
+    try {
+      await updateCheckinSettings({
+        start_minutes: startMin,
+        end_minutes: endMin,
+        office_latitude: lat,
+        office_longitude: lng,
+        max_radius_meters: radius,
+        max_accuracy_meters: accuracy,
+      });
+      alert('Configuração de check-in salva com sucesso.');
+    } catch (e: any) {
+      alert(`Erro ao salvar: ${e?.message || 'tente novamente.'}`);
+    } finally {
+      setIsSavingCheckin(false);
+    }
+  };
 
   // Extra tools dropdown/modal
   const [isToolsMenuOpen, setIsToolsMenuOpen] = useState(false);
@@ -2251,6 +2342,7 @@ export default function AdminPanel() {
           { id: 'reports', label: 'Relatórios', icon: BarChart3, adminOnly: true },
           { id: 'directorates', label: 'Diretorias', icon: Building2 },
           { id: 'gamification', label: 'Gamificação', icon: Zap },
+          { id: 'checkin', label: 'Check-in', icon: Clock, adminOnly: true },
         ].filter(tab => !tab.adminOnly || isAdmin).map((tab) => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id as Tab)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${activeTab === tab.id ? 'bg-gold-500 text-white shadow-md shadow-gold-500/20' : 'bg-card-bg dark:bg-surface-100 text-text-secondary border border-surface-200'}`}>
@@ -2266,6 +2358,85 @@ export default function AdminPanel() {
       </div>
 
       <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
+        {/* CHECK-IN SETTINGS (ADMIN) */}
+        {activeTab === 'checkin' && (
+          <section className="max-w-2xl space-y-5">
+            <PremiumCard className="p-5 space-y-5">
+              <div>
+                <h3 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                  <Clock size={18} className="text-gold-500" /> Janela de horário (BRT)
+                </h3>
+                <p className="text-xs text-text-secondary mt-1">Horário em que o check-in fica liberado, todos os dias.</p>
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  <div>
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary block mb-1">Início</label>
+                    <input type="time" value={checkinForm.start}
+                      onChange={(e) => setCheckinForm((p) => ({ ...p, start: e.target.value }))}
+                      className="w-full h-10 px-3 bg-surface-50 rounded-md border border-surface-200 text-sm text-text-primary focus:ring-2 focus:ring-gold-400/70 focus:border-gold-300" />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary block mb-1">Fim</label>
+                    <input type="time" value={checkinForm.end}
+                      onChange={(e) => setCheckinForm((p) => ({ ...p, end: e.target.value }))}
+                      className="w-full h-10 px-3 bg-surface-50 rounded-md border border-surface-200 text-sm text-text-primary focus:ring-2 focus:ring-gold-400/70 focus:border-gold-300" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-surface-200 pt-5">
+                <h3 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                  <MapPin size={18} className="text-gold-500" /> Localização do escritório
+                </h3>
+                <p className="text-xs text-text-secondary mt-1">Ponto central a partir do qual o raio é medido.</p>
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  <div>
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary block mb-1">Latitude</label>
+                    <input type="text" inputMode="decimal" value={checkinForm.lat}
+                      onChange={(e) => setCheckinForm((p) => ({ ...p, lat: e.target.value }))}
+                      className="w-full h-10 px-3 bg-surface-50 rounded-md border border-surface-200 text-sm text-text-primary focus:ring-2 focus:ring-gold-400/70 focus:border-gold-300" />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary block mb-1">Longitude</label>
+                    <input type="text" inputMode="decimal" value={checkinForm.lng}
+                      onChange={(e) => setCheckinForm((p) => ({ ...p, lng: e.target.value }))}
+                      className="w-full h-10 px-3 bg-surface-50 rounded-md border border-surface-200 text-sm text-text-primary focus:ring-2 focus:ring-gold-400/70 focus:border-gold-300" />
+                  </div>
+                </div>
+                <RoundedButton variant="secondary" size="sm" className="mt-3" onClick={handleUseCurrentLocation} disabled={isLocatingCheckin}>
+                  {isLocatingCheckin ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />}
+                  {isLocatingCheckin ? 'Obtendo localização...' : 'Usar minha localização atual'}
+                </RoundedButton>
+              </div>
+
+              <div className="border-t border-surface-200 pt-5">
+                <h3 className="text-lg font-bold text-text-primary">Tolerâncias do GPS</h3>
+                <div className="grid grid-cols-2 gap-3 mt-3">
+                  <div>
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary block mb-1">Raio máximo (m)</label>
+                    <input type="number" min={50} max={50000} value={checkinForm.radius}
+                      onChange={(e) => setCheckinForm((p) => ({ ...p, radius: e.target.value }))}
+                      className="w-full h-10 px-3 bg-surface-50 rounded-md border border-surface-200 text-sm text-text-primary focus:ring-2 focus:ring-gold-400/70 focus:border-gold-300" />
+                    <p className="text-[10px] text-text-secondary mt-1">Distância máxima permitida do escritório.</p>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary block mb-1">Precisão mínima (m)</label>
+                    <input type="number" min={10} max={1000} value={checkinForm.accuracy}
+                      onChange={(e) => setCheckinForm((p) => ({ ...p, accuracy: e.target.value }))}
+                      className="w-full h-10 px-3 bg-surface-50 rounded-md border border-surface-200 text-sm text-text-primary focus:ring-2 focus:ring-gold-400/70 focus:border-gold-300" />
+                    <p className="text-[10px] text-text-secondary mt-1">Rejeita GPS com erro maior que isso.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-surface-200 pt-5">
+                <RoundedButton fullWidth onClick={handleSaveCheckin} disabled={isSavingCheckin}>
+                  {isSavingCheckin ? 'Salvando...' : 'Salvar configuração'}
+                </RoundedButton>
+              </div>
+            </PremiumCard>
+          </section>
+        )}
+
         {/* GLOBAL PENDING APPROVALS ALERT */}
         {activeTab === 'users' && pendingUsers.length > 0 && (
           <section className="mb-8 print:hidden">
