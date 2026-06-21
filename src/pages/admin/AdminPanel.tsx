@@ -2361,9 +2361,9 @@ export default function AdminPanel() {
         {/* CHECK-IN SETTINGS (ADMIN) */}
         {activeTab === 'checkin' && (
           <section className="max-w-2xl space-y-5">
-            <PremiumCard className="p-5 space-y-5">
+            <PremiumCard className="p-4 sm:p-5 space-y-5">
               <div>
-                <h3 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                <h3 className="text-base sm:text-lg font-bold text-text-primary flex items-center gap-2">
                   <Clock size={18} className="text-gold-500" /> Janela de horário (BRT)
                 </h3>
                 <p className="text-xs text-text-secondary mt-1">Horário em que o check-in fica liberado, todos os dias.</p>
@@ -2384,11 +2384,11 @@ export default function AdminPanel() {
               </div>
 
               <div className="border-t border-surface-200 pt-5">
-                <h3 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                <h3 className="text-base sm:text-lg font-bold text-text-primary flex items-center gap-2">
                   <MapPin size={18} className="text-gold-500" /> Localização do escritório
                 </h3>
                 <p className="text-xs text-text-secondary mt-1">Ponto central a partir do qual o raio é medido.</p>
-                <div className="grid grid-cols-2 gap-3 mt-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
                   <div>
                     <label className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary block mb-1">Latitude</label>
                     <input type="text" inputMode="decimal" value={checkinForm.lat}
@@ -2402,15 +2402,15 @@ export default function AdminPanel() {
                       className="w-full h-10 px-3 bg-surface-50 rounded-md border border-surface-200 text-sm text-text-primary focus:ring-2 focus:ring-gold-400/70 focus:border-gold-300" />
                   </div>
                 </div>
-                <RoundedButton variant="secondary" size="sm" className="mt-3" onClick={handleUseCurrentLocation} disabled={isLocatingCheckin}>
+                <RoundedButton variant="secondary" size="sm" className="mt-3 w-full sm:w-auto" onClick={handleUseCurrentLocation} disabled={isLocatingCheckin}>
                   {isLocatingCheckin ? <Loader2 size={14} className="animate-spin" /> : <MapPin size={14} />}
                   {isLocatingCheckin ? 'Obtendo localização...' : 'Usar minha localização atual'}
                 </RoundedButton>
               </div>
 
               <div className="border-t border-surface-200 pt-5">
-                <h3 className="text-lg font-bold text-text-primary">Tolerâncias do GPS</h3>
-                <div className="grid grid-cols-2 gap-3 mt-3">
+                <h3 className="text-base sm:text-lg font-bold text-text-primary">Tolerâncias do GPS</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
                   <div>
                     <label className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary block mb-1">Raio máximo (m)</label>
                     <input type="number" min={50} max={50000} value={checkinForm.radius}
