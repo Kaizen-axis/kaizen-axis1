@@ -17,6 +17,18 @@ export interface Directorate {
   created_at?: string;
 }
 
+export interface CheckinSettings {
+  id: number;
+  start_minutes: number;
+  end_minutes: number;
+  office_latitude: number;
+  office_longitude: number;
+  max_radius_meters: number;
+  max_accuracy_meters: number;
+  updated_at?: string;
+  updated_by?: string | null;
+}
+
 export interface Profile {
   id: string;
   name: string;
@@ -239,6 +251,11 @@ interface AppContextValue {
   updateDirectorate: (id: string, data: Partial<Directorate>) => Promise<void>;
   deleteDirectorate: (id: string) => Promise<void>;
 
+  // Admin - Configuração de Check-in
+  checkinSettings: CheckinSettings | null;
+  refreshCheckinSettings: () => Promise<void>;
+  updateCheckinSettings: (data: Partial<Omit<CheckinSettings, 'id' | 'updated_at' | 'updated_by'>>) => Promise<void>;
+
   // Portals
   portals: Portal[];
   refreshPortals: () => Promise<void>;
@@ -275,6 +292,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [directorates, setDirectorates] = useState<Directorate[]>([]);
+  const [checkinSettings, setCheckinSettings] = useState<CheckinSettings | null>(null);
   const [portals, setPortals] = useState<Portal[]>([]);
   const [trainings, setTrainings] = useState<TrainingItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1813,6 +1831,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch (e) { console.error('Erro ao deletar diretoria:', e); }
   }, [refreshDirectorates]);
 
+  // ─── Check-in Settings ────────────────────────────────────────────────────
+
+  const refreshCheckinSettings = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('checkin_settings')
+        .select('*')
+        .eq('id', 1)
+        .maybeSingle();
+      if (error) throw error;
+      setCheckinSettings((data as CheckinSettings) ?? null);
+    } catch (e) { console.error('Erro ao carregar config de check-in:', e); }
+  }, []);
+
+  const updateCheckinSettings = useCallback(async (
+    data: Partial<Omit<CheckinSettings, 'id' | 'updated_at' | 'updated_by'>>,
+  ) => {
+    try {
+      const { error } = await supabase
+        .from('checkin_settings')
+        .update({ ...data, updated_at: new Date().toISOString(), updated_by: userRef.current?.id ?? null })
+        .eq('id', 1);
+      if (error) throw error;
+      await refreshCheckinSettings();
+    } catch (e) {
+      console.error('Erro ao salvar config de check-in:', e);
+      throw e;
+    }
+  }, [refreshCheckinSettings]);
+
   // ─── Portals ──────────────────────────────────────────────────────────────
 
   const refreshPortals = useCallback(async () => {
@@ -1961,13 +2009,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         refreshAnnouncements(),
         refreshProfiles(),
         refreshDirectorates(),
+        refreshCheckinSettings(),
       ]);
     } finally {
       // loading controla somente a inicialização de sessão/tela protegida.
       // Atualizações em background não devem desmontar a UI inteira.
       setLoading(false);
     }
-  }, [refreshClients, refreshLeads, refreshAppointments, refreshTasks, refreshDevelopments, refreshTeams, refreshGoals, refreshAnnouncements, refreshProfiles, refreshDirectorates]);
+  }, [refreshClients, refreshLeads, refreshAppointments, refreshTasks, refreshDevelopments, refreshTeams, refreshGoals, refreshAnnouncements, refreshProfiles, refreshDirectorates, refreshCheckinSettings]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -2042,6 +2091,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addDirectorate,
       updateDirectorate,
       deleteDirectorate,
+      checkinSettings, refreshCheckinSettings, updateCheckinSettings,
       portals,
       refreshPortals,
       addPortal,
