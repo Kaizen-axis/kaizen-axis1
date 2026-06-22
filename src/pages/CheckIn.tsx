@@ -216,8 +216,8 @@ export default function CheckIn() {
     }
   };
 
-  // Bloqueio de horário: Check-in disponível das 08:00 às 18:30
-  const isOpen = brtMinutes >= (8 * 60) && brtMinutes <= (18 * 60 + 30);
+  // Bloqueio de horário: Check-in disponível das 08:00 às 13:30
+  const isOpen = brtMinutes >= (8 * 60) && brtMinutes <= (13 * 60 + 30);
 
   // ── Fila do dia ───────────────────────────────────────────────────────────
   const fetchQueue = useCallback(async () => {
@@ -481,7 +481,7 @@ export default function CheckIn() {
         <h1 className="v3-serif text-2xl sm:text-3xl text-text-primary tracking-tight mt-1">Check-in</h1>
         <p className="text-sm text-text-secondary mt-1.5 flex items-center gap-2">
           <span className={`inline-block w-1.5 h-1.5 rounded-full ${isOpen ? 'bg-emerald-400' : 'bg-surface-500'}`} />
-          {isOpen ? 'Janela de check-in aberta' : 'Disponível das 08:00 às 18:30'}
+          {isOpen ? 'Janela de check-in aberta' : 'Disponível das 08:00 às 13:30'}
         </p>
       </div>
 
@@ -518,7 +518,7 @@ export default function CheckIn() {
               : 'bg-surface-100 text-text-secondary',
           )}>
             <Clock size={13} />
-            {isOpen ? 'Aberto · 08:00–18:30' : 'Fechado · abre às 08:00'}
+            {isOpen ? 'Aberto · 08:00–13:30' : 'Fechado · abre às 08:00'}
           </div>
 
           {/* Main button */}
@@ -728,7 +728,7 @@ export default function CheckIn() {
           <div className="space-y-2.5 pt-2">
             {[
                { icon: QrCode,   label: 'Leitura obrigatória', value: 'QR Code da recepção' },
-               { icon: Clock,    label: 'Horário de check-in', value: '08:00 – 18:30' },
+               { icon: Clock,    label: 'Horário de check-in', value: '08:00 – 13:30' },
                { icon: MapPin,   label: 'Validação ativa',     value: 'Presença no local' },
                { icon: Users,    label: 'Distribuição ativa',  value: '08:00 – 22:00, Round-Robin' },
             ].map(({ icon: Icon, label, value }) => (
