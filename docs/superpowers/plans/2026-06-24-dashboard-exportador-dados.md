@@ -78,8 +78,8 @@ const corsHeaders = {
 const EXPORT_BUCKET = 'data-exports';
 const DOCS_BUCKET = 'client-documents';
 const DAILY_LIMIT = 5;
-const SIGNED_TTL = 3600;      // link do zip: 1h
-const DOC_SIGNED_TTL = 3600;  // links de documentos: 1h
+const SIGNED_TTL = 600;       // link do zip: 10 min (download é imediato)
+const DOC_SIGNED_TTL = 3600;  // links de documentos: 1h (ficam dentro do zip baixado)
 
 // Tabelas de negócio incluídas no pacote (exclui logs, chat, tokens, base do Kai).
 const TABLES = [
@@ -110,6 +110,9 @@ function toCsv(rows: Record<string, any>[]): string {
   const esc = (v: any) => {
     if (v === null || v === undefined) return '';
     let s = typeof v === 'object' ? JSON.stringify(v) : String(v);
+    // Proteção contra CSV/formula injection: neutraliza células que o Excel
+    // interpretaria como fórmula (=, +, -, @, tab, CR) prefixando com aspa simples.
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
     if (/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
     return s;
   };
@@ -227,6 +230,13 @@ Deno.serve(async (req: Request) => {
   // Gera o zip
   const bytes = await zip.generateAsync({ type: 'uint8array' });
 
+  // Limpeza: remove pacotes anteriores (mantém no máximo o mais recente no bucket)
+  try {
+    const { data: prev } = await admin.storage.from(EXPORT_BUCKET).list('exportador', { limit: 100 });
+    const toRemove = (prev || []).map((o) => `exportador/${o.name}`);
+    if (toRemove.length) await admin.storage.from(EXPORT_BUCKET).remove(toRemove);
+  } catch (e) { notes.push(`limpeza de exports anteriores: ${(e as any)?.message}`); }
+
   // Upload no bucket privado
   const stamp = generatedAt.replace(/[:.]/g, '-');
   const objectPath = `exportador/kaizen-axis-export-${stamp}.zip`;
@@ -238,18 +248,19 @@ Deno.serve(async (req: Request) => {
   const { data: signed, error: signErr } = await admin.storage.from(EXPORT_BUCKET).createSignedUrl(objectPath, SIGNED_TTL);
   if (signErr || !signed?.signedUrl) return json({ error: 'Falha ao gerar o link de download.' }, 500);
 
-  // Auditoria (não bloqueia a resposta)
-  admin.from('audit_logs').insert({
+  // Auditoria (aguardada — operação sensível não fica sem registro)
+  const { error: auditErr } = await admin.from('audit_logs').insert({
     user_id: user.id, action: 'data_export', entity: 'export', entity_id: null,
     ip_address: resolveIp(req), device_info: req.headers.get('user-agent') || 'unknown',
     metadata: { counts, notes, object_path: objectPath },
-  }).then(({ error }) => { if (error) console.warn('[export-all-data] audit insert failed', error.message); });
+  });
+  if (auditErr) console.warn('[export-all-data] audit insert failed', auditErr.message);
 
   return json({ url: signed.signedUrl, generated_at: generatedAt, counts });
 });
 ```
 
-- [ ] **Step 2: Revisar** — gate por papel (`EXPORTADOR`/`ADMIN`), rate limit `data_export` (5/dia), CSV+JSON+documentos+relatórios+LEIA-ME, upload no bucket privado, URL assinada, auditoria. (Build do frontend não cobre Deno; validação real é na Task 6.)
+- [ ] **Step 2: Revisar** — gate por papel (`EXPORTADOR`/`ADMIN`), rate limit `data_export` (5/dia), CSV+JSON+documentos+relatórios+LEIA-ME, upload no bucket privado, URL assinada. Reforços de segurança: **proteção contra formula injection** no `esc`, **TTL curto (10 min)** do zip, **limpeza dos pacotes anteriores** antes do upload, **auditoria aguardada (`await`)**. (Build do frontend não cobre Deno; validação real é na Task 6.)
 
 - [ ] **Step 3: Commit**
 
@@ -521,6 +532,7 @@ supabase functions deploy export-all-data
     ```sql
     update public.profiles set role = 'EXPORTADOR', status = 'Ativo' where id = '<uuid-do-usuario>';
     ```
+  - **Segurança da conta (definido pelo admin, fora do código):** ativar **MFA/2FA** nessa conta, usar senha forte e mantê-la **dedicada/não compartilhada** — é o ponto crítico (um login extrai todos os dados).
 
 - [ ] **Step 4: UAT**
   - [ ] Logar com a conta `EXPORTADOR` → cai direto em `/exportador` e **não** consegue abrir nenhuma outra rota.
@@ -529,6 +541,8 @@ supabase functions deploy export-all-data
   - [ ] Verificar registro em `audit_logs` (`action = 'data_export'`).
   - [ ] Acionar 6 vezes no mesmo dia → a 6ª retorna limite (`429`).
   - [ ] Logar como `ADMIN` e confirmar que também consegue exportar.
+  - [ ] **Formula injection:** cadastrar um cliente de teste com nome começando por `=` (ex.: `=1+1`) e confirmar que no CSV exportado a célula sai como texto (`'=1+1`), sem executar no Excel.
+  - [ ] **Limpeza/TTL:** após exportar, conferir que há **apenas um** objeto em `data-exports/exportador/`; aguardar >10 min e confirmar que a URL anterior **expirou** (`400/403`).
 
 - [ ] **Step 5: Push da branch**
 ```bash
@@ -540,5 +554,6 @@ git push -u origin preview/exportador
 ## Self-Review (autor do plano)
 
 - **Cobertura da spec:** papel EXPORTADOR + isExportador (Task 3) ✓; conta isolada/travada na rota (Task 4, ProtectedRoute+RoleRoute) ✓; edge function com gate de papel, rate limit, auditoria, CSV+JSON+documentos(links)+relatórios+LEIA-ME, bucket privado, URL assinada (Task 2) ✓; bucket (Task 1) ✓; página com botão (Task 4) ✓; deploy + criação de conta + UAT (Task 6) ✓; exclusão de tabelas técnicas (lista `TABLES` na Task 2) ✓.
+- **Reforços de segurança aplicados:** proteção contra CSV/formula injection (`esc`), TTL do zip reduzido para 10 min, limpeza dos pacotes anteriores antes do upload, auditoria aguardada (`await`), e recomendação de MFA na conta (Task 6, fora do código). ✓
 - **Placeholders:** nenhum — todo passo tem código/comando concretos.
 - **Consistência de tipos:** `EXPORTADOR` usado igual em `UserRole`, `useAuthorization`, `App.tsx` e na função; rota `/exportador` e bucket `data-exports` consistentes entre tasks; escopo de rate limit `data_export` igual em função e UAT.

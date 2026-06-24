@@ -63,18 +63,22 @@ Edge Function server-side (`export-all-data`) usando service role para ler tudo 
 - **Rate limit** por usuário via `increment_request_counter` (escopo `data_export`, ex.: 5/dia) → `429`.
 - **Auditoria**: insere em `audit_logs` (`action='data_export'`, user, ip, metadata com contagens).
 - Lê as tabelas incluídas (service role) e as RPCs de relatório.
+- **Proteção contra CSV/formula injection:** células que começam com `= + - @` (ou tab/CR) são prefixadas com `'` ao gerar o CSV, para não executarem como fórmula no Excel.
 - Monta no zip:
   - `csv/<tabela>.csv` (um por conjunto)
   - `dados-completos.json` (tudo)
-  - `documentos.csv` (registros + URL assinada por documento, TTL curto)
-  - `relatorios/*.csv`
+  - `documentos.csv` (registros + URL assinada por documento, TTL ~1h)
+  - `relatorios/*.json`
   - `LEIA-ME.txt` (data de geração, descrição, aviso LGPD/responsabilidade)
+- **Antes de subir, apaga os pacotes anteriores** em `data-exports/exportador/` (no máximo um dump existe por vez).
 - Compacta (lib zip no Deno), faz upload em bucket **privado** `data-exports/exportador/<timestamp>.zip`.
-- Retorna `200 { url, generated_at, counts }` com **URL assinada** (TTL ~1h).
+- **Auditoria é aguardada (`await`)** antes de responder — operação sensível não fica sem registro.
+- Retorna `200 { url, generated_at, counts }` com **URL assinada de curta validade (~10 min)** — o download é imediato.
 - Erros: `401` (sem auth), `403` (papel), `429` (limite), `500` (falha de geração).
 
 ### 4. Storage
 - Bucket privado `data-exports` (criado via migration/SQL). Sem acesso público; download só por URL assinada.
+- A cada exportação, os objetos anteriores em `exportador/` são removidos — o bucket guarda no máximo o pacote mais recente, e a URL dele expira em ~10 min.
 
 ## Tratamento de erros
 - Falha de geração/upload → `500` + mensagem; dashboard oferece "tentar novamente".
@@ -82,10 +86,12 @@ Edge Function server-side (`export-all-data`) usando service role para ler tudo 
 - Se uma tabela/RPC específica falhar, registra no `LEIA-ME.txt` e continua (export parcial > falha total).
 
 ## Segurança / LGPD
-- Papel `EXPORTADOR` não tem leitura ampla no banco; tudo passa pela função validada.
-- Bucket privado + URL assinada de curta validade.
-- Toda exportação auditada.
+- Papel `EXPORTADOR` não tem leitura ampla no banco; tudo passa pela função validada (gate de papel via service role, não-spoofável).
+- Bucket privado + **URL assinada de ~10 min** + **remoção dos pacotes anteriores** a cada export.
+- **Proteção contra CSV/formula injection** ao gerar os CSVs.
+- Toda exportação é **auditada (com `await`)** em `audit_logs`, com rate limit (5/dia por usuário).
 - Pacote contém dados pessoais (clientes e equipe, com CPF) — `LEIA-ME.txt` traz aviso de responsabilidade.
+- **Conta do EXPORTADOR é o ponto crítico** (um login extrai tudo). Mitigação operacional, definida **fora do código pelo administrador**: ativar **MFA/2FA** nessa conta, senha forte, conta dedicada e revisão periódica dos `audit_logs`.
 
 ## Estratégia de branch e deploy
 - Trabalho em `preview/exportador` (base `preview/v3`).
