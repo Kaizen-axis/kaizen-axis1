@@ -42,8 +42,12 @@ function resolveIp(req: Request) {
   return f ? (f.split(',')[0]?.trim() || '0.0.0.0') : '0.0.0.0';
 }
 
+// Separador ';' (padrão do Excel em pt-BR — abre em colunas com duplo-clique).
+const CSV_SEP = ';';
 function toCsv(rows: Record<string, any>[]): string {
-  if (!rows || rows.length === 0) return '';
+  // BOM UTF-8 faz o Excel reconhecer acentos corretamente.
+  const BOM = '﻿';
+  if (!rows || rows.length === 0) return BOM;
   const headerSet = new Set<string>();
   for (const r of rows) Object.keys(r).forEach((k) => headerSet.add(k));
   const headers = Array.from(headerSet);
@@ -53,12 +57,12 @@ function toCsv(rows: Record<string, any>[]): string {
     // Proteção contra CSV/formula injection: neutraliza células que o Excel
     // interpretaria como fórmula (=, +, -, @, tab, CR) prefixando com aspa simples.
     if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
-    if (/[",\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
+    if (s.includes(CSV_SEP) || /["\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
     return s;
   };
-  const lines = [headers.join(',')];
-  for (const r of rows) lines.push(headers.map((h) => esc(r[h])).join(','));
-  return lines.join('\r\n');
+  const lines = [headers.join(CSV_SEP)];
+  for (const r of rows) lines.push(headers.map((h) => esc(r[h])).join(CSV_SEP));
+  return BOM + lines.join('\r\n');
 }
 
 Deno.serve(async (req: Request) => {
