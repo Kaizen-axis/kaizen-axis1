@@ -4,12 +4,18 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 import JSZip from 'npm:jszip@3';
 
 const CORS_ORIGIN = Deno.env.get('APP_ORIGIN') ?? '';
-const corsHeaders = {
-  'Access-Control-Allow-Origin': CORS_ORIGIN,
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey, x-client-info',
-  'Vary': 'Origin',
-};
+
+// Reflete a origem da requisição — funciona em produção (com/sem www) e nos
+// deploys de preview. A segurança real é o JWT + gate de papel, não o CORS.
+function buildCors(req: Request) {
+  const origin = req.headers.get('Origin') || CORS_ORIGIN || '*';
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey, x-client-info',
+    'Vary': 'Origin',
+  };
+}
 
 const EXPORT_BUCKET = 'data-exports';
 const DOCS_BUCKET = 'client-documents';
@@ -25,13 +31,6 @@ const TABLES = [
   'missions_templates', 'income_audits', 'user_points', 'user_achievements',
   'achievements', 'sales_streaks', 'trainings', 'training_completions',
 ];
-
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', ...corsHeaders },
-  });
-}
 
 function resolveIp(req: Request) {
   const f = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip');
@@ -58,6 +57,10 @@ function toCsv(rows: Record<string, any>[]): string {
 }
 
 Deno.serve(async (req: Request) => {
+  const corsHeaders = buildCors(req);
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...corsHeaders } });
+
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Método não permitido' }, 405);
 
