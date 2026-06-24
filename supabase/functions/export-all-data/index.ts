@@ -18,10 +18,8 @@ function buildCors(req: Request) {
 }
 
 const EXPORT_BUCKET = 'data-exports';
-const DOCS_BUCKET = 'client-documents';
 const DAILY_LIMIT = 5;
 const SIGNED_TTL = 600;       // link do zip: 10 min (download é imediato)
-const DOC_SIGNED_TTL = 3600;  // links de documentos: 1h (ficam dentro do zip baixado)
 
 // Tabelas de negócio incluídas no pacote (exclui logs, chat, tokens, base do Kai).
 const TABLES = [
@@ -31,6 +29,13 @@ const TABLES = [
   'missions_templates', 'income_audits', 'user_points', 'user_achievements',
   'achievements', 'sales_streaks', 'trainings', 'training_completions',
 ];
+
+// Colunas específicas por tabela (default '*'). income_audits.resultado_json é um
+// blob enorme (detalhamento de transações da apuração) — exclui para não estourar
+// os limites de memória da função; o resumo numérico é mantido.
+const SELECTS: Record<string, string> = {
+  income_audits: 'id, client_id, created_by, created_at, algoritmo_versao, hash_pdf, media_mensal_real, total_apurado, meses_considerados, renda_multiplo, validado_em',
+};
 
 function resolveIp(req: Request) {
   const f = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip');
@@ -98,40 +103,18 @@ Deno.serve(async (req: Request) => {
   const zip = new JSZip();
   const counts: Record<string, number> = {};
   const notes: string[] = [];
-  let clientDocs: any[] = [];
-
   // Tabelas -> CSV + JSON por tabela. Não acumulamos tudo num único objeto/string
   // gigante (evita estourar os limites de memória/CPU da função).
   for (const t of TABLES) {
     try {
-      const { data, error } = await admin.from(t).select('*');
+      const { data, error } = await admin.from(t).select(SELECTS[t] || '*');
       if (error) { notes.push(`Tabela ${t}: erro (${error.message})`); continue; }
       const rows = data || [];
       counts[t] = rows.length;
       zip.file(`csv/${t}.csv`, toCsv(rows));
       zip.file(`json/${t}.json`, JSON.stringify(rows));
-      if (t === 'client_documents') clientDocs = rows;
     } catch (e) { notes.push(`Tabela ${t}: falha (${(e as any)?.message})`); }
   }
-
-  // documentos.csv com links de download temporários
-  try {
-    const docs = clientDocs;
-    const docRows: Record<string, any>[] = [];
-    for (const d of docs) {
-      let link = '';
-      const path = String(d.url || '')
-        .replace(/^\/object\/public\/client-documents\//, '')
-        .replace(/^client-documents\//, '')
-        .trim();
-      if (path) {
-        const { data: signed } = await admin.storage.from(DOCS_BUCKET).createSignedUrl(path, DOC_SIGNED_TTL);
-        link = signed?.signedUrl || '';
-      }
-      docRows.push({ id: d.id, client_id: d.client_id, name: d.name, type: d.type, path: d.url, download_link: link });
-    }
-    zip.file('documentos.csv', toCsv(docRows));
-  } catch (e) { notes.push(`documentos: ${(e as any)?.message}`); }
 
   // Relatórios consolidados (best-effort)
   for (const rpc of ['get_report_metrics', 'get_presence_report', 'get_relatorio_diretoria']) {
@@ -151,7 +134,7 @@ Deno.serve(async (req: Request) => {
     'Conteúdo do pacote:',
     '- csv/            : um arquivo CSV por conjunto de dados',
     '- json/          : todos os dados estruturados por tabela (para migração)',
-    '- documentos.csv  : lista de documentos + links de download temporários (validade ~1h)',
+    '- csv/client_documents.csv : lista de documentos dos clientes (nome, tipo, caminho no armazenamento)',
     '- relatorios/     : relatórios consolidados',
     '',
     'Contagens por conjunto:',
