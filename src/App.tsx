@@ -32,6 +32,7 @@ import Portals from '@/pages/Portals';
 import Login from '@/pages/Login';
 import V3Showcase from '@/pages/V3Showcase';
 import ResetPassword from '@/pages/ResetPassword';
+import ExportadorDashboard from '@/pages/ExportadorDashboard';
 import PendingApproval from '@/pages/PendingApproval';
 import CheckIn from '@/pages/CheckIn';
 import CheckInDisplay from '@/pages/CheckInDisplay';
@@ -76,6 +77,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (role === 'RECEPCAO') {
     if (location.pathname !== '/checkin/display') {
       return <Navigate to="/checkin/display" replace />;
+    }
+    return <>{children}</>;
+  }
+
+  if (role === 'EXPORTADOR') {
+    if (location.pathname !== '/exportador') {
+      return <Navigate to="/exportador" replace />;
     }
     return <>{children}</>;
   }
@@ -127,6 +135,13 @@ function RoleRoute({
   if (role === 'RECEPCAO') {
     if (location.pathname !== '/checkin/display') {
       return <Navigate to="/checkin/display" replace />;
+    }
+    return <>{children}</>;
+  }
+
+  if (role === 'EXPORTADOR') {
+    if (location.pathname !== '/exportador') {
+      return <Navigate to="/exportador" replace />;
     }
     return <>{children}</>;
   }
@@ -195,6 +210,13 @@ export default function App() {
 
         {/* Simulator placeholder */}
         <Route path="/simulator" element={<ProtectedRoute><div className="p-6"><h1 className="text-2xl font-bold">Simulador</h1><p>Em breve...</p></div></ProtectedRoute>} />
+
+        {/* ── Exportador: conta isolada do cliente p/ baixar todos os dados ── */}
+        <Route path="/exportador" element={
+          <RoleRoute allowed={['EXPORTADOR', 'ADMIN']}>
+            <ExportadorDashboard />
+          </RoleRoute>
+        } />
 
         {/* ── ADMIN & DIRETOR ──────────────────────────────────────────── */}
         <Route path="/admin" element={
