@@ -1,6 +1,6 @@
 import { useApp } from '@/context/AppContext';
 
-export type UserRole = 'ADMIN' | 'DIRETOR' | 'GERENTE' | 'COORDENADOR' | 'CORRETOR' | 'RECEPCAO' | 'ANALISTA';
+export type UserRole = 'ADMIN' | 'DIRETOR' | 'GERENTE' | 'COORDENADOR' | 'CORRETOR' | 'RECEPCAO' | 'ANALISTA' | 'EXPORTADOR';
 
 export function useAuthorization() {
     const { profile } = useApp();
@@ -16,6 +16,7 @@ export function useAuthorization() {
     const isBroker = role === 'CORRETOR';
     const isReception = role === 'RECEPCAO';
     const isAnalyst = role === 'ANALISTA';
+    const isExportador = role === 'EXPORTADOR';
     const canAccessIncomeAnalysis = isAdmin || isDirector || isManager || isCoordinator || isAnalyst;
 
     // Strategic roles that can see org-wide data in their scope
@@ -65,6 +66,7 @@ export function useAuthorization() {
         isBroker,
         isReception,
         isAnalyst,
+        isExportador,
         isLeadership,
         isTeamLead,
         canCreateStrategicResources,
