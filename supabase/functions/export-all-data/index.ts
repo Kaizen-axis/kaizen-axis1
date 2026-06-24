@@ -2,6 +2,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import JSZip from 'npm:jszip@3';
+import * as XLSX from 'npm:xlsx@0.18.5';
 
 const CORS_ORIGIN = Deno.env.get('APP_ORIGIN') ?? '';
 
@@ -42,27 +43,32 @@ function resolveIp(req: Request) {
   return f ? (f.split(',')[0]?.trim() || '0.0.0.0') : '0.0.0.0';
 }
 
-// Separador ';' (padrão do Excel em pt-BR — abre em colunas com duplo-clique).
-const CSV_SEP = ';';
-function toCsv(rows: Record<string, any>[]): string {
-  // BOM UTF-8 faz o Excel reconhecer acentos corretamente.
-  const BOM = '﻿';
-  if (!rows || rows.length === 0) return BOM;
+// Calcula a largura das colunas com base no conteúdo (amostra das primeiras linhas).
+function computeColWidths(headers: string[], rows: Record<string, any>[]) {
+  const sample = rows.slice(0, 200);
+  return headers.map((h) => {
+    let max = h.length;
+    for (const r of sample) {
+      const v = r[h];
+      const s = v == null ? '' : (typeof v === 'object' ? JSON.stringify(v) : String(v));
+      if (s.length > max) max = s.length;
+    }
+    return { wch: Math.min(Math.max(max + 1, 8), 60) };
+  });
+}
+
+// Adiciona uma aba à planilha. Valores texto continuam texto (CPF/telefone não
+// viram notação científica) e as colunas saem dimensionadas pelo conteúdo.
+function addSheet(wb: any, name: string, rows: Record<string, any>[]) {
   const headerSet = new Set<string>();
   for (const r of rows) Object.keys(r).forEach((k) => headerSet.add(k));
   const headers = Array.from(headerSet);
-  const esc = (v: any) => {
-    if (v === null || v === undefined) return '';
-    let s = typeof v === 'object' ? JSON.stringify(v) : String(v);
-    // Proteção contra CSV/formula injection: neutraliza células que o Excel
-    // interpretaria como fórmula (=, +, -, @, tab, CR) prefixando com aspa simples.
-    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
-    if (s.includes(CSV_SEP) || /["\n\r]/.test(s)) s = '"' + s.replace(/"/g, '""') + '"';
-    return s;
-  };
-  const lines = [headers.join(CSV_SEP)];
-  for (const r of rows) lines.push(headers.map((h) => esc(r[h])).join(CSV_SEP));
-  return BOM + lines.join('\r\n');
+  const ws = rows.length
+    ? XLSX.utils.json_to_sheet(rows, { header: headers })
+    : XLSX.utils.aoa_to_sheet([['(sem registros)']]);
+  if (rows.length) ws['!cols'] = computeColWidths(headers, rows);
+  const safe = name.replace(/[\\/?*\[\]:]/g, '_').slice(0, 31);
+  XLSX.utils.book_append_sheet(wb, ws, safe);
 }
 
 Deno.serve(async (req: Request) => {
@@ -105,20 +111,26 @@ Deno.serve(async (req: Request) => {
   if ((cnt ?? 0) > DAILY_LIMIT) return json({ error: 'Limite diário de exportações atingido. Tente amanhã.' }, 429);
 
   const zip = new JSZip();
+  const wb = XLSX.utils.book_new();
   const counts: Record<string, number> = {};
   const notes: string[] = [];
-  // Tabelas -> CSV + JSON por tabela. Não acumulamos tudo num único objeto/string
-  // gigante (evita estourar os limites de memória/CPU da função).
+  // Tabelas -> aba na planilha .xlsx (leitura humana) + JSON por tabela (migração).
   for (const t of TABLES) {
     try {
       const { data, error } = await admin.from(t).select(SELECTS[t] || '*');
       if (error) { notes.push(`Tabela ${t}: erro (${error.message})`); continue; }
       const rows = data || [];
       counts[t] = rows.length;
-      zip.file(`csv/${t}.csv`, toCsv(rows));
+      addSheet(wb, t, rows);
       zip.file(`json/${t}.json`, JSON.stringify(rows));
     } catch (e) { notes.push(`Tabela ${t}: falha (${(e as any)?.message})`); }
   }
+
+  if (wb.SheetNames.length === 0) addSheet(wb, 'info', [{ aviso: 'Nenhum dado exportado' }]);
+
+  // Planilha única com uma aba por conjunto de dados.
+  const xlsxBytes = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+  zip.file('dados.xlsx', new Uint8Array(xlsxBytes));
 
   // Relatórios consolidados (best-effort)
   for (const rpc of ['get_report_metrics', 'get_presence_report', 'get_relatorio_diretoria']) {
@@ -136,9 +148,8 @@ Deno.serve(async (req: Request) => {
     `Gerado em: ${generatedAt}`,
     '',
     'Conteúdo do pacote:',
-    '- csv/            : um arquivo CSV por conjunto de dados',
-    '- json/          : todos os dados estruturados por tabela (para migração)',
-    '- csv/client_documents.csv : lista de documentos dos clientes (nome, tipo, caminho no armazenamento)',
+    '- dados.xlsx      : planilha com uma aba por conjunto de dados (abra no Excel)',
+    '- json/          : todos os dados estruturados por tabela (para migração/integração)',
     '- relatorios/     : relatórios consolidados',
     '',
     'Contagens por conjunto:',
