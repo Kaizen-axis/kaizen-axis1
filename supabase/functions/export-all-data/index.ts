@@ -98,23 +98,25 @@ Deno.serve(async (req: Request) => {
   const zip = new JSZip();
   const counts: Record<string, number> = {};
   const notes: string[] = [];
-  const fullData: Record<string, any[]> = {};
+  let clientDocs: any[] = [];
 
-  // Tabelas -> CSV + acumula no JSON
+  // Tabelas -> CSV + JSON por tabela. Não acumulamos tudo num único objeto/string
+  // gigante (evita estourar os limites de memória/CPU da função).
   for (const t of TABLES) {
     try {
       const { data, error } = await admin.from(t).select('*');
       if (error) { notes.push(`Tabela ${t}: erro (${error.message})`); continue; }
       const rows = data || [];
       counts[t] = rows.length;
-      fullData[t] = rows;
       zip.file(`csv/${t}.csv`, toCsv(rows));
+      zip.file(`json/${t}.json`, JSON.stringify(rows));
+      if (t === 'client_documents') clientDocs = rows;
     } catch (e) { notes.push(`Tabela ${t}: falha (${(e as any)?.message})`); }
   }
 
   // documentos.csv com links de download temporários
   try {
-    const docs = fullData['client_documents'] || [];
+    const docs = clientDocs;
     const docRows: Record<string, any>[] = [];
     for (const d of docs) {
       let link = '';
@@ -140,9 +142,6 @@ Deno.serve(async (req: Request) => {
     } catch (e) { notes.push(`Relatório ${rpc}: ${(e as any)?.message}`); }
   }
 
-  // JSON completo
-  zip.file('dados-completos.json', JSON.stringify(fullData, null, 2));
-
   // LEIA-ME
   const generatedAt = new Date().toISOString();
   const readme = [
@@ -151,7 +150,7 @@ Deno.serve(async (req: Request) => {
     '',
     'Conteúdo do pacote:',
     '- csv/            : um arquivo CSV por conjunto de dados',
-    '- dados-completos.json : todos os dados estruturados (para migração)',
+    '- json/          : todos os dados estruturados por tabela (para migração)',
     '- documentos.csv  : lista de documentos + links de download temporários (validade ~1h)',
     '- relatorios/     : relatórios consolidados',
     '',
@@ -167,7 +166,7 @@ Deno.serve(async (req: Request) => {
   zip.file('LEIA-ME.txt', readme);
 
   // Gera o zip
-  const bytes = await zip.generateAsync({ type: 'uint8array' });
+  const bytes = await zip.generateAsync({ type: 'uint8array', compression: 'STORE' });
 
   // Limpeza: remove pacotes anteriores (mantém no máximo o mais recente no bucket)
   try {
