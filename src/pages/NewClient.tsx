@@ -4,8 +4,8 @@ import { PremiumCard, RoundedButton, SectionHeader } from '@/components/ui/Premi
 import { ChevronLeft, Save, UploadCloud, FileText, X, Loader2, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { CLIENT_STAGES, ClientStage, isStageRestrictedForRole, missingFieldsForConcluido } from '@/data/clients';
 import { RJ_CITIES, getNeighborhoods } from '@/data/cities';
-import { BUILDERS } from '@/data/builders';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
+import { BuilderSelect } from '@/components/ui/BuilderSelect';
 import { useApp } from '@/context/AppContext';
 import { useAuthorization } from '@/hooks/useAuthorization';
 
@@ -601,12 +601,9 @@ export default function NewClient() {
             </div>
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-1">Construtora</label>
-              <SearchableSelect
+              <BuilderSelect
                 value={formData.builder}
                 onChange={(v) => setFormData(prev => ({ ...prev, builder: v }))}
-                options={BUILDERS}
-                placeholder="Selecione a construtora"
-                searchPlaceholder="Buscar construtora..."
               />
             </div>
             <div>

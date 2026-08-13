@@ -4,8 +4,8 @@ import { PremiumCard, StatusBadge, SectionHeader, RoundedButton } from '@/compon
 import { ChevronLeft, Phone, Mail, Calendar, Edit2, Check, Building2, Wallet, History, Trash2, FileText, Save, X, UploadCloud, Plus, ChevronDown, ChevronUp } from 'lucide-react';
 import { Client, CLIENT_STAGES, ClientStage, isStageRestrictedForRole, missingFieldsForConcluido } from '@/data/clients';
 import { RJ_CITIES, getNeighborhoods } from '@/data/cities';
-import { BUILDERS } from '@/data/builders';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
+import { BuilderSelect } from '@/components/ui/BuilderSelect';
 import { motion, AnimatePresence } from 'motion/react';
 import { Modal } from '@/components/ui/Modal';
 import { useApp } from '@/context/AppContext';
@@ -817,12 +817,10 @@ export default function ClientDetails() {
                         />
                       )
                     ) : key === 'builder' ? (
-                      <SearchableSelect
+                      <BuilderSelect
                         value={editForm.builder || ''}
                         onChange={(v) => setEditForm({ ...editForm, builder: v })}
-                        options={BUILDERS}
-                        placeholder="Selecione a construtora"
-                        searchPlaceholder="Buscar construtora..."
+                        inputClassName="p-2 rounded-lg focus:ring-gold-400"
                       />
                     ) : (
                       <input
