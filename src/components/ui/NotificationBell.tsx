@@ -6,6 +6,8 @@ import {
     UserPlus, MessageCircle, AlertTriangle, Target, Briefcase, Megaphone, Info
 } from 'lucide-react';
 import { useNotifications, Notification } from '@/context/NotificationContext';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 
 // Helper to calculate relative time
 const timeAgo = (dateStr: string) => {
@@ -121,6 +123,7 @@ const NotificationItem = ({
 
 export const NotificationBell = () => {
     const { notifications, unreadCount, markAllAsRead, deleteAllNotifications, loading } = useNotifications();
+    const { requestConfirm, confirmDialogProps } = useConfirmDialog();
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -176,7 +179,14 @@ export const NotificationBell = () => {
                             <h3 className="text-sm font-bold text-text-primary">Notificações</h3>
                             {notifications.length > 0 && (
                                 <button
-                                    onClick={() => deleteAllNotifications()}
+                                    onClick={() => {
+                                        requestConfirm({
+                                            title: 'Limpar notificações',
+                                            message: 'Tem certeza que deseja limpar todas as notificações? Esta ação não poderá ser desfeita.',
+                                            confirmLabel: 'Limpar todas',
+                                            onConfirm: () => deleteAllNotifications(),
+                                        });
+                                    }}
                                     className="text-[11px] font-semibold text-gold-600 hover:text-gold-700 flex items-center gap-1 transition-colors"
                                 >
                                     <CheckCheck size={14} /> Limpar Todas
@@ -213,6 +223,8 @@ export const NotificationBell = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            <ConfirmDialog {...confirmDialogProps} />
         </div>
     );
 };

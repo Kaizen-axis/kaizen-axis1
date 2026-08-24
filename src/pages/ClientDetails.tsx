@@ -8,6 +8,8 @@ import { BUILDERS } from '@/data/builders';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { motion, AnimatePresence } from 'motion/react';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useApp } from '@/context/AppContext';
 import { useAuthorization } from '@/hooks/useAuthorization';
 import { supabase } from '@/lib/supabase';
@@ -82,6 +84,7 @@ export default function ClientDetails() {
     directorates,
   } = useApp();
   const { role, canViewAllClients } = useAuthorization();
+  const { requestConfirm, confirmDialogProps } = useConfirmDialog();
 
   // Regra de etapas avançadas centralizada em @/data/clients (isStageRestrictedForRole)
 
@@ -364,14 +367,18 @@ export default function ClientDetails() {
     cancelEditProponent();
   };
 
-  const handleDeleteProponent = async (proponentId: string) => {
-    const confirmed = window.confirm('Deseja realmente remover este proponente?');
-    if (!confirmed) return;
-
-    const result = await deleteClientProponent(proponentId);
-    if (!result.success) {
-      alert(`Erro ao remover proponente: ${result.error || 'erro desconhecido'}`);
-    }
+  const handleDeleteProponent = (proponentId: string) => {
+    requestConfirm({
+      title: 'Remover proponente',
+      message: 'Tem certeza que deseja remover este proponente? Esta ação não poderá ser desfeita.',
+      confirmLabel: 'Remover',
+      onConfirm: async () => {
+        const result = await deleteClientProponent(proponentId);
+        if (!result.success) {
+          alert(`Erro ao remover proponente: ${result.error || 'erro desconhecido'}`);
+        }
+      },
+    });
   };
 
   const confirmDeleteDocument = async () => {
@@ -1244,45 +1251,25 @@ export default function ClientDetails() {
         </div>
       </Modal>
 
-      <Modal
+      <ConfirmDialog
         isOpen={isDeleteClientModalOpen}
         onClose={() => setIsDeleteClientModalOpen(false)}
+        onConfirm={confirmDeleteClient}
         title="Excluir Cliente"
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-text-secondary">
-            Tem certeza que deseja excluir este cliente? Esta ação não pode ser desfeita.
-          </p>
-          <div className="flex gap-3 pt-2">
-            <RoundedButton variant="secondary" fullWidth onClick={() => setIsDeleteClientModalOpen(false)}>
-              Cancelar
-            </RoundedButton>
-            <RoundedButton fullWidth onClick={confirmDeleteClient} className="!bg-red-500 hover:!bg-red-600 text-white border-none">
-              Excluir
-            </RoundedButton>
-          </div>
-        </div>
-      </Modal>
+        message="Tem certeza que deseja excluir este cliente? Esta ação não poderá ser desfeita."
+        confirmLabel="Excluir"
+      />
 
-      <Modal
+      <ConfirmDialog
         isOpen={!!documentToDelete}
         onClose={() => setDocumentToDelete(null)}
+        onConfirm={confirmDeleteDocument}
         title="Excluir Documento"
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-text-secondary">
-            Tem certeza que deseja excluir este documento?
-          </p>
-          <div className="flex gap-3 pt-2">
-            <RoundedButton variant="secondary" fullWidth onClick={() => setDocumentToDelete(null)}>
-              Cancelar
-            </RoundedButton>
-            <RoundedButton fullWidth onClick={confirmDeleteDocument} className="!bg-red-500 hover:!bg-red-600 text-white border-none">
-              Excluir
-            </RoundedButton>
-          </div>
-        </div>
-      </Modal>
+        message="Tem certeza que deseja excluir este documento? Esta ação não poderá ser desfeita."
+        confirmLabel="Excluir"
+      />
+
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

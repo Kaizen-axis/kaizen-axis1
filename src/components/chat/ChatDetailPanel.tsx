@@ -11,6 +11,8 @@ import { ChatMessageBubble, BubbleMessage } from './ChatMessageBubble';
 import { ChatInputBar } from './ChatInputBar';
 import { ChatWelcome } from './ChatWelcome';
 import { ChatInfoModal, ChatProfileInfo, ChatGroupInfo } from './ChatInfoModal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { getChatAudioExtension } from '@/lib/chat-audio';
 
 interface ChatDetailPanelProps {
@@ -83,6 +85,7 @@ export function ChatDetailPanel({
 }: ChatDetailPanelProps) {
   const { user, profile, allProfiles } = useApp();
   const { markConversationRead } = useChatUnread();
+  const { requestConfirm, confirmDialogProps } = useConfirmDialog();
   const myId = user?.id;
   const myName = profile?.chat_display_name || profile?.name || user?.email || 'Usuario';
 
@@ -351,31 +354,42 @@ export function ChatDetailPanel({
     setInfoLoading(false);
   }, [groupId, isGroup, isKAI, otherAvatar, otherId, otherName, otherRole]);
 
-  const handleRemoveGroupMember = useCallback(async (memberId: string) => {
+  const handleRemoveGroupMember = useCallback((memberId: string) => {
     if (!groupId || !myId || memberId === myId) return;
-    // M-02: re-fetch creator from DB — don't trust stale in-memory groupInfo.created_by
-    const { data: freshGroup } = await supabase
-      .from('chat_groups').select('created_by').eq('id', groupId).maybeSingle();
-    if (!freshGroup || freshGroup.created_by !== myId) return;
-    setRemovingMemberId(memberId);
-    const { error } = await supabase
-      .from('chat_group_members')
-      .delete()
-      .eq('group_id', groupId)
-      .eq('user_id', memberId);
 
-    if (error) {
-      alert('Erro ao remover participante do grupo.');
-      setRemovingMemberId(null);
-      return;
-    }
+    const member = groupInfo?.members.find(candidate => candidate.id === memberId);
+    const memberName = member?.chat_display_name || member?.name || 'este membro';
 
-    setGroupInfo(prev => prev
-      ? { ...prev, members: prev.members.filter(member => member.id !== memberId) }
-      : prev
-    );
-    setRemovingMemberId(null);
-  }, [groupId, groupInfo?.created_by, myId]);
+    requestConfirm({
+      title: 'Remover do grupo',
+      message: `Tem certeza que deseja remover ${memberName} do grupo?`,
+      confirmLabel: 'Remover',
+      onConfirm: async () => {
+        const { data: freshGroup } = await supabase
+          .from('chat_groups').select('created_by').eq('id', groupId).maybeSingle();
+        if (!freshGroup || freshGroup.created_by !== myId) return;
+
+        setRemovingMemberId(memberId);
+        const { error } = await supabase
+          .from('chat_group_members')
+          .delete()
+          .eq('group_id', groupId)
+          .eq('user_id', memberId);
+
+        if (error) {
+          alert('Erro ao remover participante do grupo.');
+          setRemovingMemberId(null);
+          return;
+        }
+
+        setGroupInfo(prev => prev
+          ? { ...prev, members: prev.members.filter(m => m.id !== memberId) }
+          : prev
+        );
+        setRemovingMemberId(null);
+      },
+    });
+  }, [groupId, groupInfo?.members, myId, requestConfirm]);
 
   const handleAddGroupMember = useCallback(async (memberId: string) => {
     if (!groupId || !myId || groupInfo?.created_by !== myId || groupInfo.members.some(member => member.id === memberId)) return;
@@ -414,56 +428,67 @@ export function ChatDetailPanel({
     setAddingMemberId(null);
   }, [availableGroupMembers, groupId, groupInfo, myId, myName]);
 
-  const handleLeaveGroup = useCallback(async () => {
+  const handleLeaveGroup = useCallback(() => {
     if (!groupId || !myId || groupInfo?.created_by === myId) return;
-    if (!confirm('Sair deste grupo?')) return;
 
-    setLeavingGroup(true);
-    const { error } = await supabase
-      .from('chat_group_members')
-      .delete()
-      .eq('group_id', groupId)
-      .eq('user_id', myId);
+    requestConfirm({
+      title: 'Sair do grupo',
+      message: 'Tem certeza que deseja sair deste grupo?',
+      confirmLabel: 'Sair',
+      onConfirm: async () => {
+        setLeavingGroup(true);
+        const { error } = await supabase
+          .from('chat_group_members')
+          .delete()
+          .eq('group_id', groupId)
+          .eq('user_id', myId);
 
-    if (error) {
-      alert('Erro ao sair do grupo.');
-      setLeavingGroup(false);
-      return;
-    }
+        if (error) {
+          alert('Erro ao sair do grupo.');
+          setLeavingGroup(false);
+          return;
+        }
 
-    setLeavingGroup(false);
-    setShowInfo(false);
-    setGroupInfo(null);
-    setMessages([]);
-    onLeftGroup?.(groupId);
-    onClose?.();
-  }, [groupId, groupInfo?.created_by, myId, onClose, onLeftGroup]);
+        setLeavingGroup(false);
+        setShowInfo(false);
+        setGroupInfo(null);
+        setMessages([]);
+        onLeftGroup?.(groupId);
+        onClose?.();
+      },
+    });
+  }, [groupId, groupInfo?.created_by, myId, onClose, onLeftGroup, requestConfirm]);
 
-  const handleDeleteGroup = useCallback(async () => {
+  const handleDeleteGroup = useCallback(() => {
     if (!groupId || !myId || groupInfo?.created_by !== myId) return;
-    // M-05: strip control chars from group name to prevent UI spoofing via \n
     const safeGroupName = groupInfo.name.replace(/[\r\n\t]/g, ' ').slice(0, 100);
-    if (!confirm(`Excluir o grupo "${safeGroupName}"? Essa ação removerá o grupo para todos.`)) return;
 
-    setDeletingGroup(true);
-    const { error } = await supabase
-      .from('chat_groups')
-      .delete()
-      .eq('id', groupId);
+    requestConfirm({
+      title: 'Excluir grupo',
+      message: `Tem certeza que deseja excluir o grupo "${safeGroupName}"? Esta ação removerá o grupo para todos e não poderá ser desfeita.`,
+      confirmLabel: 'Excluir',
+      onConfirm: async () => {
+        setDeletingGroup(true);
+        const { error } = await supabase
+          .from('chat_groups')
+          .delete()
+          .eq('id', groupId);
 
-    if (error) {
-      alert('Erro ao excluir grupo.');
-      setDeletingGroup(false);
-      return;
-    }
+        if (error) {
+          alert('Erro ao excluir grupo.');
+          setDeletingGroup(false);
+          return;
+        }
 
-    setDeletingGroup(false);
-    setShowInfo(false);
-    setGroupInfo(null);
-    setMessages([]);
-    onLeftGroup?.(groupId);
-    onClose?.();
-  }, [groupId, groupInfo, myId, onClose, onLeftGroup]);
+        setDeletingGroup(false);
+        setShowInfo(false);
+        setGroupInfo(null);
+        setMessages([]);
+        onLeftGroup?.(groupId);
+        onClose?.();
+      },
+    });
+  }, [groupId, groupInfo, myId, onClose, onLeftGroup, requestConfirm]);
 
   const handleSendAudio = async (blob: Blob) => {
     if (!myId || !otherId || isKAI) return;
@@ -675,34 +700,47 @@ export function ChatDetailPanel({
     }, 'image/jpeg', 0.92);
   };
 
-  const handleDeleteForMe = useCallback(async (msgId: string) => {
+  const handleDeleteForMe = useCallback((msgId: string) => {
     if (!myId) return;
-    // A-01: check error before mutating local state
-    // C-01: new RPC signature — p_user_id removed, uses auth.uid() internally
-    const { error } = await supabase.rpc('chat_delete_for_me', { p_message_id: msgId });
-    if (!error) {
-      setMessages(prev => prev.filter(m => m.id !== msgId));
-    }
-  }, [myId]);
 
-  const handleDeleteForAll = useCallback(async (msgId: string) => {
+    requestConfirm({
+      title: 'Apagar mensagem',
+      message: 'Tem certeza que deseja apagar esta mensagem? Ela será removida apenas para você.',
+      confirmLabel: 'Apagar',
+      onConfirm: async () => {
+        const { error } = await supabase.rpc('chat_delete_for_me', { p_message_id: msgId });
+        if (!error) {
+          setMessages(prev => prev.filter(m => m.id !== msgId));
+        }
+      },
+    });
+  }, [myId, requestConfirm]);
+
+  const handleDeleteForAll = useCallback((msgId: string) => {
     if (!myId) return;
-    // M-03: snapshot for rollback
-    const previous = messages.find(m => m.id === msgId);
-    setMessages(prev => prev.map(m =>
-      m.id === msgId && m.isMe
-        ? { ...m, is_deleted: true, text: undefined, mediaUrl: undefined }
-        : m
-    ));
-    const { error } = await supabase
-      .from('chat_messages')
-      .update({ is_deleted: true, content: null, media_url: null })
-      .eq('id', msgId)
-      .eq('sender_id', myId);
-    if (error && previous) {
-      setMessages(prev => prev.map(m => m.id === msgId ? previous : m));
-    }
-  }, [myId, messages]);
+
+    requestConfirm({
+      title: 'Apagar para todos',
+      message: 'Tem certeza? A mensagem será removida para todos os participantes. Esta ação não poderá ser desfeita.',
+      confirmLabel: 'Apagar para todos',
+      onConfirm: async () => {
+        const previous = messages.find(m => m.id === msgId);
+        setMessages(prev => prev.map(m =>
+          m.id === msgId && m.isMe
+            ? { ...m, is_deleted: true, text: undefined, mediaUrl: undefined }
+            : m
+        ));
+        const { error } = await supabase
+          .from('chat_messages')
+          .update({ is_deleted: true, content: null, media_url: null })
+          .eq('id', msgId)
+          .eq('sender_id', myId);
+        if (error && previous) {
+          setMessages(prev => prev.map(m => m.id === msgId ? previous : m));
+        }
+      },
+    });
+  }, [myId, messages, requestConfirm]);
 
   const handleReact = useCallback(async (msgId: string, emoji: string) => {
     if (!myId) return;
@@ -991,6 +1029,8 @@ export function ChatDetailPanel({
       onLeaveGroup={handleLeaveGroup}
       onDeleteGroup={handleDeleteGroup}
     />
+
+    <ConfirmDialog {...confirmDialogProps} />
     </>
   );
 }

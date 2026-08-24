@@ -7,6 +7,8 @@ import { useChatUnread } from '@/context/ChatUnreadContext';
 import { formatTime, formatPreview } from '@/lib/chat-utils';
 import { ChatSidebar } from '@/components/chat/ChatSidebar';
 import { ChatDetailPanel } from '@/components/chat/ChatDetailPanel';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import type { ConversationItemData } from '@/components/chat/ChatConversationItem';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -46,6 +48,7 @@ type EnrichedConvo = ConversationPreview & {
 export default function Chat() {
   const navigate = useNavigate();
   const { allProfiles, user } = useApp();
+  const { requestConfirm, confirmDialogProps } = useConfirmDialog();
   const [conversations, setConversations] = useState<ConversationPreview[]>([]);
   const [chatProfiles, setChatProfiles] = useState<Record<string, ChatProfile>>({});
   const [loading, setLoading] = useState(true);
@@ -203,13 +206,19 @@ export default function Chat() {
   // ── Delete conversation (apenas para mim — oculta via localStorage) ───────
   const handleDeleteConversation = (conversationId: string) => {
     if (!myId) return;
-    if (!confirm('Apagar esta conversa para você? As mensagens serão removidas somente para você.')) return;
-    try { localStorage.setItem(`hidden-conv-${myId}-${conversationId}`, '1'); } catch {}
-    setConversations(prev => prev.filter(c => c.conversationId !== conversationId));
-    if (selectedId && ctxConvo?.convo.conversationId === conversationId) {
-      setSelectedId(null);
-    }
-    setCtxConvo(null);
+    requestConfirm({
+      title: 'Apagar conversa',
+      message: 'Tem certeza que deseja apagar esta conversa? As mensagens serão removidas somente para você.',
+      confirmLabel: 'Apagar',
+      onConfirm: () => {
+        try { localStorage.setItem(`hidden-conv-${myId}-${conversationId}`, '1'); } catch {}
+        setConversations(prev => prev.filter(c => c.conversationId !== conversationId));
+        if (selectedId && ctxConvo?.convo.conversationId === conversationId) {
+          setSelectedId(null);
+        }
+        setCtxConvo(null);
+      },
+    });
   };
 
   const handleConvoTouchStart = (e: React.TouchEvent, convo: ConversationItemData) => {
@@ -391,6 +400,8 @@ export default function Chat() {
           </div>
         </>
       )}
+
+      <ConfirmDialog {...confirmDialogProps} />
     </>
   );
 }

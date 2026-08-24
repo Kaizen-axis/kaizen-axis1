@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { PremiumCard, PageHeader, RoundedButton } from '@/components/ui/PremiumComponents';
 import { PlayCircle, FileText, Image as ImageIcon, Plus, Edit2, Trash2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useAuthorization } from '@/hooks/useAuthorization';
 import { useApp, TrainingItem } from '@/context/AppContext';
 import { supabase } from '@/lib/supabase';
@@ -168,6 +170,7 @@ function getYouTubeDuration(videoId: string): Promise<string | null> {
 export default function Training() {
   const { isBroker, canCreateStrategicResources } = useAuthorization();
   const { trainings, addTraining, updateTraining, deleteTraining, getDownloadUrl, completeTraining } = useApp();
+  const { requestConfirm, confirmDialogProps } = useConfirmDialog();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [viewingItem, setViewingItem] = useState<TrainingItem | null>(null);
   const [viewingUrl, setViewingUrl] = useState<string | null>(null);
@@ -426,14 +429,20 @@ export default function Training() {
     }
   };
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
+  const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm('Tem certeza que deseja excluir este treinamento?')) return;
-    try {
-      await deleteTraining(id);
-    } catch (e: any) {
-      alert(e?.message || 'Nao foi possivel excluir o treinamento.');
-    }
+    requestConfirm({
+      title: 'Excluir treinamento',
+      message: 'Tem certeza que deseja excluir este treinamento? Esta ação não poderá ser desfeita.',
+      confirmLabel: 'Excluir',
+      onConfirm: async () => {
+        try {
+          await deleteTraining(id);
+        } catch (e: any) {
+          alert(e?.message || 'Nao foi possivel excluir o treinamento.');
+        }
+      },
+    });
   };
 
   const getIcon = (type: string) => {
@@ -756,6 +765,8 @@ export default function Training() {
           </div>
         </Modal>
       )}
+
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

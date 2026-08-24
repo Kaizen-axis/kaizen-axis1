@@ -4,7 +4,7 @@ import { RoundedButton } from '@/components/ui/PremiumComponents';
 import { ShieldCheck, LogOut, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useApp } from '@/context/AppContext';
-import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 export default function PendingApproval() {
     const navigate = useNavigate();
@@ -64,35 +64,15 @@ export default function PendingApproval() {
                     Sair e voltar ao Login
                 </RoundedButton>
 
-                <Modal
+                <ConfirmDialog
                     isOpen={isLogoutConfirmOpen}
                     onClose={() => !isSigningOut && setIsLogoutConfirmOpen(false)}
+                    onConfirm={handleSignOut}
                     title="Confirmar saída"
-                >
-                    <div className="space-y-4 text-left">
-                        <p className="text-sm text-text-secondary">
-                            Tem certeza que deseja sair da conta agora?
-                        </p>
-                        <div className="flex items-center justify-end gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setIsLogoutConfirmOpen(false)}
-                                disabled={isSigningOut}
-                                className="px-4 py-2 rounded-lg border border-surface-200 text-text-secondary hover:bg-surface-100 disabled:opacity-60"
-                            >
-                                Cancelar
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => { void handleSignOut(); }}
-                                disabled={isSigningOut}
-                                className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 disabled:opacity-60"
-                            >
-                                {isSigningOut ? 'Saindo...' : 'Sair agora'}
-                            </button>
-                        </div>
-                    </div>
-                </Modal>
+                    message="Tem certeza que deseja sair? Você precisará fazer login novamente para acessar o sistema."
+                    confirmLabel="Sair agora"
+                    loading={isSigningOut}
+                />
 
             </div>
         </div>

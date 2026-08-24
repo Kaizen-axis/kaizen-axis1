@@ -2,12 +2,15 @@ import { useState } from 'react';
 import { PremiumCard, PageHeader, RoundedButton } from '@/components/ui/PremiumComponents';
 import { Globe, Plus, Edit2, Trash2, ExternalLink, Search, Building2, Landmark } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useAuthorization } from '@/hooks/useAuthorization';
 import { useApp, Portal } from '@/context/AppContext';
 
 export default function Portals() {
   const { isBroker, canCreateStrategicResources } = useAuthorization();
   const { portals, addPortal, updatePortal, deletePortal } = useApp();
+  const { requestConfirm, confirmDialogProps } = useConfirmDialog();
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPortal, setEditingPortal] = useState<Portal | null>(null);
@@ -55,10 +58,13 @@ export default function Portals() {
     setIsModalOpen(false);
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Tem certeza que deseja excluir este portal?')) {
-      await deletePortal(id);
-    }
+  const handleDelete = (id: string) => {
+    requestConfirm({
+      title: 'Excluir portal',
+      message: 'Tem certeza que deseja excluir este portal? Esta ação não poderá ser desfeita.',
+      confirmLabel: 'Excluir',
+      onConfirm: () => deletePortal(id),
+    });
   };
 
   const getIcon = (category: string) => {
@@ -184,6 +190,8 @@ export default function Portals() {
           </RoundedButton>
         </div>
       </Modal>
+
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { supabase } from '@/lib/supabase';
 import { GamificationProfile } from '@/components/gamification/GamificationProfile';
 import { useApp } from '@/context/AppContext';
@@ -56,6 +58,7 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
 export default function Settings() {
   const navigate = useNavigate();
   const { signOut } = useApp();
+  const { requestConfirm, confirmDialogProps } = useConfirmDialog();
 
   // ── estado de dados ──────────────────────────────────────────────────────
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -524,7 +527,17 @@ export default function Settings() {
               Salvar Alterações
             </RoundedButton>
             <button
-              onClick={() => { if (confirm('Deseja realmente excluir sua conta? Esta ação é irreversível.')) { supabase.auth.signOut(); navigate('/login'); } }}
+              onClick={() => {
+                requestConfirm({
+                  title: 'Excluir perfil',
+                  message: 'Tem certeza que deseja excluir sua conta? Esta ação é irreversível e não poderá ser desfeita.',
+                  confirmLabel: 'Excluir perfil',
+                  onConfirm: async () => {
+                    await supabase.auth.signOut();
+                    navigate('/login');
+                  },
+                });
+              }}
               className="w-full py-3 text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors flex items-center justify-center gap-2"
             >
               <Trash2 size={16} /> Excluir Perfil
@@ -533,35 +546,15 @@ export default function Settings() {
         </div>
       </Modal>
 
-      <Modal
+      <ConfirmDialog
         isOpen={isLogoutConfirmOpen}
         onClose={() => !isSigningOut && setIsLogoutConfirmOpen(false)}
+        onConfirm={handleConfirmLogout}
         title="Confirmar saída"
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-text-secondary">
-            Deseja realmente sair da conta agora?
-          </p>
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setIsLogoutConfirmOpen(false)}
-              disabled={isSigningOut}
-              className="px-4 py-2 rounded-lg border border-surface-200 text-text-secondary hover:bg-surface-100 disabled:opacity-60"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={handleConfirmLogout}
-              disabled={isSigningOut}
-              className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 disabled:opacity-60"
-            >
-              {isSigningOut ? 'Saindo...' : 'Sair agora'}
-            </button>
-          </div>
-        </div>
-      </Modal>
+        message="Tem certeza que deseja sair? Você precisará fazer login novamente para acessar o sistema."
+        confirmLabel="Sair agora"
+        loading={isSigningOut}
+      />
 
       {/* ════════ MODAL: Email ════════════════════════════════════════ */}
       <Modal isOpen={isEmailModalOpen} onClose={() => setIsEmailModalOpen(false)} title="Alterar Email">
@@ -678,6 +671,8 @@ export default function Settings() {
           </div>
         )}
       </Modal>
+
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

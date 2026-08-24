@@ -5,7 +5,7 @@ import { RefreshCw, Clock, Users, Wifi, WifiOff, LogOut } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useApp } from '@/context/AppContext';
 import { useAuthorization } from '@/hooks/useAuthorization';
-import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -255,35 +255,15 @@ export default function CheckInDisplay() {
         <RefreshCw size={12} /> Atualizar QR manualmente
       </button>
 
-      <Modal
+      <ConfirmDialog
         isOpen={isLogoutConfirmOpen}
         onClose={() => !signingOut && setIsLogoutConfirmOpen(false)}
+        onConfirm={handleSignOut}
         title="Confirmar saída"
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-text-secondary">
-            Deseja sair da sessão da tela de check-in?
-          </p>
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setIsLogoutConfirmOpen(false)}
-              disabled={signingOut}
-              className="px-4 py-2 rounded-lg border border-surface-200 text-text-secondary hover:bg-surface-100 disabled:opacity-60"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={() => { void handleSignOut(); }}
-              disabled={signingOut}
-              className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 disabled:opacity-60"
-            >
-              {signingOut ? 'Saindo...' : 'Sair agora'}
-            </button>
-          </div>
-        </div>
-      </Modal>
+        message="Tem certeza que deseja sair? Você precisará fazer login novamente para acessar o sistema."
+        confirmLabel="Sair agora"
+        loading={signingOut}
+      />
     </div>
   );
 }

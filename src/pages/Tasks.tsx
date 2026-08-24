@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { PremiumCard, StatusBadge, PageHeader, RoundedButton } from '@/components/ui/PremiumComponents';
 import { CheckCircle2, Calendar, User, Plus, Edit2, Trash2, X, Clock, Loader2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useApp, Task } from '@/context/AppContext';
 import { supabase } from '@/lib/supabase';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
@@ -11,6 +13,7 @@ import { ptBR } from 'date-fns/locale';
 
 export default function Tasks() {
   const { tasks, addTask, updateTask, deleteTask, loading, profile, allProfiles, teams } = useApp();
+  const { requestConfirm, confirmDialogProps } = useConfirmDialog();
   const [filter, setFilter] = useState('Todos');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -63,13 +66,19 @@ export default function Tasks() {
     } finally { setIsSaving(false); }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir esta tarefa?')) return;
-    try {
-      await deleteTask(id);
-    } catch (e: any) {
-      alert(e?.message || 'Nao foi possivel excluir a tarefa. Tente novamente.');
-    }
+  const handleDelete = (id: string) => {
+    requestConfirm({
+      title: 'Excluir tarefa',
+      message: 'Tem certeza que deseja excluir esta tarefa? Esta ação não poderá ser desfeita.',
+      confirmLabel: 'Excluir',
+      onConfirm: async () => {
+        try {
+          await deleteTask(id);
+        } catch (e: any) {
+          alert(e?.message || 'Nao foi possivel excluir a tarefa. Tente novamente.');
+        }
+      },
+    });
   };
 
   const toggleComplete = async (task: Task) => {
@@ -422,6 +431,8 @@ export default function Tasks() {
           </RoundedButton>
         </div>
       </Modal>
+
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

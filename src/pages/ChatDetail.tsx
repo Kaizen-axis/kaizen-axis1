@@ -15,6 +15,8 @@ import { supabase } from '@/lib/supabase';
 import { useApp } from '@/context/AppContext';
 import { useChatUnread } from '@/context/ChatUnreadContext';
 import { ChatDetailHeader } from '@/components/chat/ChatDetailHeader';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { getChatAudioExtension, getSupportedChatAudioMimeType } from '@/lib/chat-audio';
 
 interface ChatMessage {
@@ -418,6 +420,7 @@ export default function ChatDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, allProfiles, profile } = useApp();
+  const { requestConfirm, confirmDialogProps } = useConfirmDialog();
 
   const [chatUser, setChatUser] = useState<ChatUser | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -1271,22 +1274,35 @@ export default function ChatDetail() {
   // ─── Delete message ───────────────────────────────────────────────────────
 
   // Apagar para mim: adiciona myId ao array deleted_for — a mensagem some só para o usuário atual
-  const handleDeleteForMe = async (msg: ChatMessage) => {
-    const updated = [...(msg.deleted_for ?? []), myId];
-    setMessages(prev => prev.filter(m => m.id !== msg.id));
-    setCtxMenu(null);
-    await supabase.from('chat_messages').update({ deleted_for: updated }).eq('id', msg.id);
+  const handleDeleteForMe = (msg: ChatMessage) => {
+    requestConfirm({
+      title: 'Apagar mensagem',
+      message: 'Tem certeza que deseja apagar esta mensagem? Ela será removida apenas para você.',
+      confirmLabel: 'Apagar',
+      onConfirm: async () => {
+        const updated = [...(msg.deleted_for ?? []), myId];
+        setMessages(prev => prev.filter(m => m.id !== msg.id));
+        setCtxMenu(null);
+        await supabase.from('chat_messages').update({ deleted_for: updated }).eq('id', msg.id);
+      },
+    });
   };
 
-  // Apagar para todos: marca is_deleted = true, limpa conteúdo — todos veem o placeholder
-  const handleDeleteForAll = async (msgId: string) => {
-    setMessages(prev => prev.map(m =>
-      m.id === msgId ? { ...m, is_deleted: true, text: undefined } : m
-    ));
-    setCtxMenu(null);
-    await supabase.from('chat_messages')
-      .update({ is_deleted: true, content: null, media_url: null })
-      .eq('id', msgId);
+  const handleDeleteForAll = (msgId: string) => {
+    requestConfirm({
+      title: 'Apagar para todos',
+      message: 'Tem certeza? A mensagem será removida para todos os participantes. Esta ação não poderá ser desfeita.',
+      confirmLabel: 'Apagar para todos',
+      onConfirm: async () => {
+        setMessages(prev => prev.map(m =>
+          m.id === msgId ? { ...m, is_deleted: true, text: undefined } : m
+        ));
+        setCtxMenu(null);
+        await supabase.from('chat_messages')
+          .update({ is_deleted: true, content: null, media_url: null })
+          .eq('id', msgId);
+      },
+    });
   };
 
   // ─── Long press / right-click for context menu ────────────────────────────
@@ -1939,6 +1955,8 @@ export default function ChatDetail() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

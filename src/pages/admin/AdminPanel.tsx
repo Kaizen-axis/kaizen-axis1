@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { PageHeader, PremiumCard, RoundedButton } from '@/components/ui/PremiumComponents';
 import { Users, Shield, ShieldCheck, Target, Megaphone, BarChart3, Plus, Search, Trophy, Download, FileSpreadsheet, FileText, Trash2, Edit2, ChevronDown, ChevronLeft, Calendar, Loader2, Building2, TrendingUp, Printer, Star, Award, Zap, Flame, MoreHorizontal, FileDown, MapPin } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useApp, Team, Goal, Announcement, Directorate } from '@/context/AppContext';
 import { useAuthorization } from '@/hooks/useAuthorization';
 import { Navigate, useNavigate } from 'react-router-dom';
@@ -85,6 +87,7 @@ export default function AdminPanel() {
     developments,
     loading, user
   } = useApp();
+  const { requestConfirm, confirmDialogProps } = useConfirmDialog();
 
   const [activeTab, setActiveTab] = useState<Tab>('users');
   const [activeGoalTab, setActiveGoalTab] = useState<'active' | 'ended'>('active');
@@ -1037,49 +1040,53 @@ export default function AdminPanel() {
   };
 
 
-  const handleDeactivateUser = async (userId: string, userName: string) => {
-    const confirmMessage = `⚠️ Confirmar desativação\n\nVocê está prestes a remover o acesso do usuário:\n\n"${userName}"\n\nEsta ação:\n- bloqueia o acesso do usuário\n- mantém o histórico e as vendas já registradas\n\nDigite "CONFIRMAR" para prosseguir:`;
+  const handleDeactivateUser = (userId: string, userName: string) => {
+    requestConfirm({
+      title: 'Confirmar desativação',
+      message: (
+        <>
+          <p>Você está prestes a remover o acesso do usuário:</p>
+          <p className="font-bold text-text-primary mt-2">&quot;{userName}&quot;</p>
+          <ul className="mt-3 space-y-1 list-disc list-inside">
+            <li>Bloqueia o acesso do usuário</li>
+            <li>Mantém o histórico e as vendas já registradas</li>
+          </ul>
+        </>
+      ),
+      confirmLabel: 'Desativar usuário',
+      requireTypedConfirm: true,
+      onConfirm: async () => {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ status: 'Inativo' })
+          .eq('id', userId);
 
-    const userInput = prompt(confirmMessage);
+        if (error) throw error;
 
-    if (userInput !== 'CONFIRMAR') {
-      alert('Desativação cancelada.');
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ status: 'Inativo' })
-        .eq('id', userId);
-
-      if (error) throw error;
-
-      alert(`✅ Usuário "${userName}" foi desativado com sucesso. O histórico foi preservado.`);
-      await refreshProfiles();
-    } catch (error: any) {
-      console.error('Erro ao desativar usuário:', error);
-      alert(`❌ Erro ao desativar usuário: ${error.message}`);
-    }
+        alert(`Usuário "${userName}" foi desativado com sucesso. O histórico foi preservado.`);
+        await refreshProfiles();
+      },
+    });
   };
 
-  const handleReactivateUser = async (userId: string, userName: string) => {
-    if (!confirm(`Reativar o usuário "${userName}"?`)) return;
+  const handleReactivateUser = (userId: string, userName: string) => {
+    requestConfirm({
+      title: 'Reativar usuário',
+      message: `Tem certeza que deseja reativar o usuário "${userName}"?`,
+      confirmLabel: 'Reativar',
+      variant: 'default',
+      onConfirm: async () => {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ status: 'Ativo' })
+          .eq('id', userId);
 
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ status: 'Ativo' })
-        .eq('id', userId);
+        if (error) throw error;
 
-      if (error) throw error;
-
-      alert(`✅ Usuário "${userName}" foi reativado com sucesso.`);
-      await refreshProfiles();
-    } catch (error: any) {
-      console.error('Erro ao reativar usuário:', error);
-      alert(`❌ Erro ao reativar usuário: ${error.message}`);
-    }
+        alert(`Usuário "${userName}" foi reativado com sucesso.`);
+        await refreshProfiles();
+      },
+    });
   };
   // ── Approval Flow ──────────────────────────────────────────────────────────
   const handleOpenApprovalModal = (userId: string) => {
@@ -1126,10 +1133,13 @@ export default function AdminPanel() {
     }
   };
 
-  const handleRejectUser = async (id: string) => {
-    if (confirm('Rejeitar este usuário?')) {
-      await updateProfile(id, { status: 'rejected' });
-    }
+  const handleRejectUser = (id: string) => {
+    requestConfirm({
+      title: 'Rejeitar usuário',
+      message: 'Tem certeza que deseja rejeitar este usuário? Esta ação não poderá ser desfeita.',
+      confirmLabel: 'Rejeitar',
+      onConfirm: () => updateProfile(id, { status: 'rejected' }),
+    });
   };
 
   // ── Team Actions ───────────────────────────────────────────────────────────
@@ -1159,26 +1169,38 @@ export default function AdminPanel() {
     }
   };
 
-  const handleToggleMember = async (teamId: string, userId: string) => {
+  const handleToggleMember = async (teamId: string, userId: string, userName?: string) => {
     const team = teams.find(t => t.id === teamId);
     if (!team) return;
     const members = getTeamMemberIds(team, allProfiles);
     const isAdding = !members.includes(userId);
 
-    try {
-      // Persiste o vínculo canônico no profile (RPC + trigger sincronizam members[]).
-      await updateProfile(userId, {
-        team: isAdding ? teamId : null,
-        team_id: isAdding ? teamId : null,
-        directorate_id: isAdding ? (team.directorate_id || null) : undefined,
-        manager_id: isAdding ? (team.manager_id || null) : undefined,
+    const performToggle = async () => {
+      try {
+        await updateProfile(userId, {
+          team: isAdding ? teamId : null,
+          team_id: isAdding ? teamId : null,
+          directorate_id: isAdding ? (team.directorate_id || null) : undefined,
+          manager_id: isAdding ? (team.manager_id || null) : undefined,
+        });
+        await refreshTeams();
+        await refreshProfiles();
+      } catch (e) {
+        console.error('Erro ao atualizar membro da equipe:', e);
+      }
+    };
+
+    if (!isAdding) {
+      requestConfirm({
+        title: 'Remover membro',
+        message: `Tem certeza que deseja remover ${userName || 'este membro'} da equipe?`,
+        confirmLabel: 'Remover',
+        onConfirm: performToggle,
       });
-      await refreshTeams();
-      await refreshProfiles();
-    } catch (e: any) {
-      console.error('Falha ao transferir membro de equipe:', e);
-      alert(`Não foi possível concluir a transferência de equipe. ${e?.message || ''}`.trim());
+      return;
     }
+
+    await performToggle();
   };
 
   // ── Goal Actions ───────────────────────────────────────────────────────────
@@ -1374,7 +1396,14 @@ export default function AdminPanel() {
                     <CardActionsMenu items={[
                       { label: 'Editar', icon: <Edit2 size={13} />, onClick: () => openTeamModal(team) },
                       { label: 'Gerenciar membros', icon: <Users size={13} />, onClick: () => { setSelectedTeamId(team.id); setIsMembersModalOpen(true); } },
-                      { label: 'Excluir', icon: <Trash2 size={13} />, danger: true, onClick: () => { if (confirm('Excluir equipe?')) deleteTeam(team.id); } },
+                      { label: 'Excluir', icon: <Trash2 size={13} />, danger: true, onClick: () => {
+                        requestConfirm({
+                          title: 'Excluir equipe',
+                          message: 'Tem certeza que deseja excluir esta equipe? Esta ação não poderá ser desfeita.',
+                          confirmLabel: 'Excluir',
+                          onConfirm: () => deleteTeam(team.id),
+                        });
+                      } },
                     ]} />
                   )}
                 />}
@@ -1487,7 +1516,14 @@ export default function AdminPanel() {
                         </div>
                         <div className="flex gap-2 ml-3 flex-shrink-0">
                           <button onClick={() => openGoalModal(goal, goal.type === 'Missão')} className="p-1.5 bg-surface-50 rounded-full hover:text-gold-600"><Edit2 size={14} /></button>
-                          <button onClick={() => { if (confirm('Excluir meta?')) deleteGoal(goal.id); }} className="p-1.5 bg-surface-50 rounded-full hover:text-red-500"><Trash2 size={14} /></button>
+                          <button onClick={() => {
+                            requestConfirm({
+                              title: 'Excluir meta',
+                              message: 'Tem certeza que deseja excluir esta meta? Esta ação não poderá ser desfeita.',
+                              confirmLabel: 'Excluir',
+                              onConfirm: () => deleteGoal(goal.id),
+                            });
+                          }} className="p-1.5 bg-surface-50 rounded-full hover:text-red-500"><Trash2 size={14} /></button>
                         </div>
                       </div>
                     </PremiumCard>
@@ -1520,7 +1556,14 @@ export default function AdminPanel() {
                         </div>
                         <div className="flex gap-2 flex-shrink-0">
                           <button onClick={() => openAnnouncementModal(ann)} className="p-1.5 bg-surface-50 rounded-full hover:text-gold-600"><Edit2 size={14} /></button>
-                          <button onClick={() => { if (confirm('Excluir anúncio?')) deleteAnnouncement(ann.id); }} className="p-1.5 bg-surface-50 rounded-full hover:text-red-500"><Trash2 size={14} /></button>
+                          <button onClick={() => {
+                            requestConfirm({
+                              title: 'Excluir anúncio',
+                              message: 'Tem certeza que deseja excluir este anúncio? Esta ação não poderá ser desfeita.',
+                              confirmLabel: 'Excluir',
+                              onConfirm: () => deleteAnnouncement(ann.id),
+                            });
+                          }} className="p-1.5 bg-surface-50 rounded-full hover:text-red-500"><Trash2 size={14} /></button>
                         </div>
                       </div>
                     </PremiumCard>
@@ -1922,7 +1965,14 @@ export default function AdminPanel() {
                   renderActions={(d) => (
                     <CardActionsMenu items={[
                       { label: 'Editar', icon: <Edit2 size={13} />, onClick: () => { setEditingDir(d); setDirForm({ name: d.name, description: d.description, manager_id: d.manager_id }); setIsDirModalOpen(true); } },
-                      { label: 'Excluir', icon: <Trash2 size={13} />, danger: true, onClick: () => { if (confirm('Excluir esta diretoria?')) deleteDirectorate(d.id); } },
+                      { label: 'Excluir', icon: <Trash2 size={13} />, danger: true, onClick: () => {
+                        requestConfirm({
+                          title: 'Excluir diretoria',
+                          message: 'Tem certeza que deseja excluir esta diretoria? Esta ação não poderá ser desfeita.',
+                          confirmLabel: 'Excluir',
+                          onConfirm: () => deleteDirectorate(d.id),
+                        });
+                      } },
                     ]} />
                   )}
                 />
@@ -2155,10 +2205,16 @@ export default function AdminPanel() {
     setAchievements(data || []);
   };
 
-  const deleteAchievement = async (id: string) => {
-    if (!confirm('Excluir conquista?')) return;
-    await supabase.from('achievements').delete().eq('id', id);
-    setAchievements(prev => prev.filter(a => a.id !== id));
+  const deleteAchievement = (id: string) => {
+    requestConfirm({
+      title: 'Excluir conquista',
+      message: 'Tem certeza que deseja excluir esta conquista? Esta ação não poderá ser desfeita.',
+      confirmLabel: 'Excluir',
+      onConfirm: async () => {
+        await supabase.from('achievements').delete().eq('id', id);
+        setAchievements(prev => prev.filter(a => a.id !== id));
+      },
+    });
   };
 
   const renderAchievementsTab = () => (
@@ -2389,7 +2445,7 @@ export default function AdminPanel() {
                     <div className="w-8 h-8 rounded-full bg-surface-200 flex items-center justify-center text-xs font-bold">{(u.name || '?').charAt(0)}</div>
                     <div><p className="text-sm font-medium">{u.name}</p><p className="text-xs text-text-secondary">{u.role}</p></div>
                   </div>
-                  <button onClick={() => selectedTeamId && handleToggleMember(selectedTeamId, u.id)}
+                  <button onClick={() => selectedTeamId && handleToggleMember(selectedTeamId, u.id, u.name)}
                     className={`text-xs font-medium hover:underline ${isMember ? 'text-red-500' : 'text-green-600'}`}>
                     {isMember ? 'Remover' : 'Adicionar'}
                   </button>
@@ -2655,6 +2711,8 @@ export default function AdminPanel() {
           <RoundedButton fullWidth onClick={saveAchievement}>Salvar Conquista</RoundedButton>
         </div>
       </Modal>
+
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

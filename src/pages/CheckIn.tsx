@@ -9,7 +9,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useApp } from '@/context/AppContext';
 import { cn } from '@/lib/utils';
-import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -804,35 +804,15 @@ export default function CheckIn() {
         )}
       </AnimatePresence>
 
-      <Modal
+      <ConfirmDialog
         isOpen={isLogoutConfirmOpen}
         onClose={() => !isSigningOut && setIsLogoutConfirmOpen(false)}
+        onConfirm={handleConfirmLogout}
         title="Confirmar saída"
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-text-secondary">
-            Deseja realmente encerrar a sessão e voltar para o login?
-          </p>
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setIsLogoutConfirmOpen(false)}
-              disabled={isSigningOut}
-              className="px-4 py-2 rounded-lg border border-surface-200 text-text-secondary hover:bg-surface-100 disabled:opacity-60"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={() => { void handleConfirmLogout(); }}
-              disabled={isSigningOut}
-              className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 disabled:opacity-60"
-            >
-              {isSigningOut ? 'Saindo...' : 'Sair agora'}
-            </button>
-          </div>
-        </div>
-      </Modal>
+        message="Tem certeza que deseja sair? Você precisará fazer login novamente para acessar o sistema."
+        confirmLabel="Sair agora"
+        loading={isSigningOut}
+      />
     </div>
   );
 }

@@ -4,6 +4,8 @@ import { PremiumCard, StatusBadge, PageHeader, RoundedButton } from '@/component
 import { Search, MapPin, Building2, Filter, ChevronRight, Plus, Upload, X, FileText, Image as ImageIcon, Loader2, Edit2, Trash2 } from 'lucide-react';
 import { FAB } from '@/components/Layout';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useApp, Development } from '@/context/AppContext';
 import { useAuthorization } from '@/hooks/useAuthorization';
 import { supabase } from '@/lib/supabase';
@@ -12,6 +14,7 @@ export default function Developments() {
   const navigate = useNavigate();
   const { developments, addDevelopment, updateDevelopment, deleteDevelopment, loading } = useApp();
   const { isBroker, canCreateStrategicResources } = useAuthorization();
+  const { requestConfirm, confirmDialogProps } = useConfirmDialog();
   const [filter, setFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [filterTypes, setFilterTypes] = useState<string[]>([]);
@@ -220,11 +223,14 @@ export default function Developments() {
     } finally { setIsSaving(false); }
   };
 
-  const handleDelete = async (id: string, e: React.MouseEvent) => {
+  const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm('Tem certeza que deseja excluir este empreendimento? Isso não pode ser desfeito.')) {
-      await deleteDevelopment(id);
-    }
+    requestConfirm({
+      title: 'Excluir empreendimento',
+      message: 'Tem certeza que deseja excluir este empreendimento? Esta ação não poderá ser desfeita.',
+      confirmLabel: 'Excluir',
+      onConfirm: () => deleteDevelopment(id),
+    });
   };
 
   return (
@@ -536,6 +542,8 @@ export default function Developments() {
           </RoundedButton>
         </div>
       </Modal>
+
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

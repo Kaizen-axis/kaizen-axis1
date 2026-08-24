@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Calendar as CalendarIcon, MapPin, Plus, Loader2, ChevronLeft, ChevronRight, ChevronDown, Filter } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import {
   format, addDays, startOfWeek, isSameDay, parseISO,
 } from 'date-fns';
@@ -40,6 +42,7 @@ export default function Schedule() {
   const navigate  = useNavigate();
   const { appointments, addAppointment, updateAppointment, deleteAppointment, loading, allProfiles, teams, directorates } = useApp();
   const { canViewAllClients } = useAuthorization();
+  const { requestConfirm, confirmDialogProps } = useConfirmDialog();
 
   const today = new Date();
 
@@ -156,13 +159,19 @@ export default function Schedule() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir este agendamento?')) return;
-    try {
-      await deleteAppointment(id);
-    } catch (e: any) {
-      alert(`Erro ao excluir: ${e?.message ?? 'Tente novamente.'}`);
-    }
+  const handleDelete = (id: string) => {
+    requestConfirm({
+      title: 'Excluir agendamento',
+      message: 'Tem certeza que deseja excluir este agendamento? Esta ação não poderá ser desfeita.',
+      confirmLabel: 'Excluir',
+      onConfirm: async () => {
+        try {
+          await deleteAppointment(id);
+        } catch (e: any) {
+          alert(`Erro ao excluir: ${e?.message ?? 'Tente novamente.'}`);
+        }
+      },
+    });
   };
 
   const toggleComplete = (apt: Appointment) => updateAppointment(apt.id, { completed: !apt.completed });
@@ -668,6 +677,8 @@ export default function Schedule() {
           </button>
         </div>
       </Modal>
+
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }
