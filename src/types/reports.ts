@@ -70,3 +70,48 @@ export interface DiretoriaReport {
     equipes: DiretoriaEquipe[];
     corretores: DiretoriaCorretor[];
 }
+
+// ─── Operations Report (hub /reports) ────────────────────────────────────────
+
+/** Pipeline distribution row: clients per stage in the selected period */
+export interface PipelineStageRow {
+    etapa: string;
+    quantidade: number;
+    percentual: number;      // 0-100, 2 decimals
+}
+
+/** Trend chart bucket (day or week): Leads, Vendas, Receita */
+export interface TrendPoint {
+    periodo: string;         // 'YYYY-MM-DD'
+    Lt: number;              // leads acquired
+    Vt: number;              // sales closed
+    Rt: number;              // revenue (BRL)
+}
+
+/** Generic category slice for pie/bar charts (regions, builders, neighborhoods) */
+export interface CategorySlice {
+    name: string;
+    value: number;
+    percentual: number;      // 0-100, 1 decimal
+}
+
+/** Ranking row for brokers/managers/coordinators (Li/Vi/Taxa/Ri kept for PDF parity) */
+export interface OpsRankingRow {
+    entity_id: string;
+    corretor_id?: string;    // present on broker rows
+    nome: string;
+    Li: number;              // clients in period
+    Vi: number;              // sales in period
+    Taxa_Conversao_i: number;
+    Ri: number;              // revenue (BRL)
+}
+
+/** Aggregated row per team or per coordination (PDF exports) */
+export interface OpsGroupReportRow {
+    nome: string;
+    corretores: number;
+    clientes: number;
+    vendas: number;
+    conversao: number;
+    receita: number;
+}
