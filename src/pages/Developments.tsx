@@ -9,8 +9,8 @@ import { useApp, Development } from '@/context/AppContext';
 import { useAuthorization } from '@/hooks/useAuthorization';
 import { supabase } from '@/lib/supabase';
 
-const CARD_WIDTH = 220;
-const CARD_GAP = 12;
+const CARD_WIDTH = 300;
+const CARD_GAP = 16;
 const CARD_STEP = CARD_WIDTH + CARD_GAP;
 
 export default function Developments() {
@@ -298,7 +298,7 @@ export default function Developments() {
         ) : undefined}
       />
 
-      <div className="relative flex items-center gap-2 mb-4" ref={filterRef}>
+      <div className="relative flex items-center justify-end gap-2 mb-4" ref={filterRef}>
         <div className="relative w-52 sm:w-64">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-secondary" size={16} />
           <input
@@ -327,7 +327,7 @@ export default function Developments() {
           )}
         </button>
           {showFilters && (
-            <div className="absolute left-0 top-full mt-2 z-20 w-72 max-w-[calc(100vw-3rem)] bg-card-bg border border-surface-200 rounded-xl shadow-xl overflow-hidden p-3 space-y-3">
+            <div className="absolute right-0 top-full mt-2 z-20 w-72 max-w-[calc(100vw-3rem)] bg-card-bg border border-surface-200 rounded-xl shadow-xl overflow-hidden p-3 space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary">Filtros</span>
                 {activeFiltersCount > 0 && (
@@ -422,7 +422,7 @@ export default function Developments() {
             aria-label="Empreendimentos anteriores"
             onClick={() => scrollByCard(-1)}
             disabled={!canScrollLeft}
-            className={`absolute top-1/2 -translate-y-1/2 left-0 z-10 h-8 w-8 rounded-full bg-card-bg border border-surface-200 shadow-md flex items-center justify-center text-text-secondary hover:text-gold-700 hover:border-gold-300 transition-all ${
+            className={`absolute top-1/2 -translate-y-1/2 left-0 z-10 h-9 w-9 rounded-full bg-card-bg border border-surface-200 shadow-md flex items-center justify-center text-text-secondary hover:text-gold-700 hover:border-gold-300 transition-all ${
               canScrollLeft ? '' : 'opacity-40 cursor-not-allowed'
             }`}
           >
@@ -432,7 +432,7 @@ export default function Developments() {
           <div
             ref={scrollRef}
             onScroll={updateScrollState}
-            className="flex gap-3 overflow-x-auto snap-x snap-mandatory no-scrollbar px-10"
+            className="flex gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar px-12"
           >
             {filteredDevelopments.map((dev) => (
               <PremiumCard
@@ -442,52 +442,52 @@ export default function Developments() {
                 style={{ width: CARD_WIDTH, minWidth: CARD_WIDTH }}
                 onClick={() => navigate(`/developments/${dev.id}`)}
               >
-                <div className="relative h-[120px] bg-surface-100">
+                <div className="relative h-44 bg-surface-100">
                   {dev.images && dev.images.length > 0 ? (
                     <img src={dev.images[0]} alt={dev.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-text-secondary/30">
-                      <Building2 size={32} />
+                      <Building2 size={40} />
                     </div>
                   )}
 
-                  <div className="absolute top-2 right-2">
-                    <StatusBadge status={dev.status || ''} className="bg-card-bg/90 dark:bg-black/80 backdrop-blur-sm shadow-sm text-[10px]" />
+                  <div className="absolute top-2.5 right-2.5">
+                    <StatusBadge status={dev.status || ''} className="bg-card-bg/90 dark:bg-black/80 backdrop-blur-sm shadow-sm" />
                   </div>
 
                   {canCreateStrategicResources && (
-                    <div className="absolute top-2 left-2 flex gap-1">
+                    <div className="absolute top-2.5 left-2.5 flex gap-1.5">
                       <button
                         onClick={(e) => { e.stopPropagation(); handleOpenModal(dev); }}
-                        className="p-1.5 bg-black/50 text-white rounded-md hover:bg-gold-500 transition-colors backdrop-blur-sm shadow-sm"
+                        className="p-2 bg-black/50 text-white rounded-lg hover:bg-gold-500 transition-colors backdrop-blur-sm shadow-sm"
                       >
-                        <Edit2 size={12} />
+                        <Edit2 size={14} />
                       </button>
                       <button
                         onClick={(e) => handleDelete(dev.id, e)}
-                        className="p-1.5 bg-black/50 text-white rounded-md hover:bg-red-500 transition-colors backdrop-blur-sm shadow-sm"
+                        className="p-2 bg-black/50 text-white rounded-lg hover:bg-red-500 transition-colors backdrop-blur-sm shadow-sm"
                       >
-                        <Trash2 size={12} />
+                        <Trash2 size={14} />
                       </button>
                     </div>
                   )}
 
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2.5">
-                    <h3 className="text-white font-bold text-sm leading-tight truncate">{dev.name}</h3>
-                    <p className="text-white/80 text-[10px] flex items-center gap-1 truncate"><Building2 size={10} /> {dev.builder}</p>
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
+                    <h3 className="text-white font-bold text-base leading-tight truncate">{dev.name}</h3>
+                    <p className="text-white/80 text-xs flex items-center gap-1 truncate"><Building2 size={12} /> {dev.builder}</p>
                   </div>
                 </div>
-                <div className="p-2.5 space-y-2 bg-card-bg">
-                  <div className="flex justify-between items-start gap-1">
-                    <div className="text-[10px] text-text-secondary flex items-center gap-1 min-w-0">
-                      <MapPin size={11} className="text-gold-500 shrink-0" />
+                <div className="p-3 space-y-2.5 bg-card-bg">
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="text-xs text-text-secondary flex items-center gap-1 min-w-0">
+                      <MapPin size={13} className="text-gold-500 shrink-0" />
                       <span className="truncate">{dev.location}</span>
                     </div>
-                    <span className="text-[10px] font-medium px-1.5 py-0.5 bg-surface-100 rounded text-text-secondary shrink-0">{dev.type}</span>
+                    <span className="text-[11px] font-medium px-2 py-0.5 bg-surface-100 rounded-md text-text-secondary shrink-0">{dev.type}</span>
                   </div>
-                  <div className="pt-1.5 border-t border-surface-100">
-                    <p className="text-[9px] text-text-secondary uppercase tracking-wider">Preço</p>
-                    <p className="text-xs font-bold text-text-primary truncate">{dev.price}</p>
+                  <div className="pt-2 border-t border-surface-100">
+                    <p className="text-[10px] text-text-secondary uppercase tracking-wider">Preço</p>
+                    <p className="text-sm font-bold text-text-primary truncate">{dev.price}</p>
                   </div>
                 </div>
               </PremiumCard>
@@ -499,7 +499,7 @@ export default function Developments() {
             aria-label="Próximos empreendimentos"
             onClick={() => scrollByCard(1)}
             disabled={!canScrollRight}
-            className={`absolute top-1/2 -translate-y-1/2 right-0 z-10 h-8 w-8 rounded-full bg-card-bg border border-surface-200 shadow-md flex items-center justify-center text-text-secondary hover:text-gold-700 hover:border-gold-300 transition-all ${
+            className={`absolute top-1/2 -translate-y-1/2 right-0 z-10 h-9 w-9 rounded-full bg-card-bg border border-surface-200 shadow-md flex items-center justify-center text-text-secondary hover:text-gold-700 hover:border-gold-300 transition-all ${
               canScrollRight ? '' : 'opacity-40 cursor-not-allowed'
             }`}
           >
