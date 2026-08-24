@@ -312,7 +312,7 @@ export default function Reports() {
                     onClick={() => { setIsExportMenuOpen(false); handleExport('pdf'); }}
                     className="w-full flex items-center gap-2 px-2.5 py-2 border border-surface-200 rounded-lg text-text-secondary text-[11px] font-semibold hover:text-gold-700 hover:bg-gold-50 transition-colors"
                   >
-                    <FileText size={14} /> PDF
+                    <FileText size={14} /> Relatório Geral
                   </button>
                 </div>
               </div>

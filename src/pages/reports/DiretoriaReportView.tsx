@@ -174,7 +174,7 @@ export function DiretoriaReportView({
         period={period}
         onPeriodChange={onPeriodChange}
         onDownloadPdf={handleDownloadPdf}
-        pdfLabel="PDF da Diretoria"
+        pdfLabel="Relatório Diretoria"
         pdfLoading={pdfLoading}
       />
 

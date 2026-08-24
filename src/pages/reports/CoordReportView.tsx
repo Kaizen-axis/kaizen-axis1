@@ -168,7 +168,7 @@ export function CoordReportView({
         period={period}
         onPeriodChange={onPeriodChange}
         onDownloadPdf={handleDownloadPdf}
-        pdfLabel="PDF da Coordenação"
+        pdfLabel="Relatório Coordenação"
         pdfLoading={pdfLoading}
       />
 

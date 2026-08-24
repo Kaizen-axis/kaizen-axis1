@@ -191,7 +191,7 @@ export function TeamReportView({
         period={period}
         onPeriodChange={onPeriodChange}
         onDownloadPdf={handleDownloadPdf}
-        pdfLabel="PDF da Equipe"
+        pdfLabel="Relatório Equipe"
         pdfLoading={pdfLoading}
       />
 

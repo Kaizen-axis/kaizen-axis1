@@ -137,7 +137,7 @@ export function BrokerReportView({
         period={period}
         onPeriodChange={onPeriodChange}
         onDownloadPdf={handleDownloadPdf}
-        pdfLabel="PDF do Corretor"
+        pdfLabel="Relatório Corretor"
         pdfLoading={pdfLoading}
       />
 
