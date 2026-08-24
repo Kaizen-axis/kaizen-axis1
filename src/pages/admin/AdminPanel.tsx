@@ -2225,21 +2225,21 @@ export default function AdminPanel() {
           { id: 'users', label: 'Usuários', icon: Users },
           { id: 'teams', label: 'Equipes', icon: Shield },
           { id: 'directorates', label: 'Diretorias', icon: Building2 },
-          { id: 'reports', label: 'Central de relatórios', icon: BarChart3, adminOnly: true },
+          { id: 'reports', label: 'Central de relatórios', icon: BarChart3, adminOnly: true, wide: true },
           { id: 'announcements', label: 'Anúncios', icon: Megaphone },
           { id: 'goals', label: 'Metas', icon: Target },
           { id: 'gamification', label: 'Gamificação', icon: Zap },
         ].filter(tab => !tab.adminOnly || isAdmin).map((tab) => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id as Tab)}
-            className={`flex-1 min-w-0 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${activeTab === tab.id ? 'bg-gold-500 text-white shadow-md shadow-gold-500/20' : 'bg-card-bg dark:bg-surface-100 text-text-secondary border border-surface-200'}`}>
-            <tab.icon size={14} className="shrink-0" /> {tab.label}
+            className={`${tab.wide ? 'flex-[1.7]' : 'flex-1'} min-w-0 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all ${activeTab === tab.id ? 'bg-gold-500 text-white shadow-md shadow-gold-500/20' : 'bg-card-bg dark:bg-surface-100 text-text-secondary border border-surface-200'}`}>
+            <tab.icon size={13} className="shrink-0" /> {tab.label}
           </button>
         ))}
         <button
           onClick={() => navigate('/admin/security')}
-          className="flex-1 min-w-0 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all bg-card-bg dark:bg-surface-100 text-text-secondary border border-surface-200 hover:border-gold-400 hover:text-gold-500"
+          className="flex-1 min-w-0 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all bg-card-bg dark:bg-surface-100 text-text-secondary border border-surface-200 hover:border-gold-400 hover:text-gold-500"
         >
-          <ShieldCheck size={14} className="shrink-0" /> Segurança
+          <ShieldCheck size={13} className="shrink-0" /> Segurança
         </button>
       </div>
 
