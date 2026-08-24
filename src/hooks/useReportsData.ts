@@ -8,58 +8,20 @@ import {
 } from '@/types/reports';
 import { parseDateOnlyLocal, parseDateOnlyLocalEnd } from '@/lib/dateRange';
 
-// ─── helpers ─────────────────────────────────────────────────────────────────
-
 const parseCurrency = (v: string | undefined | null): number => {
     if (!v) return 0;
     return parseFloat(v.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
 };
 
-/** Compute a health score for a client based on stage, value presence, and staleness */
-function computeHealthScore(client: {
-    stage: string;
-    intendedValue?: string;
-    updated_at?: string;
-}): number {
-    // Base score by stage
-    const stageBase: Record<string, number> = {
-        'Aprovado': 85,
-        'Contrato': 80,
-        'Em Tratativa': 65,
-        'Condicionado': 55,
-        'Em Análise': 50,
-        'Documentação': 40,
-        'Novo Lead': 35,
-        'Desistência': 0,
-        'Reprovado': 10,
-        'Concluído': 100,
-    };
-    let score = stageBase[client.stage] ?? 50;
-
-    // Bonus: intended value is filled
-    if (parseCurrency(client.intendedValue) > 0) score += 10;
-
-    // Penalty: stale — last update > 10 days ago
-    if (client.updated_at) {
-        const daysSinceUpdate =
-            (Date.now() - new Date(client.updated_at).getTime()) / (1000 * 60 * 60 * 24);
-        if (daysSinceUpdate > 10) score -= 15;
-    }
-
-    return Math.min(100, Math.max(0, Math.round(score)));
-}
-
-// ─── hook ─────────────────────────────────────────────────────────────────────
-
 interface UseReportsDataOptions {
-    startDate?: string; // ISO date string 'YYYY-MM-DD'
-    endDate?: string;   // ISO date string 'YYYY-MM-DD'
+    startDate?: string;
+    endDate?: string;
 }
 
 interface UseReportsDataResult {
     globalMetrics: GlobalMetrics;
     weightedPipeline: WeightedPipelineEntry[];
-    forecastTotal: number;  // weighted total in BRL
+    forecastTotal: number;
     healthScores: ClientHealthScore[];
     filteredClientsCount: number;
     filteredLeadsCount: number;
@@ -71,7 +33,6 @@ export function useReportsData({ startDate, endDate }: UseReportsDataOptions = {
     const rangeStart = startDate ? parseDateOnlyLocal(startDate) : null;
     const rangeEnd = endDate ? parseDateOnlyLocalEnd(endDate) : null;
 
-    // Filter clients by the selected date range
     const filteredClients = useMemo(() => {
         return clients.filter(c => {
             const created = new Date(c.createdAt);
@@ -92,12 +53,8 @@ export function useReportsData({ startDate, endDate }: UseReportsDataOptions = {
         });
     }, [leads, rangeStart, rangeEnd]);
 
-    // ── Global Metrics ─────────────────────────────────────────────────────────
     const globalMetrics = useMemo((): GlobalMetrics => {
         const total = filteredClients.length;
-
-        // Sales = clients with stage 'Concluído' whose closed_at falls within the period.
-        // updated_at is NOT used as sale date — it changes on any edit and would misplace old sales.
         const vendas = clients.filter(c => {
             if (c.stage !== 'Concluído') return false;
             const closedRaw = c.closed_at;
@@ -109,8 +66,6 @@ export function useReportsData({ startDate, endDate }: UseReportsDataOptions = {
         });
         const totalVendas = vendas.length;
         const taxaConversao = total > 0 ? (totalVendas / total) * 100 : 0;
-
-        // Real average sales cycle: requires closed_at to be set
         const ciclosComDados = vendas.filter(c => c.closed_at);
         const cicloMedioDias =
             ciclosComDados.length > 0
@@ -131,26 +86,16 @@ export function useReportsData({ startDate, endDate }: UseReportsDataOptions = {
         };
     }, [clients, filteredClients, filteredLeads, rangeStart, rangeEnd]);
 
-    // ── Weighted Pipeline (chart data) ────────────────────────────────────────
     const { weightedPipeline, forecastTotal } = useMemo(() => {
         const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-
         let totalWeightedBRL = 0;
-
         const pipeline: WeightedPipelineEntry[] = months.map((m, i) => {
-            // Pipeline uses ALL clients grouped by creation month — not period-filtered.
-            // A forecast chart must reflect the full active funnel regardless of the selected period.
             const monthClients = clients.filter(c => new Date(c.createdAt).getMonth() === i);
-
-            // weighted = sum of (intended_value * stage_weight)
             const weighted = monthClients.reduce((acc, c) => {
                 const val = parseCurrency(c.intendedValue);
                 const weight = STAGE_WEIGHTS[c.stage] ?? 0;
                 return acc + val * weight;
             }, 0);
-
-            // confirmed = Concluído clients whose closed_at falls in month i.
-            // Groups by sale date, not creation date, to show when revenue was actually realized.
             const confirmed = clients
                 .filter(c => {
                     if (c.stage !== 'Concluído') return false;
@@ -159,39 +104,17 @@ export function useReportsData({ startDate, endDate }: UseReportsDataOptions = {
                     return new Date(closedRaw).getMonth() === i;
                 })
                 .reduce((acc, c) => acc + parseCurrency(c.intendedValue), 0);
-
             totalWeightedBRL += weighted;
-
             return { month: m, weighted: weighted / 1000, confirmed: confirmed / 1000 };
         });
-
         return { weightedPipeline: pipeline, forecastTotal: totalWeightedBRL };
     }, [clients]);
-
-    // ── Health Scores (top 5 clients) ─────────────────────────────────────────
-    const healthScores = useMemo((): ClientHealthScore[] => {
-        return filteredClients.slice(0, 5).map(c => {
-            const score = computeHealthScore({
-                stage: c.stage,
-                intendedValue: c.intendedValue,
-                updated_at: c.updated_at,
-            });
-            return {
-                id: c.id,
-                name: c.name,
-                stage: c.stage,
-                score,
-                potentialValue: c.intendedValue,
-                conversionProbability: score,
-            };
-        });
-    }, [filteredClients]);
 
     return {
         globalMetrics,
         weightedPipeline,
         forecastTotal,
-        healthScores,
+        healthScores: [],
         filteredClientsCount: filteredClients.length,
         filteredLeadsCount: filteredLeads.length,
     };

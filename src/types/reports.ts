@@ -29,14 +29,14 @@ export interface WeightedPipelineEntry {
     confirmed: number;       // confirmed (Concluído only) in thousands
 }
 
-/** Per-client health score for risk/probability section */
+/** @deprecated Health Score Comercial was removed from the reports UI. Kept for the legacy template. */
 export interface ClientHealthScore {
     id: string;
     name: string;
     stage: string;
-    score: number;                   // 0-100
-    potentialValue: string;          // formatted BRL string
-    conversionProbability: number;   // 0-100 (same as score)
+    score: number;
+    potentialValue: string;
+    conversionProbability: number;
 }
 
 /** Summary returned from the get_relatorio_diretoria RPC */
