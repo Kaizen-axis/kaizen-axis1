@@ -2246,10 +2246,10 @@ export default function AdminPanel() {
         {[
           { id: 'users', label: 'Usuários', icon: Users },
           { id: 'teams', label: 'Equipes', icon: Shield },
-          { id: 'goals', label: 'Metas', icon: Target },
-          { id: 'announcements', label: 'Anúncios', icon: Megaphone },
-          { id: 'reports', label: 'Relatórios', icon: BarChart3, adminOnly: true },
           { id: 'directorates', label: 'Diretorias', icon: Building2 },
+          { id: 'reports', label: 'Relatórios', icon: BarChart3, adminOnly: true },
+          { id: 'announcements', label: 'Anúncios', icon: Megaphone },
+          { id: 'goals', label: 'Metas', icon: Target },
           { id: 'gamification', label: 'Gamificação', icon: Zap },
         ].filter(tab => !tab.adminOnly || isAdmin).map((tab) => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id as Tab)}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { PremiumCard, SectionHeader } from '@/components/ui/PremiumComponents';
-import { Loader2, Users, TrendingUp, Target, Calendar, Building2, ChevronDown } from 'lucide-react';
+import { Loader2, Users, TrendingUp, Target, Calendar, ChevronDown } from 'lucide-react';
 import { SalesProgressCard } from '@/components/dashboard/SalesProgressCard';
 import { FunnelChart } from '@/components/ui/FunnelChart';
 import { useNavigate } from 'react-router-dom';
@@ -15,6 +15,7 @@ import { parseDateOnlyLocal, parseDateOnlyLocalEnd, toDateOnlyLocal, toPtBrDate 
 import { getDashboardSaleDate } from '@/lib/sales/salePeriod';
 import { useGsapReveal } from '@/lib/motion';
 import { CountNumber } from '@/components/dashboard/CountNumber';
+import { DiretoriaCardGrid } from './reports/DiretoriaCardGrid';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -270,33 +271,12 @@ export default function Dashboard() {
           {isAdmin && directorates.length > 0 && (
             <section>
               <SectionHeader title="Visão por Diretoria" />
-              <div className="space-y-2">
-                {directorates.map(d => {
-                  const dClients = periodClients.filter(c => (c as any).directorate_id === d.id);
-                  const dSales = periodSales.filter(c => (c as any).directorate_id === d.id).length;
-                  return (
-                    <PremiumCard
-                      key={d.id}
-                      className="flex items-center justify-between cursor-pointer hover:border-gold-400 hover:shadow-md transition-all"
-                      onClick={() => navigate(`/reports?scope=diretoria&id=${d.id}&name=${encodeURIComponent(d.name)}&start=${periodStartYmd}&end=${periodEndYmd}`)}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-gold-100 dark:bg-gold-900/30 flex items-center justify-center">
-                          <Building2 size={16} className="text-gold-600 dark:text-gold-400" />
-                        </div>
-                        <div>
-                          <span className="font-medium text-text-primary text-sm">{d.name}</span>
-                          <p className="text-[10px] text-text-secondary">Ver relatório →</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs text-text-secondary">{dClients.length} clientes</p>
-                        <p className="text-xs text-green-600 font-medium">{dSales} vendas</p>
-                      </div>
-                    </PremiumCard>
-                  );
-                })}
-              </div>
+              <DiretoriaCardGrid
+                directorates={directorates}
+                clients={scopedClients}
+                startDate={periodStartYmd}
+                endDate={periodEndYmd}
+              />
             </section>
           )}
           <section><FunnelChart clientsData={periodClients} /></section>

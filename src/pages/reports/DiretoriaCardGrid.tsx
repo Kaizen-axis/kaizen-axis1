@@ -52,7 +52,7 @@ export function DiretoriaCardGrid({ directorates, clients, startDate, endDate }:
                 <p className="text-xs font-bold text-text-primary">{metrics.vendas}</p>
               </div>
               <div>
-                <p className="text-[9px] text-text-secondary uppercase tracking-wide">Leads</p>
+                <p className="text-[9px] text-text-secondary uppercase tracking-wide">Clientes</p>
                 <p className="text-xs font-bold text-text-primary">{metrics.createdInPeriodCount}</p>
               </div>
               <div>
