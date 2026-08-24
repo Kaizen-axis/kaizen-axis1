@@ -244,7 +244,7 @@ function AccordionMes({
   return (
     <div className={`rounded-2xl overflow-hidden border shadow-sm ${mesDesconsiderado ? 'border-red-200 bg-red-50/40 dark:bg-red-900/10' : 'border-surface-100 bg-card-bg dark:bg-surface-100'}`}>
       {/* Header */}
-      <div className={`w-full flex items-center justify-between p-4 transition-colors ${mesDesconsiderado ? 'hover:bg-red-50/70 dark:hover:bg-red-900/20' : 'hover:bg-surface-50'}`}>
+      <div className={`w-full flex items-center justify-between p-4 transition-colors ${mesDesconsiderado ? 'hover:bg-danger-subtle dark:hover:bg-red-900/20' : 'hover:bg-surface-100'}`}>
         <div className="flex items-center gap-3">
           <button
             type="button"

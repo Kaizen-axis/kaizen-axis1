@@ -513,7 +513,7 @@ export function NewClientForm({
                     <button
                       type="button"
                       onClick={() => removeProponent(index)}
-                      className="h-7 w-7 flex items-center justify-center rounded-md text-red-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+                      className="h-7 w-7 flex items-center justify-center rounded-md text-red-500 hover:text-red-600 hover:bg-danger-subtle transition-colors"
                       title="Remover proponente"
                     >
                       <Trash2 size={13} />
@@ -647,7 +647,7 @@ export function NewClientForm({
                 onChange={handleFileChange}
                 className="absolute inset-0 opacity-0 cursor-pointer"
               />
-              <div className="w-12 h-12 bg-gold-50 dark:bg-gold-900/20 rounded-full flex items-center justify-center text-gold-600 dark:text-gold-400 mb-2">
+              <div className="w-12 h-12 bg-accent-subtle rounded-full flex items-center justify-center text-gold-600 dark:text-gold-400 mb-2">
                 <UploadCloud size={24} />
               </div>
               <p className="text-sm font-medium text-text-primary">Toque para adicionar PDFs</p>

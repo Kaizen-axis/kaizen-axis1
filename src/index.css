@@ -60,6 +60,12 @@
   --color-subtle-bg:   var(--bg-subtle);
   --color-line-subtle: var(--border-subtle);
   --color-line-strong: var(--border-strong);
+
+  /* Semantic accent/danger/success — dark-safe substitutes for *-50 hovers */
+  --color-accent-subtle: var(--bg-accent-subtle);
+  --color-accent-hover: var(--bg-accent-hover);
+  --color-danger-subtle: var(--bg-danger-subtle);
+  --color-success-subtle: var(--bg-success-subtle);
 }
 
 :root {
@@ -95,6 +101,12 @@
   --color-warning: #fbbf24;
   --color-error: #f87171;
   --color-info: #60a5fa;
+
+  /* Semantic subtle backgrounds (dark-safe) */
+  --bg-accent-subtle: rgba(37, 99, 235, 0.10);
+  --bg-accent-hover: rgba(37, 99, 235, 0.16);
+  --bg-danger-subtle: rgba(248, 113, 113, 0.12);
+  --bg-success-subtle: rgba(34, 197, 94, 0.12);
 }
 
 /* iOS Safari ignores overflow-x on body alone — must set on html too */

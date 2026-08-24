@@ -76,7 +76,7 @@ export function FilePreviewCard({ item, index, onRemove, onRotateLeft, onRotateR
         )}
         <button 
           onClick={() => onRemove(item.id)}
-          className="p-1.5 rounded-lg hover:bg-red-50 text-text-secondary hover:text-red-500 transition-colors ml-1"
+          className="p-1.5 rounded-lg hover:bg-danger-subtle text-text-secondary hover:text-red-500 transition-colors ml-1"
           title="Remover"
         >
           <X size={16} />

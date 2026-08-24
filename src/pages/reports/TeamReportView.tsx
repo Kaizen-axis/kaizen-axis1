@@ -218,7 +218,8 @@ export function TeamReportView({
               return (
                 <PremiumCard
                   key={coord.id}
-                  className="flex items-center justify-between p-4 cursor-pointer hover:border-purple-300 transition-colors"
+                  interactive
+                  className="flex items-center justify-between p-4"
                   onClick={() => navigate(buildReportHref({
                     scope: 'coordenacao',
                     id: coord.id,

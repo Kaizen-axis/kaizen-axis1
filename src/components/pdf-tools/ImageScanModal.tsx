@@ -86,7 +86,7 @@ export function ImageScanModal({ imageFile, onConfirm, onClose }: ImageScanModal
                             <p className="text-xs text-gray-500 dark:text-gray-400">Arraste a área sobre o documento e confirme</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors">
+                    <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-surface-100 dark:hover:bg-gray-800 rounded-xl transition-colors">
                         <X size={20} />
                     </button>
                 </div>
@@ -118,17 +118,17 @@ export function ImageScanModal({ imageFile, onConfirm, onClose }: ImageScanModal
                 <div className="flex-shrink-0 px-5 py-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-[#111b21]">
                     <div className="flex items-center justify-center gap-2">
                         <span className="text-xs text-gray-500 mr-2">Rotação:</span>
-                        <button onClick={() => setRotation(r => r - 90)} className="px-3 py-1.5 text-xs font-bold bg-white dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-100 transition-colors text-gray-700 dark:text-gray-200">−90°</button>
-                        <button onClick={() => setRotation(r => r - 1)}  className="px-3 py-1.5 text-xs bg-white dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-100 transition-colors text-gray-700 dark:text-gray-200 flex items-center gap-1"><RotateCcw size={11}/>−1°</button>
-                        <button onClick={() => setRotation(0)} className="px-3 py-1.5 text-xs bg-white dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-100 transition-colors text-gray-500">0°</button>
-                        <button onClick={() => setRotation(r => r + 1)}  className="px-3 py-1.5 text-xs bg-white dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-100 transition-colors text-gray-700 dark:text-gray-200 flex items-center gap-1"><RotateCw size={11}/>+1°</button>
-                        <button onClick={() => setRotation(r => r + 90)} className="px-3 py-1.5 text-xs font-bold bg-white dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-100 transition-colors text-gray-700 dark:text-gray-200">+90°</button>
+                        <button onClick={() => setRotation(r => r - 90)} className="px-3 py-1.5 text-xs font-bold bg-white dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-surface-100 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-200">−90°</button>
+                        <button onClick={() => setRotation(r => r - 1)}  className="px-3 py-1.5 text-xs bg-white dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-surface-100 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-200 flex items-center gap-1"><RotateCcw size={11}/>−1°</button>
+                        <button onClick={() => setRotation(0)} className="px-3 py-1.5 text-xs bg-white dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-surface-100 dark:hover:bg-gray-800 transition-colors text-gray-500">0°</button>
+                        <button onClick={() => setRotation(r => r + 1)}  className="px-3 py-1.5 text-xs bg-white dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-surface-100 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-200 flex items-center gap-1"><RotateCw size={11}/>+1°</button>
+                        <button onClick={() => setRotation(r => r + 90)} className="px-3 py-1.5 text-xs font-bold bg-white dark:bg-[#202c33] border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-surface-100 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-200">+90°</button>
                     </div>
                 </div>
 
                 {/* Footer */}
                 <div className="flex-shrink-0 px-5 py-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-[#0d1418] flex gap-3">
-                    <button onClick={onClose} className="flex-1 py-3 px-4 bg-white dark:bg-[#202c33] text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 rounded-xl font-medium text-sm hover:bg-gray-50 transition-colors">
+                    <button onClick={onClose} className="flex-1 py-3 px-4 bg-white dark:bg-[#202c33] text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 rounded-xl font-medium text-sm hover:bg-surface-100 dark:hover:bg-[#2a3942] transition-colors">
                         Cancelar
                     </button>
                     <button

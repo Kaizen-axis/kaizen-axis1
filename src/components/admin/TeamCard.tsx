@@ -12,7 +12,7 @@ export function TeamCard({ team, onManage }: TeamCardProps) {
     <PremiumCard className="p-4">
       <div className="flex justify-between items-start mb-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gold-50 dark:bg-gold-900/20 flex items-center justify-center text-gold-600 dark:text-gold-400">
+          <div className="w-10 h-10 rounded-xl bg-accent-subtle flex items-center justify-center text-gold-600 dark:text-gold-400">
             <Users size={20} />
           </div>
           <div>

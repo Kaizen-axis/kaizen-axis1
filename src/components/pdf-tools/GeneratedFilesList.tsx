@@ -51,7 +51,7 @@ export function GeneratedFilesList({ files, onDownload, onDelete }: GeneratedFil
               </button>
               <button 
                 onClick={() => onDelete(file.id)}
-                className="p-2 rounded-lg hover:bg-red-50 text-text-secondary hover:text-red-500 transition-colors"
+                className="p-2 rounded-lg hover:bg-danger-subtle text-text-secondary hover:text-red-500 transition-colors"
                 title="Excluir"
               >
                 <Trash2 size={16} />

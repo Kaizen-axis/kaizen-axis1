@@ -367,7 +367,8 @@ export default function Settings() {
 
       {/* ── Perfil ──────────────────────────────────────────────────────── */}
       <PremiumCard
-        className="flex items-center gap-4 cursor-pointer hover:bg-surface-100 transition-colors group"
+        interactive="list"
+        className="flex items-center gap-4 group"
         onClick={handleOpenProfileModal}
       >
         <div className="w-16 h-16 rounded-full bg-surface-100 flex items-center justify-center text-gold-500 overflow-hidden border-2 border-transparent group-hover:border-gold-200 transition-colors flex-shrink-0">
@@ -423,7 +424,7 @@ export default function Settings() {
               onClick={handle2FAOpen}
               className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${is2FAEnabled
                 ? 'bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 hover:bg-red-100'
-                : 'bg-gold-50 text-gold-700 dark:bg-gold-900/20 dark:text-gold-400 hover:bg-gold-100'
+                : 'bg-accent-subtle text-gold-700 dark:text-gold-400 hover:bg-accent-hover'
                 }`}
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : (is2FAEnabled ? 'Desativar' : 'Ativar')}
@@ -466,7 +467,7 @@ export default function Settings() {
 
       {/* ── Sair ───────────────────────────────────────────────────────── */}
       <RoundedButton variant="outline" fullWidth
-        className="border-red-200 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+        className="border-red-200 text-red-500 hover:bg-danger-subtle dark:hover:bg-red-900/20"
         onClick={handleLogout}>
         <LogOut size={18} className="mr-2" /> Sair da Conta
       </RoundedButton>
@@ -538,7 +539,7 @@ export default function Settings() {
                   },
                 });
               }}
-              className="w-full py-3 text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors flex items-center justify-center gap-2"
+              className="w-full py-3 text-sm font-medium text-red-500 hover:bg-danger-subtle dark:hover:bg-red-900/20 rounded-xl transition-colors flex items-center justify-center gap-2"
             >
               <Trash2 size={16} /> Excluir Perfil
             </button>
@@ -629,7 +630,7 @@ export default function Settings() {
                   alt="QR Code 2FA"
                   width={200}
                   height={200}
-                  className="rounded-xl border border-surface-200 p-2 bg-white"
+                  className="rounded-xl border border-surface-200 p-2 bg-card-bg"
                 />
               ) : (
                 <div className="flex h-[200px] w-[200px] items-center justify-center rounded-xl border border-surface-200 bg-card-bg">

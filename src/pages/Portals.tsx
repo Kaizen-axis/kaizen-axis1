@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PremiumCard, PageHeader, RoundedButton } from '@/components/ui/PremiumComponents';
+import { PremiumCard, PageHeader, RoundedButton, cardInteractiveHover } from '@/components/ui/PremiumComponents';
 import { Globe, Plus, Edit2, Trash2, ExternalLink, Search, Building2, Landmark } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -109,7 +109,7 @@ export default function Portals() {
             <div
               key={portal.id}
               onClick={() => window.open(portal.url, '_blank')}
-              className="group relative flex flex-col rounded-2xl border border-surface-200/60 bg-card-bg p-5 premium-shadow cursor-pointer transition-all hover:border-primary-500/40"
+              className={`group relative flex flex-col rounded-2xl border border-surface-200/60 bg-card-bg p-5 premium-shadow ${cardInteractiveHover}`}
             >
               <div className="flex items-start justify-between">
                 <div className="w-11 h-11 rounded-xl bg-surface-100 flex items-center justify-center flex-shrink-0">

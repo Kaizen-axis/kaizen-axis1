@@ -76,7 +76,7 @@ export default function More() {
           .map((item) => {
             return (
               <Link key={item.path} to={item.path}>
-                <PremiumCard className="flex items-center gap-4 hover:bg-surface-50 dark:hover:bg-surface-100/10 transition-colors py-4">
+                <PremiumCard interactive="list" className="flex items-center gap-4 py-4">
                   <div className="w-10 h-10 rounded-full bg-surface-100 flex items-center justify-center text-text-secondary">
                     <item.icon size={20} />
                   </div>

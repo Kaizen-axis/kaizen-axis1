@@ -206,8 +206,8 @@ export default function AutomationLeads() {
           leads.map((lead) => (
             <PremiumCard 
               key={lead.id}
+              interactive
               onClick={() => setSelectedLead(lead)}
-              className="cursor-pointer hover:border-gold-300 transition-all active:scale-[0.98]"
             >
               <div className="flex justify-between items-start mb-3">
                 <div className="flex items-center gap-2">

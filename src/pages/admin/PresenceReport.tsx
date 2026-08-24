@@ -557,7 +557,7 @@ export default function PresenceReport() {
               icon={<CalendarCheck size={18} className="text-gold-600" />}
               label="Total Check-ins"
               value={data.metrics.total_checkins.toString()}
-              bg="bg-gold-50 dark:bg-gold-900/20"
+              bg="bg-accent-subtle"
             />
             <MetricBlock
               icon={<Users size={18} className="text-green-600" />}
@@ -843,7 +843,8 @@ function MetricBlock({
 }) {
   return (
     <PremiumCard
-      className={`p-4 flex flex-col gap-2 ${onClick ? 'cursor-pointer hover:border-gold-400 transition-colors' : ''}`}
+      interactive={!!onClick}
+      className="p-4 flex flex-col gap-2"
       onClick={onClick}
     >
       <div className={`w-8 h-8 rounded-xl ${bg} flex items-center justify-center`}>

@@ -39,7 +39,7 @@ export function ReportActionsMenu({ label, onDownloadPdf, pdfLoading, disabled, 
             type="button"
             onClick={() => { setIsOpen(false); onDownloadPdf(); }}
             disabled={disabled || pdfLoading}
-            className="w-full flex items-center gap-2 px-2.5 py-2 border border-surface-200 rounded-lg text-text-secondary text-[11px] font-semibold hover:text-gold-700 hover:bg-gold-50 transition-colors disabled:opacity-50"
+            className="w-full flex items-center gap-2 px-2.5 py-2 border border-surface-200 rounded-lg text-text-secondary text-[11px] font-semibold hover:text-gold-700 hover:bg-accent-hover transition-colors disabled:opacity-50"
           >
             {pdfLoading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />} {label}
           </button>

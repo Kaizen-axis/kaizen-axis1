@@ -69,7 +69,7 @@ export function BrokerClientList({ clients, onOpen }: {
         <div
           key={client.id}
           onClick={() => onOpen(client.id)}
-          className="flex items-center justify-between bg-card-bg rounded-xl px-3 py-2.5 cursor-pointer hover:bg-gold-50 dark:hover:bg-gold-900/10 hover:border-gold-200 border border-surface-100 transition-all"
+          className="flex items-center justify-between bg-card-bg rounded-xl px-3 py-2.5 cursor-pointer hover:bg-accent-hover hover:border-gold-200 border border-surface-100 transition-all"
         >
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-text-primary truncate">{client.name}</p>

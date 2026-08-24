@@ -29,7 +29,8 @@ export function DiretoriaCardGrid({ directorates, clients, startDate, endDate, r
         return (
           <PremiumCard
             key={d.id}
-            className="relative p-4 cursor-pointer hover:border-gold-300 transition-colors flex flex-col gap-3"
+            interactive
+            className="relative p-4 flex flex-col gap-3"
             onClick={() => navigate(buildReportHref({
               scope: 'diretoria',
               id: d.id,
@@ -44,7 +45,7 @@ export function DiretoriaCardGrid({ directorates, clients, startDate, endDate, r
               </div>
             )}
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-9 h-9 rounded-xl bg-gold-50 dark:bg-gold-900/20 flex items-center justify-center shrink-0">
+              <div className="w-9 h-9 rounded-xl bg-accent-subtle flex items-center justify-center shrink-0">
                 <Building2 size={18} className="text-gold-500" />
               </div>
               <h4 className="font-bold text-text-primary text-sm leading-tight truncate">{d.name}</h4>

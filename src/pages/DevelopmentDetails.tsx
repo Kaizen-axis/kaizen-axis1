@@ -259,7 +259,7 @@ export default function DevelopmentDetails() {
                 >
                   <Phone size={18} /> Ligar
                 </RoundedButton>
-                <RoundedButton variant="outline" className="w-full flex items-center justify-center gap-2 border-green-500 text-green-600 hover:bg-green-50" onClick={handleWhatsApp}>
+                <RoundedButton variant="outline" className="w-full flex items-center justify-center gap-2 border-green-500 text-green-600 hover:bg-success-subtle" onClick={handleWhatsApp}>
                   <MessageCircle size={18} /> WhatsApp
                 </RoundedButton>
               </div>

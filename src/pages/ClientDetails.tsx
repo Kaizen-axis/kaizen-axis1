@@ -647,7 +647,7 @@ export default function ClientDetails() {
         </div>
         <button
           onClick={() => setIsDeleteClientModalOpen(true)}
-          className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors"
+          className="p-2 text-red-500 hover:bg-danger-subtle rounded-full transition-colors"
           title="Excluir Cliente"
         >
           <Trash2 size={20} />
@@ -677,7 +677,7 @@ export default function ClientDetails() {
             />
           )}
 
-          <div className="flex items-center gap-2 text-gold-600 dark:text-gold-400 font-medium bg-gold-50 dark:bg-gold-900/20 p-3 rounded-xl">
+          <div className="flex items-center gap-2 text-gold-600 dark:text-gold-400 font-medium bg-accent-subtle p-3 rounded-xl">
             <Wallet size={18} />
             <span>{client.intendedValue || 'Valor não informado'}</span>
           </div>
@@ -741,7 +741,7 @@ export default function ClientDetails() {
                       disabled={isRestricted}
                       title={isRestricted ? 'Apenas Coordenador, Gerente, Diretor ou ADMIN podem usar esta etapa' : undefined}
                       className={`p-3 rounded-xl text-sm font-medium border transition-all text-left flex items-center justify-between ${client.stage === stage
-                        ? 'bg-gold-50 dark:bg-gold-900/20 border-gold-400 text-gold-700 dark:text-gold-400'
+                        ? 'bg-accent-subtle border-gold-400 text-gold-700 dark:text-gold-400'
                         : isRestricted
                           ? 'bg-surface-50 border-surface-200 text-text-secondary opacity-50 cursor-not-allowed'
                           : 'bg-card-bg border-surface-200 text-text-secondary hover:border-gold-300'
@@ -960,7 +960,7 @@ export default function ClientDetails() {
                       <p className="text-sm font-semibold text-text-primary">Proponente {index + 2}</p>
                       <div className="flex gap-2">
                         <button onClick={cancelEditProponent} className="h-7 w-7 flex items-center justify-center rounded-md text-text-secondary hover:bg-surface-100"><X size={13} /></button>
-                        <button onClick={saveEditProponent} className="h-7 w-7 flex items-center justify-center rounded-md text-green-600 hover:bg-green-50"><Save size={13} /></button>
+                        <button onClick={saveEditProponent} className="h-7 w-7 flex items-center justify-center rounded-md text-green-600 hover:bg-success-subtle"><Save size={13} /></button>
                       </div>
                     </div>
 
@@ -1004,8 +1004,8 @@ export default function ClientDetails() {
                       {openProponentIndex === index ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                     </button>
                     <div className="flex gap-2">
-                      <button onClick={() => startEditProponent(proponent)} className="h-7 w-7 flex items-center justify-center rounded-md text-gold-600 hover:bg-gold-50"><Edit2 size={12} /></button>
-                      <button onClick={() => handleDeleteProponent(proponent.id)} className="h-7 w-7 flex items-center justify-center rounded-md text-red-500 hover:bg-red-50"><Trash2 size={12} /></button>
+                      <button onClick={() => startEditProponent(proponent)} className="h-7 w-7 flex items-center justify-center rounded-md text-gold-600 hover:bg-accent-hover"><Edit2 size={12} /></button>
+                      <button onClick={() => handleDeleteProponent(proponent.id)} className="h-7 w-7 flex items-center justify-center rounded-md text-red-500 hover:bg-danger-subtle"><Trash2 size={12} /></button>
                     </div>
                   </div>
                   {openProponentIndex === index && (
@@ -1103,7 +1103,8 @@ export default function ClientDetails() {
               client.documents.map(doc => (
                 <PremiumCard
                   key={doc.id}
-                  className="flex items-center justify-between p-3 cursor-pointer hover:border-gold-300 transition-all"
+                  interactive
+                  className="flex items-center justify-between p-3"
                   onClick={() => handleOpenDocument((doc as any).file_path, (doc as any).id)}
                 >
                   <div className="flex items-center gap-3">
@@ -1120,7 +1121,7 @@ export default function ClientDetails() {
                       e.stopPropagation();
                       handleDeleteDocument(doc.id);
                     }}
-                    className="p-2 text-text-secondary hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                    className="p-2 text-text-secondary hover:text-red-500 hover:bg-danger-subtle rounded-full transition-colors"
                   >
                     <Trash2 size={18} />
                   </button>

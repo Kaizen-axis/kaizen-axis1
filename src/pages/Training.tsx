@@ -68,7 +68,7 @@ function PDFViewer({ url }: { url: string }) {
     <div
       ref={containerRef}
       className="w-full overflow-y-auto overflow-x-hidden"
-      style={{ height: '78vh', background: '#e5e7eb' }}
+      style={{ height: '78vh', background: 'var(--bg-subtle)' }}
     >
       {!blobUrl ? (
         <div className="flex items-center justify-center h-full">
@@ -471,7 +471,8 @@ export default function Training() {
         {trainings.map((item) => (
           <PremiumCard
             key={item.id}
-            className="p-4 flex gap-4 cursor-pointer hover:bg-surface-100 transition-colors relative group"
+            interactive="list"
+            className="p-4 flex gap-4 relative group"
             onClick={() => setViewingItem(item)}
           >
             {canCreateStrategicResources && (
@@ -554,7 +555,7 @@ export default function Training() {
                   key={type}
                   onClick={() => setFormData(prev => ({ ...prev, type: type as any }))}
                   className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${formData.type === type
-                    ? 'bg-gold-50 border-gold-400 text-gold-700 dark:bg-gold-900/20 dark:text-gold-400'
+                    ? 'bg-accent-subtle border-gold-400 text-gold-700 dark:text-gold-400'
                     : 'bg-surface-50 border-surface-200 text-text-secondary'
                     }`}
                 >

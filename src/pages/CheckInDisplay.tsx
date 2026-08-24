@@ -208,7 +208,7 @@ export default function CheckInDisplay() {
             ) : qrUrl ? (
               <motion.div key="qr"
                 initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
-                className="bg-white p-5 rounded-2xl shadow-2xl shadow-primary-500/10">
+                className="bg-card-bg p-5 rounded-2xl shadow-2xl shadow-primary-500/10">
                 <QRCode
                   value={qrUrl}
                   size={240}

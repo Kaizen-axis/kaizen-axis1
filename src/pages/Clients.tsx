@@ -152,7 +152,7 @@ function LeadCard({ lead, onConvert }: { lead: AutomationLead; onConvert: (lead:
           <MessageCircle size={11} /> Conversar
         </button>
         <div className="w-px bg-surface-100" />
-        <button onClick={(e) => { e.stopPropagation(); onConvert(lead); }} className="flex-1 flex items-center justify-center gap-1 py-2 text-[11px] font-semibold text-gold-600 hover:bg-gold-50 transition-colors">
+        <button onClick={(e) => { e.stopPropagation(); onConvert(lead); }} className="flex-1 flex items-center justify-center gap-1 py-2 text-[11px] font-semibold text-gold-600 hover:bg-accent-hover transition-colors">
           <UserPlus size={11} /> Criar Ficha
         </button>
       </div>
@@ -731,7 +731,8 @@ export default function Clients() {
               return (
               <PremiumCard
                 key={client.id}
-                className={`relative group cursor-pointer hover:border-gold-300 transition-colors ${canViewUrgencyState && urgency.level === 'critical' ? 'border-red-300 dark:border-red-700' : canViewUrgencyState && urgency.level === 'urgent' ? 'border-orange-300 dark:border-orange-700' : ''}`}
+                interactive
+                className={`relative group ${canViewUrgencyState && urgency.level === 'critical' ? 'border-red-300 dark:border-red-700' : canViewUrgencyState && urgency.level === 'urgent' ? 'border-orange-300 dark:border-orange-700' : ''}`}
                 onClick={() => navigate(`/clients/${client.id}`)}
               >
                 <div className="flex justify-between items-start mb-2">
@@ -783,7 +784,7 @@ export default function Clients() {
                       variant="secondary" size="sm"
                       className={`h-9 px-3 text-xs ${
                         urgency.level === 'critical'
-                          ? 'text-red-600 dark:text-red-400 border-red-300 dark:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/20'
+                          ? 'text-red-600 dark:text-red-400 border-red-300 dark:border-red-700 hover:bg-danger-subtle dark:hover:bg-red-900/20'
                           : urgency.level === 'urgent'
                           ? 'text-orange-500 dark:text-orange-400 border-orange-300 dark:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/20'
                           : urgency.level === 'warning'

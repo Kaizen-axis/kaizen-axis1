@@ -249,7 +249,7 @@ export default function Dashboard() {
       {isAdmin && (
         <>
           <div data-reveal className="grid grid-cols-2 gap-4">
-            <PremiumCard highlight className="col-span-2 flex justify-between items-center cursor-pointer"
+            <PremiumCard highlight interactive className="col-span-2 flex justify-between items-center"
               onClick={() => navigate('/reports')}>
               <div>
                 <p className="text-[11px] text-primary-400 font-semibold uppercase tracking-[0.18em]">Vendas Globais Concluídas</p>
@@ -258,11 +258,11 @@ export default function Dashboard() {
               </div>
               <div className="h-12 w-12 rounded-full bg-primary-500/15 flex items-center justify-center text-primary-400 font-bold text-xl">{totalSales}</div>
             </PremiumCard>
-            <PremiumCard className="cursor-pointer" onClick={() => navigate('/clients', { state: { initialStage: 'Em Análise' } })}>
+            <PremiumCard interactive onClick={() => navigate('/clients', { state: { initialStage: 'Em Análise' } })}>
               <p className="text-[10px] text-text-secondary uppercase tracking-[0.16em]">Em Análise</p>
               <h3 className="v3-serif text-3xl text-text-primary mt-2 tabular-nums"><CountNumber value={emAnalise} pad={2} /></h3>
             </PremiumCard>
-            <PremiumCard className="cursor-pointer" onClick={() => navigate('/clients', { state: { initialStage: 'Aprovado' } })}>
+            <PremiumCard interactive onClick={() => navigate('/clients', { state: { initialStage: 'Aprovado' } })}>
               <p className="text-[10px] text-text-secondary uppercase tracking-[0.16em]">Aprovados</p>
               <h3 className="v3-serif text-3xl text-emerald-400 mt-2 tabular-nums"><CountNumber value={aprovados} pad={2} /></h3>
             </PremiumCard>
@@ -287,7 +287,7 @@ export default function Dashboard() {
       {isDirector && (
         <>
           <div className="grid grid-cols-2 gap-4">
-            <PremiumCard highlight className="col-span-2 flex justify-between items-center cursor-pointer"
+            <PremiumCard highlight interactive className="col-span-2 flex justify-between items-center"
               onClick={() => navigate('/reports')}>
               <div>
                 <p className="text-sm text-gold-700 dark:text-gold-400 font-medium uppercase tracking-wider">Vendas da Diretoria</p>
@@ -296,11 +296,11 @@ export default function Dashboard() {
               </div>
               <div className="h-12 w-12 rounded-full bg-gold-100 dark:bg-gold-900/40 flex items-center justify-center text-gold-600 font-bold text-xl">{totalSales}</div>
             </PremiumCard>
-            <PremiumCard className="cursor-pointer" onClick={() => navigate('/clients', { state: { initialStage: 'Em Análise' } })}>
+            <PremiumCard interactive onClick={() => navigate('/clients', { state: { initialStage: 'Em Análise' } })}>
               <p className="text-xs text-text-secondary uppercase">Em Análise</p>
               <h3 className="text-2xl font-bold text-text-primary mt-2">{String(emAnalise).padStart(2, '0')}</h3>
             </PremiumCard>
-            <PremiumCard className="cursor-pointer" onClick={() => navigate('/clients', { state: { initialStage: 'Aprovado' } })}>
+            <PremiumCard interactive onClick={() => navigate('/clients', { state: { initialStage: 'Aprovado' } })}>
               <p className="text-xs text-text-secondary uppercase">Aprovados</p>
               <h3 className="text-2xl font-bold text-green-600 mt-2">{String(aprovados).padStart(2, '0')}</h3>
             </PremiumCard>
@@ -314,7 +314,7 @@ export default function Dashboard() {
       {isBroker && (
         <>
           <div className="grid grid-cols-2 gap-4">
-            <PremiumCard highlight className="col-span-2 flex justify-between items-center cursor-pointer"
+            <PremiumCard highlight interactive className="col-span-2 flex justify-between items-center"
               onClick={() => navigate('/clients', { state: { initialStage: 'Concluído' } })}>
               <div>
                 <p className="text-sm text-gold-700 dark:text-gold-400 font-medium uppercase tracking-wider">Vendas Concluídas</p>
@@ -323,11 +323,11 @@ export default function Dashboard() {
               </div>
               <div className="h-12 w-12 rounded-full bg-gold-100 dark:bg-gold-900/40 flex items-center justify-center text-gold-600 font-bold text-xl">{totalSales}</div>
             </PremiumCard>
-            <PremiumCard className="cursor-pointer" onClick={() => navigate('/clients', { state: { initialStage: 'Em Análise' } })}>
+            <PremiumCard interactive onClick={() => navigate('/clients', { state: { initialStage: 'Em Análise' } })}>
               <p className="text-xs text-text-secondary uppercase">Em Análise</p>
               <h3 className="text-2xl font-bold text-text-primary mt-2">{String(emAnalise).padStart(2, '0')}</h3>
             </PremiumCard>
-            <PremiumCard className="cursor-pointer" onClick={() => navigate('/clients', { state: { initialStage: 'Aprovado' } })}>
+            <PremiumCard interactive onClick={() => navigate('/clients', { state: { initialStage: 'Aprovado' } })}>
               <p className="text-xs text-text-secondary uppercase">Aprovados</p>
               <h3 className="text-2xl font-bold text-green-600 dark:text-green-400 mt-2">{String(aprovados).padStart(2, '0')}</h3>
             </PremiumCard>
@@ -365,7 +365,7 @@ export default function Dashboard() {
                   </PremiumCard>
                 ) : (
                   upcomingAppointments.map((app) => (
-                    <PremiumCard key={app.id} className="cursor-pointer hover:bg-surface-50 transition-colors"
+                    <PremiumCard key={app.id} interactive="list"
                       onClick={() => navigate('/schedule', { state: { date: app.date } })}>
                       <div className="flex justify-between items-center">
                         <div className="flex items-center gap-4">
@@ -553,7 +553,8 @@ export default function Dashboard() {
         <>
           <div className="grid grid-cols-2 gap-4">
             <PremiumCard
-              className="flex flex-col items-center gap-1 cursor-pointer hover:border-gold-300 transition-colors"
+              interactive
+              className="flex flex-col items-center gap-1"
               onClick={() => navigate('/clients')}
             >
               <Users size={22} className="text-gold-500" />
@@ -561,7 +562,8 @@ export default function Dashboard() {
               <p className="text-xs text-text-secondary">Clientes no período</p>
             </PremiumCard>
             <PremiumCard
-              className="flex flex-col items-center gap-1 cursor-pointer hover:border-gold-300 transition-colors"
+              interactive
+              className="flex flex-col items-center gap-1"
               onClick={() => navigate('/clients', { state: { initialStage: 'Concluído' } })}
             >
               <TrendingUp size={22} className="text-green-500" />
@@ -569,7 +571,8 @@ export default function Dashboard() {
               <p className="text-xs text-text-secondary">Vendas no período</p>
             </PremiumCard>
             <PremiumCard
-              className="flex flex-col items-center gap-1 cursor-pointer hover:border-gold-300 transition-colors"
+              interactive
+              className="flex flex-col items-center gap-1"
               onClick={() => navigate('/clients', { state: { initialStage: 'Em Análise' } })}
             >
               <Target size={22} className="text-blue-500" />
@@ -577,7 +580,8 @@ export default function Dashboard() {
               <p className="text-xs text-text-secondary">Em Análise no período</p>
             </PremiumCard>
             <PremiumCard
-              className="flex flex-col items-center gap-1 cursor-pointer hover:border-gold-300 transition-colors"
+              interactive
+              className="flex flex-col items-center gap-1"
               onClick={() => navigate('/schedule')}
             >
               <Calendar size={22} className="text-purple-500" />
@@ -763,7 +767,7 @@ export default function Dashboard() {
           />
           <div className="space-y-3">
             {upcomingAppointments.map(item => (
-              <PremiumCard key={item.id} className="p-4 flex items-center gap-4 cursor-pointer" onClick={() => navigate('/schedule', { state: { date: item.date } })}>
+              <PremiumCard key={item.id} interactive="list" className="p-4 flex items-center gap-4" onClick={() => navigate('/schedule', { state: { date: item.date } })}>
                 <div className="flex-col flex items-center justify-center w-12 h-12 bg-surface-100 rounded-xl text-center">
                   <span className="text-xs font-bold text-text-secondary">{item.time}</span>
                 </div>

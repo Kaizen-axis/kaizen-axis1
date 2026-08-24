@@ -310,7 +310,7 @@ export default function Reports() {
                 <div className="space-y-1.5">
                   <button
                     onClick={() => { setIsExportMenuOpen(false); handleExport('pdf'); }}
-                    className="w-full flex items-center gap-2 px-2.5 py-2 border border-surface-200 rounded-lg text-text-secondary text-[11px] font-semibold hover:text-gold-700 hover:bg-gold-50 transition-colors"
+                    className="w-full flex items-center gap-2 px-2.5 py-2 border border-surface-200 rounded-lg text-text-secondary text-[11px] font-semibold hover:text-gold-700 hover:bg-accent-hover transition-colors"
                   >
                     <FileText size={14} /> Relatório Geral
                   </button>
@@ -343,7 +343,8 @@ export default function Reports() {
                 return (
                   <PremiumCard
                     key={coord.id}
-                    className="flex items-center justify-between p-4 cursor-pointer hover:border-purple-300 transition-colors"
+                    interactive
+                    className="flex items-center justify-between p-4"
                     onClick={() => navigate(buildReportHref({
                       scope: 'coordenacao',
                       id: coord.id,

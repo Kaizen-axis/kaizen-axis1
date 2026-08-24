@@ -47,7 +47,7 @@ export function BrokerSearch({
               <button
                 key={broker.id}
                 type="button"
-                className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-transparent hover:border-gold-300 hover:bg-gold-50 transition-colors text-left"
+                className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-transparent hover:border-gold-300 hover:bg-accent-hover transition-colors text-left"
                 onClick={() => { setQuery(''); onSelect(broker); }}
               >
                 <div>

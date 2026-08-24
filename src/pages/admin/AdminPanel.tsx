@@ -61,7 +61,7 @@ function CardActionsMenu({ items }: { items: CardActionItem[] }) {
               key={item.label}
               type="button"
               onClick={() => { setOpen(false); item.onClick(); }}
-              className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[11px] font-semibold transition-colors ${item.danger ? 'text-red-500 hover:bg-red-50' : 'text-text-secondary hover:bg-surface-50'}`}
+              className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[11px] font-semibold transition-colors ${item.danger ? 'text-red-500 hover:bg-danger-subtle' : 'text-text-secondary hover:bg-surface-100'}`}
             >
               {item.icon} {item.label}
             </button>
@@ -1283,7 +1283,7 @@ export default function AdminPanel() {
                         {/* Botão desativar visível no mobile ao lado do nome */}
                         <button
                           onClick={() => handleDeactivateUser(u.id, u.name || 'Usuário')}
-                          className="md:hidden p-2 rounded-lg hover:bg-red-50 text-red-500 transition-colors flex-shrink-0"
+                          className="md:hidden p-2 rounded-lg hover:bg-danger-subtle text-red-500 transition-colors flex-shrink-0"
                           title="Desativar usuário"
                         >
                           <Trash2 size={16} />
@@ -1330,7 +1330,7 @@ export default function AdminPanel() {
                         {/* Botão desativar visível só no desktop */}
                         <button
                           onClick={() => handleDeactivateUser(u.id, u.name || 'Usuário')}
-                          className="hidden md:flex p-2 rounded-lg hover:bg-red-50 text-red-500 transition-colors flex-shrink-0"
+                          className="hidden md:flex p-2 rounded-lg hover:bg-danger-subtle text-red-500 transition-colors flex-shrink-0"
                           title="Desativar usuário"
                         >
                           <Trash2 size={16} />
@@ -1442,7 +1442,7 @@ export default function AdminPanel() {
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => openGoalModal(undefined, true)}
-                  className="flex items-center justify-center gap-2 py-3 px-4 rounded-2xl border-2 border-gold-200 dark:border-gold-800 text-gold-600 dark:text-gold-400 bg-gold-50 dark:bg-gold-900/10 hover:bg-gold-100 dark:hover:bg-gold-900/20 font-semibold text-sm transition-all duration-200 active:scale-95"
+                  className="flex items-center justify-center gap-2 py-3 px-4 rounded-2xl border-2 border-gold-200 dark:border-gold-800 text-gold-600 dark:text-gold-400 bg-accent-subtle hover:bg-accent-hover font-semibold text-sm transition-all duration-200 active:scale-95"
                 >
                   <Trophy size={16} /> Nova Missão
                 </button>
@@ -1615,7 +1615,7 @@ export default function AdminPanel() {
                       <button
                         onClick={() => { setIsToolsMenuOpen(false); handleExportGeneralPdf(); }}
                         disabled={reportLoading || !reportData || pdfExportType !== null}
-                        className="w-full flex items-center gap-2 px-2.5 py-2 border border-surface-200 rounded-lg text-text-secondary text-[11px] font-semibold hover:text-gold-700 hover:bg-gold-50 transition-colors disabled:opacity-50"
+                        className="w-full flex items-center gap-2 px-2.5 py-2 border border-surface-200 rounded-lg text-text-secondary text-[11px] font-semibold hover:text-gold-700 hover:bg-accent-hover transition-colors disabled:opacity-50"
                         title="Gerar relatório geral"
                       >
                         {pdfExportType === 'geral' ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />} Relatório Geral
@@ -1623,7 +1623,7 @@ export default function AdminPanel() {
                       <button
                         onClick={() => { setIsToolsMenuOpen(false); handleExportTeamPdf(); }}
                         disabled={reportLoading || !reportData || pdfExportType !== null}
-                        className="w-full flex items-center gap-2 px-2.5 py-2 border border-surface-200 rounded-lg text-text-secondary text-[11px] font-semibold hover:text-gold-700 hover:bg-gold-50 transition-colors disabled:opacity-50"
+                        className="w-full flex items-center gap-2 px-2.5 py-2 border border-surface-200 rounded-lg text-text-secondary text-[11px] font-semibold hover:text-gold-700 hover:bg-accent-hover transition-colors disabled:opacity-50"
                         title="Gerar relatório por equipe"
                       >
                         {pdfExportType === 'equipe' ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />} Relatório Equipe
@@ -1631,7 +1631,7 @@ export default function AdminPanel() {
                       <button
                         onClick={() => { setIsToolsMenuOpen(false); handleExportCoordinationPdf(); }}
                         disabled={reportLoading || !reportData || pdfExportType !== null}
-                        className="w-full flex items-center gap-2 px-2.5 py-2 border border-surface-200 rounded-lg text-text-secondary text-[11px] font-semibold hover:text-gold-700 hover:bg-gold-50 transition-colors disabled:opacity-50"
+                        className="w-full flex items-center gap-2 px-2.5 py-2 border border-surface-200 rounded-lg text-text-secondary text-[11px] font-semibold hover:text-gold-700 hover:bg-accent-hover transition-colors disabled:opacity-50"
                         title="Gerar relatório por coordenação"
                       >
                         {pdfExportType === 'coordenacao' ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />} Relatório Coordenação
@@ -1642,7 +1642,7 @@ export default function AdminPanel() {
                     <div className="px-4 pt-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-text-secondary">Ferramentas</div>
                     <button
                       onClick={() => { setIsToolsMenuOpen(false); setIsPipelineModalOpen(true); }}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface-50 dark:hover:bg-surface-200 transition-colors text-left"
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface-100 dark:hover:bg-surface-200 transition-colors text-left"
                     >
                       <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
                         <FileDown size={15} className="text-blue-600 dark:text-blue-400" />
@@ -1654,7 +1654,7 @@ export default function AdminPanel() {
                     </button>
                     <button
                       onClick={() => { setIsToolsMenuOpen(false); navigate('/admin/reports/presence'); }}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface-50 dark:hover:bg-surface-200 transition-colors text-left"
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface-100 dark:hover:bg-surface-200 transition-colors text-left"
                     >
                       <div className="w-8 h-8 rounded-lg bg-gold-100 dark:bg-gold-900/30 flex items-center justify-center shrink-0">
                         <BarChart3 size={15} className="text-gold-600 dark:text-gold-400" />
@@ -1695,7 +1695,8 @@ export default function AdminPanel() {
                   ] as Array<{ label: string; value: string; sub: string; icon: React.ReactNode; iconBg: string; route?: string; state?: any }>).map((stat) => (
                     <PremiumCard
                       key={stat.label}
-                      className={`p-3 relative flex flex-col justify-between h-28 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border-surface-100 ${stat.route ? 'cursor-pointer hover:border-primary-400/50 hover:shadow-md transition-all' : ''}`}
+                      interactive={!!stat.route}
+                      className="p-3 relative flex flex-col justify-between h-28 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border-surface-100"
                       onClick={() => stat.route && navigate(stat.route, { state: stat.state })}
                     >
                       <div className="flex items-center gap-1.5 min-w-0">
@@ -1904,7 +1905,7 @@ export default function AdminPanel() {
                             return (
                             <tr
                               key={`${ranking.key}-${c.entity_id}`}
-                              className={`border-b border-surface-50 last:border-0 transition-colors ${rowHref ? 'cursor-pointer hover:bg-gold-50/40 dark:hover:bg-gold-900/10' : 'hover:bg-surface-50/50'}`}
+                              className={`border-b border-surface-50 last:border-0 transition-colors ${rowHref ? 'cursor-pointer hover:bg-accent-hover' : 'hover:bg-surface-100/50'}`}
                               onClick={rowHref ? () => navigate(rowHref) : undefined}
                               role={rowHref ? 'button' : undefined}
                               tabIndex={rowHref ? 0 : undefined}
@@ -2043,13 +2044,13 @@ export default function AdminPanel() {
                         <button onClick={() => {
                           const today = new Date();
                           setXpDateRange({ start: toDateOnlyLocal(new Date(today.getFullYear(), today.getMonth(), 1)), end: toDateOnlyLocal(today) });
-                        }} className="px-3 py-1.5 bg-surface-100 text-[11px] font-semibold text-text-secondary rounded-lg hover:bg-gold-50 hover:text-gold-700 transition-colors">Este Mês</button>
+                        }} className="px-3 py-1.5 bg-surface-100 text-[11px] font-semibold text-text-secondary rounded-lg hover:bg-accent-hover hover:text-gold-700 transition-colors">Este Mês</button>
                         <button onClick={() => {
                           const today = new Date();
                           const m30 = new Date();
                           m30.setDate(today.getDate() - 30);
                           setXpDateRange({ start: toDateOnlyLocal(m30), end: toDateOnlyLocal(today) });
-                        }} className="px-3 py-1.5 bg-surface-100 text-[11px] font-semibold text-text-secondary rounded-lg hover:bg-gold-50 hover:text-gold-700 transition-colors">30 Dias</button>
+                        }} className="px-3 py-1.5 bg-surface-100 text-[11px] font-semibold text-text-secondary rounded-lg hover:bg-accent-hover hover:text-gold-700 transition-colors">30 Dias</button>
                       </div>
                     </div>
                   </div>
@@ -2077,7 +2078,7 @@ export default function AdminPanel() {
                           </thead>
                           <tbody>
                             {xpReportData.map((row: any, i: number) => (
-                              <tr key={row.user_id} className="border-b border-surface-50 last:border-0 hover:bg-surface-50/50 transition-colors">
+                              <tr key={row.user_id} className="border-b border-surface-50 last:border-0 hover:bg-surface-100/50 transition-colors">
                                 <td className="p-4 text-sm font-bold text-text-primary flex items-center gap-3">
                                   {i < 3 ? (
                                     <span className={`w-6 h-6 flex items-center justify-center rounded-full text-[10px] font-bold shadow-sm shrink-0 ${i === 0 ? 'bg-gradient-to-br from-yellow-300 to-yellow-500 text-white' : i === 1 ? 'bg-gradient-to-br from-gray-200 to-gray-400 text-white' : 'bg-gradient-to-br from-orange-300 to-orange-500 text-white'}`}>{i + 1}</span>
@@ -2104,7 +2105,7 @@ export default function AdminPanel() {
                       {/* Mobile Card View */}
                       <div className="md:hidden flex flex-col divide-y divide-surface-100">
                         {xpReportData.map((row: any, i: number) => (
-                          <div key={row.user_id} className="p-4 flex flex-col gap-3 hover:bg-surface-50 transition-colors">
+                          <div key={row.user_id} className="p-4 flex flex-col gap-3 hover:bg-surface-100 transition-colors">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3">
                                 {i < 3 ? (
@@ -2238,7 +2239,7 @@ export default function AdminPanel() {
               {group.map(ach => (
                 <PremiumCard key={ach.id} className="p-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gold-50 dark:bg-gold-900/20 border border-gold-200 dark:border-gold-800 flex items-center justify-center flex-shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-accent-subtle border border-gold-200 dark:border-gold-800 flex items-center justify-center flex-shrink-0">
                       <Star size={18} className="text-gold-500" />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -2330,7 +2331,7 @@ export default function AdminPanel() {
                     </div>
                   </div>
                   <div className="flex gap-2 w-full sm:w-auto shrink-0 mt-2 md:mt-0 relative z-20">
-                    <RoundedButton onClick={() => handleRejectUser(u.id)} variant="outline" className="flex-1 sm:flex-none justify-center text-red-500 border-red-200 hover:bg-red-50 dark:hover:bg-red-900/20 text-xs px-3 py-1.5 w-full sm:w-[130px]">
+                    <RoundedButton onClick={() => handleRejectUser(u.id)} variant="outline" className="flex-1 sm:flex-none justify-center text-red-500 border-red-200 hover:bg-danger-subtle dark:hover:bg-red-900/20 text-xs px-3 py-1.5 w-full sm:w-[130px]">
                       Recusar
                     </RoundedButton>
                     <RoundedButton onClick={() => handleOpenApprovalModal(u.id)} className="flex-1 sm:flex-none justify-center bg-green-500 hover:bg-green-600 text-white border-0 shadow-sm shadow-green-500/20 text-xs px-3 py-1.5 w-full sm:w-[130px] whitespace-nowrap">

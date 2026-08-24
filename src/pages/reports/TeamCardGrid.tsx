@@ -68,7 +68,8 @@ export function TeamCardGrid({ teams, clients, startDate, endDate, from, fromId,
           return (
             <PremiumCard
               key={team.id}
-              className="relative min-w-[170px] w-[170px] aspect-square snap-start p-4 cursor-pointer hover:border-gold-300 transition-colors flex flex-col justify-between shrink-0"
+              interactive
+              className="relative min-w-[170px] w-[170px] aspect-square snap-start p-4 flex flex-col justify-between shrink-0"
               onClick={() => navigate(buildReportHref({
                 scope: 'equipe',
                 id: team.id,
@@ -86,7 +87,7 @@ export function TeamCardGrid({ teams, clients, startDate, endDate, from, fromId,
                 </div>
               )}
               <div className="min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-gold-50 dark:bg-gold-900/20 flex items-center justify-center mb-2">
+                <div className="w-9 h-9 rounded-xl bg-accent-subtle flex items-center justify-center mb-2">
                   <Shield size={18} className="text-gold-500" />
                 </div>
                 <h4 className="font-bold text-text-primary text-sm leading-tight truncate">{team.name}</h4>

@@ -2,19 +2,28 @@ import React from 'react';
 import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
 
+export const cardInteractiveHover =
+  'cursor-pointer transition-all duration-200 hover:border-primary-400/50 hover:shadow-md hover:shadow-black/20 active:scale-[0.99]';
+
+export const cardListInteractiveHover =
+  'cursor-pointer transition-colors duration-200 hover:bg-surface-100/60';
+
 interface PremiumCardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
   highlight?: boolean;
+  interactive?: boolean | 'list';
 }
 
-export const PremiumCard = ({ children, className, highlight, ...props }: PremiumCardProps) => {
+export const PremiumCard = ({ children, className, highlight, interactive, ...props }: PremiumCardProps) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 } as any}
       animate={{ opacity: 1, y: 0 } as any}
       className={cn(
         "bg-card-bg rounded-2xl p-5 shadow-sm border border-surface-200",
-        highlight && "border-gold-400/30 bg-gradient-to-br from-card-bg to-gold-50/10 dark:to-gold-900/10",
+        highlight && "border-gold-400/30 bg-gradient-to-br from-card-bg to-primary-500/10",
+        interactive === true && cardInteractiveHover,
+        interactive === 'list' && cardListInteractiveHover,
         className
       )}
       {...(props as any)}

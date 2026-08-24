@@ -317,7 +317,7 @@ export default function Developments() {
           </div>
         ) : (
           filteredDevelopments.map((dev) => (
-            <PremiumCard key={dev.id} className="p-0 overflow-hidden group cursor-pointer border-none" onClick={() => navigate(`/developments/${dev.id}`)}>
+            <PremiumCard key={dev.id} interactive className="p-0 overflow-hidden group border-none" onClick={() => navigate(`/developments/${dev.id}`)}>
               <div className="relative h-40 bg-surface-100">
                 {dev.images && dev.images.length > 0 ? (
                   <img src={dev.images[0]} alt={dev.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
