@@ -16,6 +16,7 @@ import { profileMatchesTeam } from '@/lib/reports/teamMembers';
 import { ReportClientLike } from '@/lib/reports/computeHybridMetrics';
 import { FilterMenu } from './reports/FilterMenu';
 import { ForecastEvolution } from './reports/ForecastEvolution';
+import { DiretoriaCardGrid } from './reports/DiretoriaCardGrid';
 import { TeamCardGrid } from './reports/TeamCardGrid';
 import { DiretoriaReportView } from './reports/DiretoriaReportView';
 import { TeamReportView } from './reports/TeamReportView';
@@ -75,7 +76,7 @@ function CustomDateModal({
 export default function Reports() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { loading, teams, allProfiles, profile, clients } = useApp();
+  const { loading, teams, allProfiles, profile, clients, directorates } = useApp();
   const { isAdmin, isDirector, isManager, isCoordinator, canViewAllClients } = useAuthorization();
 
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
@@ -326,7 +327,7 @@ export default function Reports() {
         ))}
       </section>
 
-      <ForecastEvolution clients={clients as ReportClientLike[]} />
+      <ForecastEvolution clients={clients as ReportClientLike[]} startDate={startDate} endDate={endDate} />
 
       {isManager && (() => {
         const myCoords = allProfiles.filter(
@@ -369,18 +370,32 @@ export default function Reports() {
         );
       })()}
 
-      {canViewAllClients && (() => {
+      {(isAdmin || isDirector) && (() => {
         const myDirectorateId = profile?.directorate_id || allProfiles.find((p) => p.id === profile?.id)?.directorate_id;
-        const visibleTeams = isAdmin
-          ? teams
-          : isDirector
-            ? teams.filter((t) => t.directorate_id && t.directorate_id === myDirectorateId)
-            : isManager
-              ? teams.filter((t) => t.manager_id === profile?.id)
-              : teams.filter((t) =>
-                t.members?.includes(profile?.id ?? '') ||
-                (!!currentUserProfile && profileMatchesTeam(currentUserProfile, t))
-              );
+        const visibleDirectorates = isAdmin
+          ? directorates
+          : directorates.filter((d) => d.id === myDirectorateId);
+        if (visibleDirectorates.length === 0) return null;
+        return (
+          <section className="mt-8 print:hidden">
+            <SectionHeader title="Visão por Diretoria" subtitle="Performance segmentada por diretoria" />
+            <DiretoriaCardGrid
+              directorates={visibleDirectorates}
+              clients={clients as ReportClientLike[]}
+              startDate={startDate}
+              endDate={endDate}
+            />
+          </section>
+        );
+      })()}
+
+      {!isAdmin && !isDirector && canViewAllClients && (() => {
+        const visibleTeams = isManager
+          ? teams.filter((t) => t.manager_id === profile?.id)
+          : teams.filter((t) =>
+            t.members?.includes(profile?.id ?? '') ||
+            (!!currentUserProfile && profileMatchesTeam(currentUserProfile, t))
+          );
         if (visibleTeams.length === 0) return null;
         return (
           <section className="mt-8 print:hidden">

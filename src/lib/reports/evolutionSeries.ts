@@ -1,3 +1,4 @@
+import { parseDateOnlyLocal, parseDateOnlyLocalEnd } from '@/lib/dateRange';
 import { parseReportValue, ReportClientLike } from './computeHybridMetrics';
 
 export type EvolutionGranularity = 'mensal' | 'trimestral' | 'semestral' | 'anual';
@@ -91,6 +92,67 @@ export function buildEvolutionSeries(
   referenceDate: Date = new Date(),
 ): EvolutionPoint[] {
   return buildBuckets(granularity, referenceDate).map((bucket) => {
+    const sales = clients.filter((c) => {
+      if (c.stage !== 'Concluído' || !c.closed_at) return false;
+      const closed = new Date(c.closed_at).getTime();
+      return closed >= bucket.start && closed <= bucket.end;
+    });
+    return {
+      label: bucket.label,
+      vendas: sales.length,
+      vgv: sales.reduce((acc, c) => acc + parseReportValue(c.intendedValue), 0),
+    };
+  });
+}
+
+const DAY_MS = 86400000;
+const ddMm = (d: Date) =>
+  `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+function buildPeriodBuckets(start: Date, end: Date): Bucket[] {
+  const spanDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / DAY_MS) + 1);
+  const buckets: Bucket[] = [];
+
+  if (spanDays <= 31) {
+    for (let i = 0; i < spanDays; i++) {
+      const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+      buckets.push({ label: ddMm(d), start: d.getTime(), end: endOfDay(d.getFullYear(), d.getMonth(), d.getDate()) });
+    }
+    return buckets;
+  }
+
+  if (spanDays <= 92) {
+    let cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    while (cursor.getTime() <= end.getTime()) {
+      const bEnd = new Date(Math.min(cursor.getTime() + 6 * DAY_MS, end.getTime()));
+      buckets.push({
+        label: ddMm(cursor),
+        start: cursor.getTime(),
+        end: endOfDay(bEnd.getFullYear(), bEnd.getMonth(), bEnd.getDate()),
+      });
+      cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 7);
+    }
+    return buckets;
+  }
+
+  let cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+  while (cursor.getTime() <= end.getTime()) {
+    const y = cursor.getFullYear();
+    const m = cursor.getMonth();
+    buckets.push({ label: monthShort(y, m), start: cursor.getTime(), end: endOfDay(y, m + 1, 0) });
+    cursor = new Date(y, m + 1, 1);
+  }
+  return buckets;
+}
+
+export function buildPeriodSeries(
+  clients: ReportClientLike[],
+  startDate: string,
+  endDate: string,
+): EvolutionPoint[] {
+  const start = parseDateOnlyLocal(startDate);
+  const end = parseDateOnlyLocalEnd(endDate);
+  return buildPeriodBuckets(start, end).map((bucket) => {
     const sales = clients.filter((c) => {
       if (c.stage !== 'Concluído' || !c.closed_at) return false;
       const closed = new Date(c.closed_at).getTime();

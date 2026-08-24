@@ -175,7 +175,7 @@ export function CoordReportView({
       <HybridMetricCards metrics={metrics} />
       <PipelineByStage pipeline={metrics.pipeline} totalClientes={metrics.totalClientes} />
 
-      <ForecastEvolution clients={scopedClients} />
+      <ForecastEvolution clients={scopedClients} startDate={startDate} endDate={endDate} />
 
       <BrokerRankingCards brokers={brokerRanking} onSelect={openBroker} />
     </div>

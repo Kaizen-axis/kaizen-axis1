@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   Area, AreaChart, Bar, CartesianGrid, ComposedChart, Line,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -6,14 +6,7 @@ import {
 import { PremiumCard, SectionHeader } from '@/components/ui/PremiumComponents';
 import { STAGE_WEIGHTS } from '@/types/reports';
 import { parseReportValue, ReportClientLike } from '@/lib/reports/computeHybridMetrics';
-import { buildEvolutionSeries, EvolutionGranularity } from '@/lib/reports/evolutionSeries';
-
-const GRANULARITIES: Array<{ id: EvolutionGranularity; label: string }> = [
-  { id: 'mensal', label: 'Mensal' },
-  { id: 'trimestral', label: 'Trimestral' },
-  { id: 'semestral', label: 'Semestral' },
-  { id: 'anual', label: 'Anual' },
-];
+import { buildPeriodSeries } from '@/lib/reports/evolutionSeries';
 
 const tooltipStyle = {
   borderRadius: '8px',
@@ -23,8 +16,7 @@ const tooltipStyle = {
   boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
 };
 
-export function ForecastEvolution({ clients }: { clients: ReportClientLike[] }) {
-  const [granularity, setGranularity] = useState<EvolutionGranularity>('mensal');
+export function ForecastEvolution({ clients, startDate, endDate }: { clients: ReportClientLike[]; startDate: string; endDate: string }) {
 
   const { weightedPipeline, forecastTotal } = useMemo(() => {
     const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -45,8 +37,8 @@ export function ForecastEvolution({ clients }: { clients: ReportClientLike[] }) 
   }, [clients]);
 
   const evolution = useMemo(
-    () => buildEvolutionSeries(clients, granularity).map((p) => ({ ...p, vgvK: p.vgv / 1000 })),
-    [clients, granularity],
+    () => buildPeriodSeries(clients, startDate, endDate).map((p) => ({ ...p, vgvK: p.vgv / 1000 })),
+    [clients, startDate, endDate],
   );
 
   return (
@@ -96,22 +88,6 @@ export function ForecastEvolution({ clients }: { clients: ReportClientLike[] }) 
               <h3 className="font-ui text-lg font-bold text-text-primary">
                 {evolution.reduce((acc, p) => acc + p.vendas, 0)} vendas
               </h3>
-            </div>
-            <div className="flex gap-1">
-              {GRANULARITIES.map((g) => (
-                <button
-                  key={g.id}
-                  type="button"
-                  onClick={() => setGranularity(g.id)}
-                  className={`px-2 py-1 rounded-md text-[10px] font-semibold transition-all ${
-                    granularity === g.id
-                      ? 'bg-primary-600 text-white shadow-sm'
-                      : 'bg-surface-100 text-text-secondary hover:text-text-primary'
-                  }`}
-                >
-                  {g.label}
-                </button>
-              ))}
             </div>
           </div>
           <div className="h-40 w-full">

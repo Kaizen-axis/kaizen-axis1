@@ -144,7 +144,7 @@ export function BrokerReportView({
       <HybridMetricCards metrics={metrics} />
       <PipelineByStage pipeline={metrics.pipeline} totalClientes={metrics.totalClientes} />
 
-      <ForecastEvolution clients={scopedClients} />
+      <ForecastEvolution clients={scopedClients} startDate={startDate} endDate={endDate} />
 
       <section>
         <SectionHeader title="Clientes" subtitle="Clientes criados no período" />

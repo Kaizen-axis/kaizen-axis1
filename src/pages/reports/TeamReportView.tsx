@@ -198,7 +198,7 @@ export function TeamReportView({
       <HybridMetricCards metrics={metrics} />
       <PipelineByStage pipeline={metrics.pipeline} totalClientes={metrics.totalClientes} />
 
-      <ForecastEvolution clients={scopedClients} />
+      <ForecastEvolution clients={scopedClients} startDate={startDate} endDate={endDate} />
 
       <section className="mb-6">
         <SectionHeader title="Visão por Coordenação" subtitle="Métricas e corretores de cada coordenação da equipe" />

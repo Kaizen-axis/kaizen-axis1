@@ -181,7 +181,7 @@ export function DiretoriaReportView({
       <HybridMetricCards metrics={metrics} />
       <PipelineByStage pipeline={metrics.pipeline} totalClientes={metrics.totalClientes} />
 
-      <ForecastEvolution clients={dirScopedClients} />
+      <ForecastEvolution clients={dirScopedClients} startDate={startDate} endDate={endDate} />
 
       <section>
         <SectionHeader title="Relatório por Equipe" subtitle="Análise segmentada por equipe da diretoria" />
