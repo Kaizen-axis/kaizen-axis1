@@ -1,8 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PremiumCard, StatusBadge, PageHeader, RoundedButton } from '@/components/ui/PremiumComponents';
-import { Search, MapPin, Building2, Filter, ChevronRight, Plus, Upload, X, FileText, Image as ImageIcon, Loader2, Edit2, Trash2 } from 'lucide-react';
-import { FAB } from '@/components/Layout';
+import { Search, MapPin, Building2, SlidersHorizontal, ChevronLeft, ChevronRight, Plus, Upload, X, FileText, Image as ImageIcon, Loader2, Edit2, Trash2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
@@ -10,15 +9,24 @@ import { useApp, Development } from '@/context/AppContext';
 import { useAuthorization } from '@/hooks/useAuthorization';
 import { supabase } from '@/lib/supabase';
 
+const CARD_WIDTH = 220;
+const CARD_GAP = 12;
+const CARD_STEP = CARD_WIDTH + CARD_GAP;
+
 export default function Developments() {
   const navigate = useNavigate();
   const { developments, addDevelopment, updateDevelopment, deleteDevelopment, loading } = useApp();
-  const { isBroker, canCreateStrategicResources } = useAuthorization();
+  const { canCreateStrategicResources } = useAuthorization();
   const { requestConfirm, confirmDialogProps } = useConfirmDialog();
   const [filter, setFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [filterTypes, setFilterTypes] = useState<string[]>([]);
   const [filterStatuses, setFilterStatuses] = useState<string[]>([]);
+  const [filterBuilders, setFilterBuilders] = useState<string[]>([]);
+  const filterRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingDevId, setEditingDevId] = useState<string | null>(null);
@@ -115,17 +123,61 @@ export default function Developments() {
     setFilterTypes(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
   const toggleFilterStatus = (val: string) =>
     setFilterStatuses(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
-  const clearFilters = () => { setFilterTypes([]); setFilterStatuses([]); };
-  const activeFiltersCount = filterTypes.length + filterStatuses.length;
+  const toggleFilterBuilder = (val: string) =>
+    setFilterBuilders(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
+  const clearFilters = () => { setFilterTypes([]); setFilterStatuses([]); setFilterBuilders([]); };
+  const activeFiltersCount = filterTypes.length + filterStatuses.length + filterBuilders.length;
+
+  const catalogBuilders = useMemo(() => {
+    const names = new Set<string>();
+    developments.forEach((d) => {
+      const name = (d.builder || '').trim();
+      if (name) names.add(name);
+    });
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [developments]);
 
   const filteredDevelopments = developments.filter(dev => {
+    const q = filter.toLowerCase();
     const matchesSearch =
-      dev.name.toLowerCase().includes(filter.toLowerCase()) ||
-      (dev.builder || '').toLowerCase().includes(filter.toLowerCase());
+      !q ||
+      dev.name.toLowerCase().includes(q) ||
+      (dev.builder || '').toLowerCase().includes(q) ||
+      (dev.location || '').toLowerCase().includes(q);
     const matchesType = filterTypes.length === 0 || filterTypes.includes(dev.type || '');
     const matchesStatus = filterStatuses.length === 0 || filterStatuses.includes(dev.status || '');
-    return matchesSearch && matchesType && matchesStatus;
+    const matchesBuilder = filterBuilders.length === 0 || filterBuilders.includes(dev.builder || '');
+    return matchesSearch && matchesType && matchesStatus && matchesBuilder;
   });
+
+  const updateScrollState = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  };
+
+  useEffect(() => {
+    if (!showFilters) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!filterRef.current?.contains(event.target as Node)) setShowFilters(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [showFilters]);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(updateScrollState);
+    window.addEventListener('resize', updateScrollState);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', updateScrollState);
+    };
+  }, [filteredDevelopments.length]);
+
+  const scrollByCard = (direction: 1 | -1) => {
+    scrollRef.current?.scrollBy({ left: direction * CARD_STEP, behavior: 'smooth' });
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -246,138 +298,215 @@ export default function Developments() {
         ) : undefined}
       />
 
-      <div className="flex gap-3 mb-3">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
-          <input type="text" placeholder="Buscar por nome, construtora..."
-            className="w-full pl-10 pr-4 py-3 bg-card-bg rounded-xl text-sm shadow-sm border border-surface-200 focus:outline-none focus:ring-2 focus:ring-gold-200 text-text-primary placeholder:text-text-secondary"
-            value={filter} onChange={(e) => setFilter(e.target.value)} />
+      <div className="relative flex items-center gap-2 mb-4" ref={filterRef}>
+        <div className="relative w-52 sm:w-64">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-secondary" size={16} />
+          <input
+            type="search"
+            placeholder="Buscar…"
+            className="w-full h-9 pl-8 pr-3 bg-card-bg rounded-lg text-sm shadow-sm border border-surface-200 focus:outline-none focus:ring-2 focus:ring-gold-200 text-text-primary placeholder:text-text-secondary"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          />
         </div>
         <button
-          onClick={() => setShowFilters(p => !p)}
-          className={`relative p-3 rounded-xl border shadow-sm transition-colors ${showFilters || activeFiltersCount > 0 ? 'bg-gold-500 text-white border-gold-500' : 'bg-card-bg text-text-secondary border-surface-200 hover:bg-surface-100'}`}
+          type="button"
+          onClick={() => setShowFilters((p) => !p)}
+          aria-label="Filtrar empreendimentos"
+          className={`relative h-9 w-9 flex items-center justify-center rounded-lg border shadow-sm transition-all ${
+            showFilters || activeFiltersCount > 0
+              ? 'bg-gold-500 text-white border-gold-500'
+              : 'bg-card-bg text-text-secondary border-surface-200 hover:text-gold-700 hover:border-gold-300'
+          }`}
         >
-          <Filter size={20} />
+          <SlidersHorizontal size={16} />
           {activeFiltersCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+            <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
               {activeFiltersCount}
             </span>
           )}
         </button>
+          {showFilters && (
+            <div className="absolute left-0 top-full mt-2 z-20 w-72 max-w-[calc(100vw-3rem)] bg-card-bg border border-surface-200 rounded-xl shadow-xl overflow-hidden p-3 space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary">Filtros</span>
+                {activeFiltersCount > 0 && (
+                  <button type="button" onClick={clearFilters} className="text-[11px] text-red-500 hover:underline flex items-center gap-1">
+                    <X size={12} /> Limpar
+                  </button>
+                )}
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-text-secondary mb-1.5">Tipo</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {['Apartamento', 'Casa', 'Flat', 'Lote'].map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => toggleFilterType(t)}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors ${
+                        filterTypes.includes(t)
+                          ? 'bg-gold-500 text-white border-gold-500'
+                          : 'bg-surface-50 text-text-secondary border-surface-200 hover:border-gold-300'
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-text-secondary mb-1.5">Status</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {['Lançamento', 'Em Construção', 'Pronto'].map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => toggleFilterStatus(s)}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors ${
+                        filterStatuses.includes(s)
+                          ? 'bg-gold-500 text-white border-gold-500'
+                          : 'bg-surface-50 text-text-secondary border-surface-200 hover:border-gold-300'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-text-secondary mb-1.5">Construtora</p>
+                {catalogBuilders.length === 0 ? (
+                  <p className="text-[11px] text-text-secondary">Nenhuma construtora no catálogo.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {catalogBuilders.map((b) => (
+                      <button
+                        key={b}
+                        type="button"
+                        onClick={() => toggleFilterBuilder(b)}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors ${
+                          filterBuilders.includes(b)
+                            ? 'bg-gold-500 text-white border-gold-500'
+                            : 'bg-surface-50 text-text-secondary border-surface-200 hover:border-gold-300'
+                        }`}
+                      >
+                        {b}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
       </div>
 
-      {/* Filter Panel */}
-      {showFilters && (
-        <div className="mb-5 p-4 bg-card-bg border border-surface-200 rounded-xl shadow-sm space-y-4">
-          <div className="flex justify-between items-center">
-            <span className="text-sm font-semibold text-text-primary">Filtros</span>
-            {activeFiltersCount > 0 && (
-              <button onClick={clearFilters} className="text-xs text-red-500 hover:underline flex items-center gap-1">
-                <X size={12} /> Limpar
-              </button>
-            )}
+      {loading ? (
+        <div className="flex justify-center py-10"><Loader2 size={32} className="animate-spin text-gold-400" /></div>
+      ) : filteredDevelopments.length === 0 ? (
+        <div className="text-center py-16 text-text-secondary">
+          <Building2 size={48} className="mx-auto mb-3 opacity-30" />
+            <p className="font-medium">
+              {filter || activeFiltersCount > 0 ? 'Nenhum empreendimento encontrado' : 'Nenhum empreendimento cadastrado'}
+            </p>
+          {canCreateStrategicResources && !filter && activeFiltersCount === 0 && (
+            <RoundedButton size="sm" className="mt-4 mx-auto" onClick={() => handleOpenModal()}>
+              <Plus size={14} className="mr-1" /> Adicionar Empreendimento
+            </RoundedButton>
+          )}
+        </div>
+      ) : (
+        <div className="relative">
+          <button
+            type="button"
+            aria-label="Empreendimentos anteriores"
+            onClick={() => scrollByCard(-1)}
+            disabled={!canScrollLeft}
+            className={`absolute top-1/2 -translate-y-1/2 left-0 z-10 h-8 w-8 rounded-full bg-card-bg border border-surface-200 shadow-md flex items-center justify-center text-text-secondary hover:text-gold-700 hover:border-gold-300 transition-all ${
+              canScrollLeft ? '' : 'opacity-40 cursor-not-allowed'
+            }`}
+          >
+            <ChevronLeft size={16} />
+          </button>
+
+          <div
+            ref={scrollRef}
+            onScroll={updateScrollState}
+            className="flex gap-3 overflow-x-auto snap-x snap-mandatory no-scrollbar px-10"
+          >
+            {filteredDevelopments.map((dev) => (
+              <PremiumCard
+                key={dev.id}
+                interactive
+                className="p-0 overflow-hidden group shrink-0 snap-start"
+                style={{ width: CARD_WIDTH, minWidth: CARD_WIDTH }}
+                onClick={() => navigate(`/developments/${dev.id}`)}
+              >
+                <div className="relative h-[120px] bg-surface-100">
+                  {dev.images && dev.images.length > 0 ? (
+                    <img src={dev.images[0]} alt={dev.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-text-secondary/30">
+                      <Building2 size={32} />
+                    </div>
+                  )}
+
+                  <div className="absolute top-2 right-2">
+                    <StatusBadge status={dev.status || ''} className="bg-card-bg/90 dark:bg-black/80 backdrop-blur-sm shadow-sm text-[10px]" />
+                  </div>
+
+                  {canCreateStrategicResources && (
+                    <div className="absolute top-2 left-2 flex gap-1">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleOpenModal(dev); }}
+                        className="p-1.5 bg-black/50 text-white rounded-md hover:bg-gold-500 transition-colors backdrop-blur-sm shadow-sm"
+                      >
+                        <Edit2 size={12} />
+                      </button>
+                      <button
+                        onClick={(e) => handleDelete(dev.id, e)}
+                        className="p-1.5 bg-black/50 text-white rounded-md hover:bg-red-500 transition-colors backdrop-blur-sm shadow-sm"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2.5">
+                    <h3 className="text-white font-bold text-sm leading-tight truncate">{dev.name}</h3>
+                    <p className="text-white/80 text-[10px] flex items-center gap-1 truncate"><Building2 size={10} /> {dev.builder}</p>
+                  </div>
+                </div>
+                <div className="p-2.5 space-y-2 bg-card-bg">
+                  <div className="flex justify-between items-start gap-1">
+                    <div className="text-[10px] text-text-secondary flex items-center gap-1 min-w-0">
+                      <MapPin size={11} className="text-gold-500 shrink-0" />
+                      <span className="truncate">{dev.location}</span>
+                    </div>
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 bg-surface-100 rounded text-text-secondary shrink-0">{dev.type}</span>
+                  </div>
+                  <div className="pt-1.5 border-t border-surface-100">
+                    <p className="text-[9px] text-text-secondary uppercase tracking-wider">Preço</p>
+                    <p className="text-xs font-bold text-text-primary truncate">{dev.price}</p>
+                  </div>
+                </div>
+              </PremiumCard>
+            ))}
           </div>
-          <div>
-            <p className="text-xs font-medium text-text-secondary uppercase mb-2">Tipo</p>
-            <div className="flex flex-wrap gap-2">
-              {['Apartamento', 'Casa', 'Flat', 'Lote'].map(t => (
-                <button key={t} onClick={() => toggleFilterType(t)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${filterTypes.includes(t) ? 'bg-gold-500 text-white border-gold-500' : 'bg-surface-50 text-text-secondary border-surface-200 hover:border-gold-300'}`}>
-                  {t}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <p className="text-xs font-medium text-text-secondary uppercase mb-2">Status</p>
-            <div className="flex flex-wrap gap-2">
-              {['Lançamento', 'Em Construção', 'Pronto'].map(s => (
-                <button key={s} onClick={() => toggleFilterStatus(s)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${filterStatuses.includes(s) ? 'bg-gold-500 text-white border-gold-500' : 'bg-surface-50 text-text-secondary border-surface-200 hover:border-gold-300'}`}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
+
+          <button
+            type="button"
+            aria-label="Próximos empreendimentos"
+            onClick={() => scrollByCard(1)}
+            disabled={!canScrollRight}
+            className={`absolute top-1/2 -translate-y-1/2 right-0 z-10 h-8 w-8 rounded-full bg-card-bg border border-surface-200 shadow-md flex items-center justify-center text-text-secondary hover:text-gold-700 hover:border-gold-300 transition-all ${
+              canScrollRight ? '' : 'opacity-40 cursor-not-allowed'
+            }`}
+          >
+            <ChevronRight size={16} />
+          </button>
         </div>
       )}
-
-      <div className="space-y-6">
-        {loading ? (
-          <div className="flex justify-center py-10"><Loader2 size={32} className="animate-spin text-gold-400" /></div>
-        ) : filteredDevelopments.length === 0 ? (
-          <div className="text-center py-16 text-text-secondary">
-            <Building2 size={48} className="mx-auto mb-3 opacity-30" />
-            <p className="font-medium">Nenhum empreendimento cadastrado</p>
-            {canCreateStrategicResources && (
-              <RoundedButton size="sm" className="mt-4 mx-auto" onClick={() => handleOpenModal()}>
-                <Plus size={14} className="mr-1" /> Adicionar Empreendimento
-              </RoundedButton>
-            )}
-          </div>
-        ) : (
-          filteredDevelopments.map((dev) => (
-            <PremiumCard key={dev.id} interactive className="p-0 overflow-hidden group border-none" onClick={() => navigate(`/developments/${dev.id}`)}>
-              <div className="relative h-40 bg-surface-100">
-                {dev.images && dev.images.length > 0 ? (
-                  <img src={dev.images[0]} alt={dev.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-text-secondary/30">
-                    <Building2 size={48} />
-                  </div>
-                )}
-
-                {/* Status Badge */}
-                <div className="absolute top-3 right-3">
-                  <StatusBadge status={dev.status || ''} className="bg-card-bg/90 dark:bg-black/80 backdrop-blur-sm shadow-sm" />
-                </div>
-
-                {/* Admin Actions */}
-                {canCreateStrategicResources && (
-                  <div className="absolute top-3 left-3 flex gap-2">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleOpenModal(dev); }}
-                      className="p-2 bg-black/50 text-white rounded-lg hover:bg-gold-500 transition-colors backdrop-blur-sm shadow-sm"
-                    >
-                      <Edit2 size={16} />
-                    </button>
-                    <button
-                      onClick={(e) => handleDelete(dev.id, e)}
-                      className="p-2 bg-black/50 text-white rounded-lg hover:bg-red-500 transition-colors backdrop-blur-sm shadow-sm"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                )}
-
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
-                  <h3 className="text-white font-bold text-lg">{dev.name}</h3>
-                  <p className="text-white/80 text-xs flex items-center gap-1"><Building2 size={12} /> {dev.builder}</p>
-                </div>
-              </div>
-              <div className="p-4 space-y-3 bg-card-bg">
-                <div className="flex justify-between items-start">
-                  <div className="text-xs text-text-secondary flex items-center gap-1"><MapPin size={14} className="text-gold-500" /> {dev.location}</div>
-                  <span className="text-xs font-medium px-2 py-1 bg-surface-100 rounded-md text-text-secondary">{dev.type}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-4 pt-2 border-t border-surface-100">
-                  <div>
-                    <p className="text-[10px] text-text-secondary uppercase tracking-wider">Preço</p>
-                    <p className="text-sm font-bold text-text-primary">{dev.price}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-text-secondary uppercase tracking-wider">Renda Mínima</p>
-                    <p className="text-sm font-bold text-text-primary">{dev.min_income}</p>
-                  </div>
-                </div>
-                <button className="w-full mt-2 py-2 text-sm font-medium text-primary-400 hover:bg-primary-500/10 rounded-lg transition-colors flex items-center justify-center gap-1">
-                  Ver Detalhes <ChevronRight size={16} />
-                </button>
-              </div>
-            </PremiumCard>
-          ))
-        )}
-      </div>
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingDevId ? "Editar Empreendimento" : "Novo Empreendimento"}>
         <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
