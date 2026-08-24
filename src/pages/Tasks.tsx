@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { PremiumCard, StatusBadge, PageHeader, RoundedButton } from '@/components/ui/PremiumComponents';
 import { CheckCircle2, Calendar, User, Plus, Edit2, Trash2, X, Clock, Loader2 } from 'lucide-react';
+import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
@@ -372,16 +373,17 @@ export default function Tasks() {
           <div>
             <label className="block text-sm font-medium text-text-secondary mb-1">Responsável</label>
             {canDelegate ? (
-              <select value={formData.assigned_to || ''} onChange={(e) => {
-                const selectedId = e.target.value;
-                const selected = allProfiles.find((p) => p.id === selectedId);
-                setFormData(p => ({ ...p, assigned_to: selectedId, responsible: selected?.name || '' }));
-              }}
-                className="w-full p-3 bg-surface-50 rounded-xl border-none focus:ring-2 focus:ring-gold-200 text-text-primary">
-                {assignableBrokers.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
+              <SearchableSelect
+                value={assignableBrokers.find((p) => p.id === formData.assigned_to)?.name || allProfiles.find((p) => p.id === formData.assigned_to)?.name || ''}
+                onChange={(name) => {
+                  const selected = assignableBrokers.find((p) => p.name === name);
+                  setFormData((p) => ({ ...p, assigned_to: selected?.id, responsible: selected?.name || name }));
+                }}
+                options={assignableBrokers.map((p) => p.name)}
+                placeholder="Selecione o responsável"
+                searchPlaceholder="Buscar responsável…"
+                allowClear={false}
+              />
             ) : (
               <input value={formData.responsible || profile?.name || ''} onChange={(e) => setFormData(p => ({ ...p, responsible: e.target.value }))}
                 className="w-full p-3 bg-surface-50 rounded-xl border-none focus:ring-2 focus:ring-gold-200 text-text-primary" placeholder="Nome do responsável" />
