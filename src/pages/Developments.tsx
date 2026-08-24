@@ -177,7 +177,7 @@ export default function Developments() {
     const el = scrollRef.current;
     if (!el) return;
     const card = el.querySelector('[data-dev-card]') as HTMLElement | null;
-    const step = (card?.offsetWidth || el.clientWidth / 3) + CARD_GAP;
+    const step = (card?.offsetWidth || el.clientWidth / 3.5) + CARD_GAP;
     el.scrollBy({ left: direction * step, behavior: 'smooth' });
   };
 
@@ -434,7 +434,7 @@ export default function Developments() {
           <div
             ref={scrollRef}
             onScroll={updateScrollState}
-            className="grid grid-flow-col auto-cols-[100%] md:auto-cols-[calc((100%-2rem)/3)] gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar"
+            className="grid grid-flow-col auto-cols-[100%] md:auto-cols-[calc((100%-3rem)/3.5)] gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar"
           >
             {filteredDevelopments.map((dev) => (
               <PremiumCard
