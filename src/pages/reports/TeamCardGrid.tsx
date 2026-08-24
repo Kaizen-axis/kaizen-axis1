@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PremiumCard } from '@/components/ui/PremiumComponents';
@@ -15,11 +15,12 @@ interface TeamCardGridProps {
   from?: ReportScope;
   fromId?: string;
   fromName?: string;
+  renderActions?: (team: Team) => ReactNode;
 }
 
 const CARD_STEP = 182; // 170px do card + 12px de gap
 
-export function TeamCardGrid({ teams, clients, startDate, endDate, from, fromId, fromName }: TeamCardGridProps) {
+export function TeamCardGrid({ teams, clients, startDate, endDate, from, fromId, fromName, renderActions }: TeamCardGridProps) {
   const navigate = useNavigate();
   const { allProfiles } = useApp();
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -67,7 +68,7 @@ export function TeamCardGrid({ teams, clients, startDate, endDate, from, fromId,
           return (
             <PremiumCard
               key={team.id}
-              className="min-w-[170px] w-[170px] aspect-square snap-start p-4 cursor-pointer hover:border-gold-300 transition-colors flex flex-col justify-between shrink-0"
+              className="relative min-w-[170px] w-[170px] aspect-square snap-start p-4 cursor-pointer hover:border-gold-300 transition-colors flex flex-col justify-between shrink-0"
               onClick={() => navigate(buildReportHref({
                 scope: 'equipe',
                 id: team.id,
@@ -79,6 +80,11 @@ export function TeamCardGrid({ teams, clients, startDate, endDate, from, fromId,
                 end: endDate,
               }))}
             >
+              {renderActions && (
+                <div className="absolute top-2 right-2 z-10" onClick={(e) => e.stopPropagation()}>
+                  {renderActions(team)}
+                </div>
+              )}
               <div className="min-w-0">
                 <div className="w-9 h-9 rounded-xl bg-gold-50 dark:bg-gold-900/20 flex items-center justify-center mb-2">
                   <Shield size={18} className="text-gold-500" />

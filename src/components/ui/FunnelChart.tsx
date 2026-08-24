@@ -1,28 +1,29 @@
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, LabelList } from 'recharts';
 import { PremiumCard } from './PremiumComponents';
-import { Client, useApp } from '@/context/AppContext';
+import { useApp } from '@/context/AppContext';
 
 
 interface FunnelChartProps {
-  clientsData?: Client[];
+  clientsData?: Array<{ stage: string }>;
 }
 
 export const FunnelChart = ({ clientsData }: FunnelChartProps) => {
   const { clients } = useApp();
   const sourceClients = clientsData ?? clients;
 
+  // Etapas reais do pipeline (CLIENT_STAGES em src/data/clients.ts)
   const data = [
-    { name: 'Leads', value: sourceClients.filter(c => c.stage === 'Novo Lead').length },
-    { name: 'Análise', value: sourceClients.filter(c => c.stage === 'Em Análise').length },
-    { name: 'Em Trâmite', value: sourceClients.filter(c => ['Aprovado', 'Condicionado', 'Em Tratativa'].includes(c.stage)).length },
-    { name: 'Venda', value: sourceClients.filter(c => c.stage === 'Concluído').length },
+    { name: 'Documentação', value: sourceClients.filter(c => c.stage === 'Documentação').length },
+    { name: 'Em Análise', value: sourceClients.filter(c => c.stage === 'Em Análise').length },
+    { name: 'Aprovados', value: sourceClients.filter(c => c.stage === 'Aprovado').length },
+    { name: 'Concluídos', value: sourceClients.filter(c => c.stage === 'Concluído').length },
   ];
 
   return (
     <PremiumCard className="h-72 flex flex-col">
       <div className="mb-4">
         <h3 className="v3-serif text-lg text-text-primary tracking-tight">Funil de Conversão</h3>
-        <p className="text-xs text-text-secondary">Baseado em dados reais</p>
+        <p className="text-xs text-text-secondary">Clientes por etapa do pipeline</p>
       </div>
       <div className="flex-1 w-full -ml-4">
         <ResponsiveContainer width="100%" height="100%">
@@ -73,7 +74,14 @@ export const FunnelChart = ({ clientsData }: FunnelChartProps) => {
               fillOpacity={1}
               fill="url(#colorValue)"
               activeDot={{ r: 6, fill: '#3b82f6', stroke: 'var(--color-card-bg)', strokeWidth: 2 }}
-            />
+            >
+              <LabelList
+                dataKey="value"
+                position="top"
+                offset={8}
+                style={{ fill: 'var(--color-text-primary)', fontSize: 12, fontWeight: 700 }}
+              />
+            </Area>
           </AreaChart>
         </ResponsiveContainer>
       </div>

@@ -13,8 +13,62 @@ import PipelinePdfExport from '@/components/admin/PipelinePdfExport';
 import { useReportsData } from '@/hooks/useReportsData';
 import { parseDateOnlyLocal, parseDateOnlyLocalEnd, toDateOnlyLocal, toPtBrDate } from '@/lib/dateRange';
 import { CLIENT_STAGES } from '@/data/clients';
+import { getTeamMemberIds, profileMatchesTeam } from '@/lib/reports/teamMembers';
+import { TeamCardGrid } from '@/pages/reports/TeamCardGrid';
+import { DiretoriaCardGrid } from '@/pages/reports/DiretoriaCardGrid';
+import { FilterMenu } from '@/pages/reports/FilterMenu';
+import { buildReportHref } from '@/lib/reports/reportNav';
+import { ReportClientLike } from '@/lib/reports/computeHybridMetrics';
 
 type Tab = 'users' | 'teams' | 'goals' | 'announcements' | 'reports' | 'directorates' | 'gamification';
+
+interface CardActionItem {
+  label: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+  danger?: boolean;
+}
+
+function CardActionsMenu({ items }: { items: CardActionItem[] }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        aria-label="Ações"
+        onClick={() => setOpen(v => !v)}
+        className="w-7 h-7 flex items-center justify-center rounded-lg border border-surface-200 bg-card-bg text-text-secondary hover:text-gold-700 hover:border-gold-300 shadow-sm transition-all"
+      >
+        <MoreHorizontal size={14} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1.5 z-20 w-44 bg-card-bg border border-surface-200 rounded-xl shadow-xl overflow-hidden p-1.5">
+          {items.map(item => (
+            <button
+              key={item.label}
+              type="button"
+              onClick={() => { setOpen(false); item.onClick(); }}
+              className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[11px] font-semibold transition-colors ${item.danger ? 'text-red-500 hover:bg-red-50' : 'text-text-secondary hover:bg-surface-50'}`}
+            >
+              {item.icon} {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function AdminPanel() {
   // ── Hard role guard: only ADMIN and DIRETOR can access this page ────────────
@@ -79,6 +133,9 @@ export default function AdminPanel() {
     };
   });
   const [reportPeriod, setReportPeriod] = useState<'este_mes' | '30_dias' | '60_dias' | '90_dias' | 'custom'>('este_mes');
+  const [isReportDateModalOpen, setIsReportDateModalOpen] = useState(false);
+  const [customStartInput, setCustomStartInput] = useState('');
+  const [customEndInput, setCustomEndInput] = useState('');
   const [drillCity, setDrillCity] = useState<string | null>(null); // drill-down de regiões: cidade → bairros
   const [reportData, setReportData] = useState<any>(null);
   const [reportLoading, setReportLoading] = useState(false);
@@ -102,45 +159,6 @@ export default function AdminPanel() {
   const parseCurrencyLocal = (v: string | undefined | null): number => {
     if (!v) return 0;
     return parseFloat(v.replace(/[R$\s.]/g, '').replace(',', '.')) || 0;
-  };
-
-  const normalizeTeamRef = (value?: string | null) => String(value || '').trim().toLowerCase();
-
-  const profileMatchesTeam = (profile: any, team: Team): boolean => {
-    if (!profile || !team) return false;
-    if (profile.team_id === team.id || profile.team === team.id) return true;
-    const profileTeamName = normalizeTeamRef(profile.team);
-    const teamName = normalizeTeamRef(team.name);
-    return profileTeamName.length > 0 && profileTeamName === teamName;
-  };
-
-  const getTeamMemberIds = (team: Team): string[] => {
-    const directMembers = allProfiles.filter((p: any) => profileMatchesTeam(p, team)).map((p: any) => p.id);
-    const managerId = team.manager_id || null;
-    const managerLinked = managerId
-      ? allProfiles.filter((p: any) => p.manager_id === managerId).map((p: any) => p.id)
-      : [];
-
-    const coordinatorIds = managerId
-      ? allProfiles
-        .filter((p: any) => p.role?.toUpperCase() === 'COORDENADOR' && p.manager_id === managerId)
-        .map((p: any) => p.id)
-      : [];
-
-    const coordinatorLinkedBrokers = coordinatorIds.length > 0
-      ? allProfiles
-        .filter((p: any) => p.role?.toUpperCase() === 'CORRETOR' && p.coordinator_id && coordinatorIds.includes(p.coordinator_id))
-        .map((p: any) => p.id)
-      : [];
-
-    return Array.from(new Set([
-      ...(team.members || []),
-      ...directMembers,
-      ...(managerId ? [managerId] : []),
-      ...managerLinked,
-      ...coordinatorIds,
-      ...coordinatorLinkedBrokers,
-    ]));
   };
 
   const formatBrokerDisplayName = (name?: string | null): string => {
@@ -184,6 +202,45 @@ export default function AdminPanel() {
       start = toDateOnlyLocal(d);
     }
     setReportDateRange({ start, end });
+  };
+
+  // Seletor de período no padrão da aba Relatórios (FilterMenu) ───────────────
+  const REPORT_PERIOD_LABELS: Record<'este_mes' | '30_dias' | '60_dias' | '90_dias', string> = {
+    este_mes: 'Mês vigente',
+    '30_dias': '30 dias',
+    '60_dias': '60 dias',
+    '90_dias': '90 dias',
+  };
+
+  const reportPeriodFilterLabel = reportPeriod === 'custom'
+    ? `${toPtBrDate(reportDateRange.start)} - ${toPtBrDate(reportDateRange.end)}`
+    : REPORT_PERIOD_LABELS[reportPeriod];
+
+  const handleReportPeriodFilter = (option: string) => {
+    if (option === 'Personalizado') {
+      setCustomStartInput(reportDateRange.start);
+      setCustomEndInput(reportDateRange.end);
+      setIsReportDateModalOpen(true);
+      return;
+    }
+    const map: Record<string, 'este_mes' | '30_dias' | '60_dias' | '90_dias'> = {
+      'Mês vigente': 'este_mes',
+      '30 dias': '30_dias',
+      '60 dias': '60_dias',
+      '90 dias': '90_dias',
+    };
+    const id = map[option];
+    if (id) applyReportPeriod(id);
+  };
+
+  const applyCustomReportRange = () => {
+    if (!customStartInput || !customEndInput) {
+      alert('Por favor, selecione as datas de início e fim.');
+      return;
+    }
+    setReportPeriod('custom');
+    setReportDateRange({ start: customStartInput, end: customEndInput });
+    setIsReportDateModalOpen(false);
   };
 
   const selectedPeriodClients = clients.filter((c) => {
@@ -439,7 +496,7 @@ export default function AdminPanel() {
     return teams
       .map((team) => {
         const teamMemberIds = Array.from(new Set([
-          ...getTeamMemberIds(team),
+          ...getTeamMemberIds(team, allProfiles),
           team.manager_id,
         ].filter(Boolean) as string[]));
         const brokerIds = Array.from(new Set(allProfiles
@@ -1105,7 +1162,7 @@ export default function AdminPanel() {
   const handleToggleMember = async (teamId: string, userId: string) => {
     const team = teams.find(t => t.id === teamId);
     if (!team) return;
-    const members = getTeamMemberIds(team);
+    const members = getTeamMemberIds(team, allProfiles);
     const isAdding = !members.includes(userId);
 
     try {
@@ -1308,33 +1365,19 @@ export default function AdminPanel() {
             </div>
             {loading ? <Loader2 size={24} className="animate-spin mx-auto text-gold-400 py-4" /> :
               teams.length === 0 ? <p className="text-center text-text-secondary py-8">Nenhuma equipe cadastrada.</p> :
-                teams.map(team => {
-                  const dirName = directorates.find(d => d.id === team.directorate_id)?.name;
-                  const mgrName = allProfiles.find(p => p.id === team.manager_id)?.name;
-                  return (
-                    <PremiumCard
-                      key={team.id}
-                      className="p-4 cursor-pointer transition-colors hover:border-primary-500/40"
-                      onClick={() => navigate(`/reports?scope=equipe&id=${team.id}&name=${encodeURIComponent(team.name)}&start=${reportDateRange.start}&end=${reportDateRange.end}`)}
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <h4 className="font-bold text-text-primary">{team.name}</h4>
-                          <div className="flex flex-col gap-0.5 mt-1">
-                            {dirName && <p className="text-xs text-text-secondary">🏢 {dirName}</p>}
-                            {mgrName && <p className="text-xs text-text-secondary">👤 Gestor: {mgrName}</p>}
-                          </div>
-                        </div>
-                        <div className="flex gap-2 items-start" onClick={e => e.stopPropagation()}>
-                          <button onClick={() => openTeamModal(team)} className="p-1.5 bg-surface-50 rounded-full hover:text-gold-600"><Edit2 size={14} /></button>
-                          <button onClick={() => { setSelectedTeamId(team.id); setIsMembersModalOpen(true); }} className="p-1.5 bg-surface-50 rounded-full hover:text-blue-600"><Users size={14} /></button>
-                          <button onClick={() => { if (confirm('Excluir equipe?')) deleteTeam(team.id); }} className="p-1.5 bg-surface-50 rounded-full hover:text-red-500"><Trash2 size={14} /></button>
-                        </div>
-                      </div>
-                      <p className="text-xs text-text-secondary">{getTeamMemberIds(team).length} membros</p>
-                    </PremiumCard>
-                  );
-                })}
+                <TeamCardGrid
+                  teams={teams}
+                  clients={clients as ReportClientLike[]}
+                  startDate={reportDateRange.start}
+                  endDate={reportDateRange.end}
+                  renderActions={(team) => (
+                    <CardActionsMenu items={[
+                      { label: 'Editar', icon: <Edit2 size={13} />, onClick: () => openTeamModal(team) },
+                      { label: 'Gerenciar membros', icon: <Users size={13} />, onClick: () => { setSelectedTeamId(team.id); setIsMembersModalOpen(true); } },
+                      { label: 'Excluir', icon: <Trash2 size={13} />, danger: true, onClick: () => { if (confirm('Excluir equipe?')) deleteTeam(team.id); } },
+                    ]} />
+                  )}
+                />}
           </div>
         );
 
@@ -1494,8 +1537,24 @@ export default function AdminPanel() {
               <PipelinePdfExport corretores={allProfiles} />
             </Modal>
 
-            {/* ── Extra Tools: "..." button ── */}
-            <div className="print:hidden flex justify-end relative">
+            {/* ── Modal: período personalizado ── */}
+            <Modal isOpen={isReportDateModalOpen} onClose={() => setIsReportDateModalOpen(false)} title="Período Personalizado">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">Início</label>
+                  <input type="date" value={customStartInput} onChange={(e) => setCustomStartInput(e.target.value)} className="w-full p-3 bg-surface-50 rounded-xl border-none focus:ring-2 focus:ring-gold-200 text-text-primary" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-text-secondary mb-1">Fim</label>
+                  <input type="date" value={customEndInput} onChange={(e) => setCustomEndInput(e.target.value)} className="w-full p-3 bg-surface-50 rounded-xl border-none focus:ring-2 focus:ring-gold-200 text-text-primary" />
+                </div>
+                <RoundedButton fullWidth onClick={applyCustomReportRange}>Aplicar Filtro</RoundedButton>
+              </div>
+            </Modal>
+
+            {/* ── Period filter + Extra Tools ── */}
+            <div className="print:hidden flex items-center justify-end gap-2 relative">
+              <FilterMenu period={reportPeriodFilterLabel} onPeriodChange={handleReportPeriodFilter} />
               <button
                 onClick={() => setIsToolsMenuOpen(v => !v)}
                 className="flex items-center justify-center w-9 h-9 rounded-lg border border-surface-200 bg-card-bg dark:bg-surface-100 text-text-secondary hover:text-text-primary hover:border-gold-300 shadow-sm transition-all"
@@ -1567,55 +1626,6 @@ export default function AdminPanel() {
               )}
             </div>
 
-            <div className="flex flex-col gap-3 print:hidden">
-              <div className="flex flex-wrap gap-2">
-                {([
-                  { id: 'este_mes', label: 'Este mês' },
-                  { id: '30_dias', label: '30 dias' },
-                  { id: '60_dias', label: '60 dias' },
-                  { id: '90_dias', label: '90 dias' },
-                  { id: 'custom', label: 'Personalizado' },
-                ] as const).map((opt) => (
-                  <button
-                    key={opt.id}
-                    onClick={() => applyReportPeriod(opt.id)}
-                    className={`px-4 py-2 rounded-lg text-xs font-semibold border transition-all ${
-                      reportPeriod === opt.id
-                        ? 'bg-primary-600 text-white border-primary-600'
-                        : 'bg-card-bg text-text-secondary border-surface-200 hover:border-primary-400'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-
-              {reportPeriod === 'custom' && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-bold text-text-secondary uppercase mb-1">Início</span>
-                    <input
-                      type="date"
-                      value={reportDateRange.start}
-                      onChange={(e) => setReportDateRange(prev => ({ ...prev, start: e.target.value }))}
-                      className="w-full px-2 py-2 border border-surface-200 rounded-lg text-sm bg-surface-50 text-text-primary focus:border-primary-400 focus:ring-1 focus:ring-primary-400 outline-none transition-all"
-                      max={reportDateRange.end}
-                    />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-bold text-text-secondary uppercase mb-1">Fim</span>
-                    <input
-                      type="date"
-                      value={reportDateRange.end}
-                      onChange={(e) => setReportDateRange(prev => ({ ...prev, end: e.target.value }))}
-                      className="w-full px-2 py-2 border border-surface-200 rounded-lg text-sm bg-surface-50 text-text-primary focus:border-primary-400 focus:ring-1 focus:ring-primary-400 outline-none transition-all"
-                      min={reportDateRange.start}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
             {reportLoading || !reportData ? (
               <div className="flex flex-col items-center justify-center py-20 bg-card-bg rounded-2xl border border-surface-200 shadow-sm">
                 <Loader2 size={40} className="animate-spin text-gold-500 mb-4" />
@@ -1630,69 +1640,31 @@ export default function AdminPanel() {
                   <p className="text-sm text-text-secondary">{toPtBrDate(reportDateRange.start)} a {toPtBrDate(reportDateRange.end)}</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 print:grid-cols-4 print:gap-4 print:mt-4">
-                  {[
-                    { label: 'Leads', value: selectedPeriodLeads.length, cmp: null, icon: <Users size={14} />, color: 'text-text-primary', bg: 'bg-surface-100 text-text-secondary', route: '/clients', state: { tab: 'documentacao' } },
-                    { label: 'Clientes', value: selectedPeriodClients.length, cmp: null, icon: <Users size={14} />, color: 'text-primary-400', bg: 'bg-primary-500/15 text-primary-400', route: '/clients', state: undefined },
-                    { label: 'Aprovados', value: selectedPeriodApproved, cmp: null, icon: <Shield size={14} />, color: 'text-green-400', bg: 'bg-green-500/15 text-green-400', route: '/clients', state: { initialStage: 'Aprovado' } },
-                    { label: 'Agenda', value: upcomingAppointmentsCount, cmp: null, icon: <Calendar size={14} />, color: 'text-blue-400', bg: 'bg-blue-500/15 text-blue-400', route: '/schedule', state: undefined },
-                  ].map((stat, i) => (
-                    <PremiumCard key={i} className={`p-3 relative flex flex-col justify-between h-24 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border-surface-100 ${stat.route ? 'cursor-pointer hover:border-primary-400/50 hover:shadow-md transition-all' : ''}`} onClick={() => stat.route && navigate(stat.route, { state: stat.state })}>
-                      <div className="flex justify-between items-start">
-                        <span className={`p-1.5 rounded-md ${stat.bg}`}>{stat.icon}</span>
-                        {stat.cmp !== null && (
-                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-sm ${stat.cmp > 0 ? 'bg-green-50 text-green-700' : stat.cmp < 0 ? 'bg-red-50 text-red-700' : 'bg-surface-50 text-text-secondary'}`}>
-                            {stat.cmp > 0 ? '+' : ''}{stat.cmp}%
-                          </span>
-                        )}
+                {/* MÉTRICAS PRINCIPAIS — grid unificado, cards com mesma altura e largura */}
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 print:grid-cols-3 print:gap-4 print:mt-4">
+                  {([
+                    { label: 'Clientes', value: String(selectedPeriodClients.length), sub: 'no período selecionado', icon: <Users size={14} />, iconBg: 'bg-primary-500/15 text-primary-400', route: '/clients', state: undefined },
+                    { label: 'Aprovados', value: String(selectedPeriodApproved), sub: 'clientes aprovados', icon: <Shield size={14} />, iconBg: 'bg-green-500/15 text-green-400', route: '/clients', state: { initialStage: 'Aprovado' } },
+                    { label: 'Agenda', value: String(upcomingAppointmentsCount), sub: 'compromissos futuros', icon: <Calendar size={14} />, iconBg: 'bg-blue-500/15 text-blue-400', route: '/schedule', state: undefined },
+                    { label: 'VGV', value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(vgvLocal), sub: `${selectedPeriodSalesCount} vendas concluídas`, icon: <TrendingUp size={14} />, iconBg: 'bg-green-500/15 text-green-400' },
+                    { label: 'Conversão', value: `${selectedPeriodConversion.toFixed(1)}%`, sub: 'vendas / total clientes', icon: <Target size={14} />, iconBg: 'bg-blue-500/15 text-blue-400' },
+                    { label: 'Jornada', value: `${Math.round(globalMetrics.cicloMedioDias)} dias`, sub: 'TMC em média', icon: <Calendar size={14} />, iconBg: 'bg-indigo-500/15 text-indigo-400' },
+                  ] as Array<{ label: string; value: string; sub: string; icon: React.ReactNode; iconBg: string; route?: string; state?: any }>).map((stat) => (
+                    <PremiumCard
+                      key={stat.label}
+                      className={`p-3 relative flex flex-col justify-between h-28 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border-surface-100 ${stat.route ? 'cursor-pointer hover:border-primary-400/50 hover:shadow-md transition-all' : ''}`}
+                      onClick={() => stat.route && navigate(stat.route, { state: stat.state })}
+                    >
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className={`p-1.5 rounded-md shrink-0 ${stat.iconBg}`}>{stat.icon}</span>
+                        <p className="text-[10px] uppercase tracking-wider font-semibold text-text-secondary truncate">{stat.label}</p>
                       </div>
-                      <div className="mt-1">
-                        <p className={`text-2xl font-bold ${stat.color} leading-none`}>{stat.value}</p>
-                        <p className="text-[10px] uppercase tracking-wider font-semibold text-text-secondary mt-1">{stat.label}</p>
+                      <div className="min-w-0">
+                        <p className="text-lg font-bold text-text-primary leading-none whitespace-nowrap truncate">{stat.value}</p>
+                        <p className="text-[9px] font-semibold text-text-secondary mt-1.5 truncate">{stat.sub}</p>
                       </div>
                     </PremiumCard>
                   ))}
-                </div>
-
-                {/* STRATEGIC DASHBOARD */}
-                <div className="grid grid-cols-2 gap-3 print:grid-cols-4 print:gap-4">
-                  <PremiumCard className="p-3 bg-gradient-to-br from-primary-500/10 to-card-bg border-primary-500/20 shadow-[0_2px_10px_rgba(0,0,0,0.03)] h-28 flex flex-col justify-between">
-                    <p className="text-[10px] uppercase font-bold tracking-wider text-primary-400 flex items-center gap-1"><Trophy size={12} /> Vendas</p>
-                    <div>
-                      <p className="text-2xl font-bold text-text-primary leading-none">{selectedPeriodSalesCount}</p>
-                      <p className="text-[9px] font-semibold text-text-secondary mt-1.5">no período selecionado</p>
-                    </div>
-                  </PremiumCard>
-
-                  <PremiumCard className="p-3 bg-gradient-to-br from-green-500/10 to-card-bg border-green-500/20 shadow-[0_2px_10px_rgba(0,0,0,0.03)] h-28 flex flex-col justify-between">
-                    <p className="text-[10px] uppercase font-bold tracking-wider text-green-400 flex items-center gap-1"><TrendingUp size={12} /> VGV</p>
-                    <div>
-                      <p className="text-xl font-bold text-text-primary leading-none whitespace-nowrap">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(vgvLocal)}
-                      </p>
-                      <p className="text-[9px] font-semibold text-text-secondary mt-1.5">vendas concluídas</p>
-                    </div>
-                  </PremiumCard>
-
-                  <PremiumCard className="p-3 bg-gradient-to-br from-blue-500/10 to-card-bg border-blue-500/20 shadow-[0_2px_10px_rgba(0,0,0,0.03)] h-28 flex flex-col justify-between">
-                    <p className="text-[10px] uppercase font-bold tracking-wider text-blue-400 flex items-center gap-1"><Target size={12} /> Conversão</p>
-                    <div>
-                      <div className="flex items-end gap-1 mb-1">
-                        <p className="text-2xl font-bold text-text-primary leading-none">{selectedPeriodConversion.toFixed(1)}%</p>
-                      </div>
-                      <p className="text-[9px] font-semibold text-text-secondary mt-0.5">vendas / total clientes</p>
-                    </div>
-                  </PremiumCard>
-
-                  <PremiumCard className="p-3 bg-gradient-to-br from-indigo-500/10 to-card-bg border-indigo-500/20 shadow-[0_2px_10px_rgba(0,0,0,0.03)] h-28 flex flex-col justify-between">
-                    <p className="text-[10px] uppercase font-bold tracking-wider text-indigo-400 flex items-center gap-1 justify-between">
-                      <span className="flex items-center gap-1"><Calendar size={12} /> Jornada</span>
-                    </p>
-                    <div>
-                      <p className="text-2xl font-bold text-text-primary leading-none">{Math.round(globalMetrics.cicloMedioDias)} <span className="text-[10px] font-bold text-text-secondary tracking-normal">dias</span></p>
-                      <p className="text-[9px] font-semibold text-text-secondary mt-1.5 flex items-center gap-1">TMC em média</p>
-                    </div>
-                  </PremiumCard>
                 </div>
 
                 {/* CHARTS LAYER — grid 2x2 de cards menores */}
@@ -1840,18 +1812,30 @@ export default function AdminPanel() {
                   label: 'Corretor',
                   rows: periodBrokerRanking,
                   empty: `Nenhum corretor com dados no período ${selectedPeriodLabel}.`,
+                  hrefFor: (row: any) => row?.entity_id
+                    ? buildReportHref({ scope: 'corretor', id: row.entity_id, name: row.nome, start: reportDateRange.start, end: reportDateRange.end })
+                    : null,
                 }, {
                   key: 'managers',
                   title: `Ranking de Gerentes (Top 3 • ${selectedPeriodLabel})`,
                   label: 'Gerente',
                   rows: periodManagerRanking,
                   empty: `Nenhum gerente com dados no período ${selectedPeriodLabel}.`,
+                  hrefFor: (row: any) => {
+                    const team = teams.find(t => t.manager_id === row?.entity_id);
+                    return team
+                      ? buildReportHref({ scope: 'equipe', id: team.id, name: team.name, start: reportDateRange.start, end: reportDateRange.end })
+                      : null;
+                  },
                 }, {
                   key: 'coordinators',
                   title: `Ranking de Coordenadores (Top 3 • ${selectedPeriodLabel})`,
                   label: 'Coordenador',
                   rows: periodCoordinatorRanking,
                   empty: `Nenhum coordenador com dados no período ${selectedPeriodLabel}.`,
+                  hrefFor: (row: any) => row?.entity_id
+                    ? buildReportHref({ scope: 'corretor', id: row.entity_id, name: row.nome, start: reportDateRange.start, end: reportDateRange.end })
+                    : null,
                 }].map((ranking) => (
                   <PremiumCard key={ranking.key} className="p-0 overflow-hidden border-surface-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] mt-4">
                     <div className="p-3 border-b border-surface-100 flex items-center justify-between bg-surface-50">
@@ -1870,13 +1854,28 @@ export default function AdminPanel() {
                           </tr>
                         </thead>
                         <tbody>
-                          {ranking.rows.map((c: any, i: number) => (
+                          {ranking.rows.map((c: any, i: number) => {
+                            const rowHref = ranking.hrefFor(c);
+                            const displayName = formatBrokerDisplayName(c.nome);
+                            const fullName = String(c.nome || '').trim() || 'Sem nome';
+                            return (
                             <tr key={`${ranking.key}-${c.entity_id}`} className="border-b border-surface-50 last:border-0 hover:bg-surface-50/50 transition-colors">
                               <td className="p-3 text-[11px] font-bold text-text-primary flex items-center gap-2">
                                 <span className={`text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold shadow-sm shrink-0 ${i === 0 ? 'bg-gradient-to-br from-yellow-300 to-yellow-500 text-white' : i === 1 ? 'bg-gradient-to-br from-gray-200 to-gray-400 text-white' : 'bg-gradient-to-br from-orange-300 to-orange-500 text-white'}`}>{i + 1}</span>
-                                <span className="truncate max-w-[70px]" title={String(c.nome || '').trim() || 'Sem nome'}>
-                                  {formatBrokerDisplayName(c.nome)}
-                                </span>
+                                {rowHref ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(rowHref)}
+                                    className="truncate max-w-[70px] text-left hover:text-gold-600 hover:underline transition-colors cursor-pointer"
+                                    title={`${fullName} — abrir relatório`}
+                                  >
+                                    {displayName}
+                                  </button>
+                                ) : (
+                                  <span className="truncate max-w-[70px]" title={fullName}>
+                                    {displayName}
+                                  </span>
+                                )}
                               </td>
                               <td className="p-3 text-[11px] text-center text-text-secondary font-medium">{c.Li}</td>
                               <td className="p-3 text-[11px] text-center font-black text-green-600">{c.Vi}</td>
@@ -1889,7 +1888,8 @@ export default function AdminPanel() {
                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0, notation: 'compact' }).format(c.Ri)}
                               </td>
                             </tr>
-                          ))}
+                            );
+                          })}
                           {ranking.rows.length === 0 && (
                             <tr><td colSpan={5} className="p-8 text-center text-text-secondary text-sm">{ranking.empty}</td></tr>
                           )}
@@ -1916,38 +1916,19 @@ export default function AdminPanel() {
               </RoundedButton>
             </div>
             {loading ? <Loader2 size={24} className="animate-spin mx-auto text-gold-400 py-4" /> :
-              directorates.map(d => (
-                <PremiumCard
-                  key={d.id}
-                  className="flex items-center justify-between p-4 cursor-pointer transition-colors hover:border-primary-500/40"
-                  onClick={() => navigate(`/reports?scope=diretoria&id=${d.id}&name=${encodeURIComponent(d.name)}&start=${reportDateRange.start}&end=${reportDateRange.end}`)}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-primary-500/15 flex items-center justify-center">
-                      <Building2 size={18} className="text-primary-400" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-text-primary">{d.name}</p>
-                      <p className="text-xs text-text-secondary">{d.description || 'Sem descrição'}</p>
-                      {d.manager_id && (
-                        <p className="text-[10px] font-semibold text-gold-600 mt-0.5">
-                          Gestor: {allProfiles.find(p => p.id === d.manager_id)?.name || 'Desconhecido'}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex gap-2" onClick={e => e.stopPropagation()}>
-                    <button onClick={() => { setEditingDir(d); setDirForm({ name: d.name, description: d.description, manager_id: d.manager_id }); setIsDirModalOpen(true); }}
-                      className="p-2 rounded-lg hover:bg-surface-100 text-text-secondary">
-                      <Edit2 size={16} />
-                    </button>
-                    <button onClick={() => { if (confirm('Excluir esta diretoria?')) deleteDirectorate(d.id); }}
-                      className="p-2 rounded-lg hover:bg-red-50 text-red-500">
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </PremiumCard>
-              ))
+              directorates.length === 0 ? <p className="text-center text-text-secondary py-8">Nenhuma diretoria cadastrada.</p> :
+                <DiretoriaCardGrid
+                  directorates={directorates}
+                  clients={clients as ReportClientLike[]}
+                  startDate={reportDateRange.start}
+                  endDate={reportDateRange.end}
+                  renderActions={(d) => (
+                    <CardActionsMenu items={[
+                      { label: 'Editar', icon: <Edit2 size={13} />, onClick: () => { setEditingDir(d); setDirForm({ name: d.name, description: d.description, manager_id: d.manager_id }); setIsDirModalOpen(true); } },
+                      { label: 'Excluir', icon: <Trash2 size={13} />, danger: true, onClick: () => { if (confirm('Excluir esta diretoria?')) deleteDirectorate(d.id); } },
+                    ]} />
+                  )}
+                />
             }
           </div>
         );
@@ -2247,7 +2228,7 @@ export default function AdminPanel() {
           { id: 'users', label: 'Usuários', icon: Users },
           { id: 'teams', label: 'Equipes', icon: Shield },
           { id: 'directorates', label: 'Diretorias', icon: Building2 },
-          { id: 'reports', label: 'Relatórios', icon: BarChart3, adminOnly: true },
+          { id: 'reports', label: 'Central de relatórios', icon: BarChart3, adminOnly: true },
           { id: 'announcements', label: 'Anúncios', icon: Megaphone },
           { id: 'goals', label: 'Metas', icon: Target },
           { id: 'gamification', label: 'Gamificação', icon: Zap },
@@ -2404,7 +2385,7 @@ export default function AdminPanel() {
           <div className="max-h-60 overflow-y-auto space-y-2">
             {allProfiles.filter(u => u.status === 'active' || u.status === 'Ativo').map(u => {
               const team = teams.find(t => t.id === selectedTeamId);
-              const isMember = team ? getTeamMemberIds(team).includes(u.id) : false;
+              const isMember = team ? getTeamMemberIds(team, allProfiles).includes(u.id) : false;
               return (
                 <div key={u.id} className="flex justify-between items-center p-2 bg-surface-50 rounded-lg">
                   <div className="flex items-center gap-2">
