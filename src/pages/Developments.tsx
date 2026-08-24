@@ -9,9 +9,7 @@ import { useApp, Development } from '@/context/AppContext';
 import { useAuthorization } from '@/hooks/useAuthorization';
 import { supabase } from '@/lib/supabase';
 
-const CARD_WIDTH = 300;
 const CARD_GAP = 16;
-const CARD_STEP = CARD_WIDTH + CARD_GAP;
 
 export default function Developments() {
   const navigate = useNavigate();
@@ -176,7 +174,11 @@ export default function Developments() {
   }, [filteredDevelopments.length]);
 
   const scrollByCard = (direction: 1 | -1) => {
-    scrollRef.current?.scrollBy({ left: direction * CARD_STEP, behavior: 'smooth' });
+    const el = scrollRef.current;
+    if (!el) return;
+    const card = el.querySelector('[data-dev-card]') as HTMLElement | null;
+    const step = (card?.offsetWidth || el.clientWidth / 3) + CARD_GAP;
+    el.scrollBy({ left: direction * step, behavior: 'smooth' });
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -416,7 +418,7 @@ export default function Developments() {
           )}
         </div>
       ) : (
-        <div className="relative">
+        <div className="relative px-11">
           <button
             type="button"
             aria-label="Empreendimentos anteriores"
@@ -432,17 +434,17 @@ export default function Developments() {
           <div
             ref={scrollRef}
             onScroll={updateScrollState}
-            className="flex gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar px-12"
+            className="grid grid-flow-col auto-cols-[100%] md:auto-cols-[calc((100%-2rem)/3)] gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar"
           >
             {filteredDevelopments.map((dev) => (
               <PremiumCard
                 key={dev.id}
+                data-dev-card
                 interactive
-                className="p-0 overflow-hidden group shrink-0 snap-start"
-                style={{ width: CARD_WIDTH, minWidth: CARD_WIDTH }}
+                className="p-0 overflow-hidden group snap-start min-w-0"
                 onClick={() => navigate(`/developments/${dev.id}`)}
               >
-                <div className="relative h-44 bg-surface-100">
+                <div className="relative h-48 bg-surface-100">
                   {dev.images && dev.images.length > 0 ? (
                     <img src={dev.images[0]} alt={dev.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                   ) : (
