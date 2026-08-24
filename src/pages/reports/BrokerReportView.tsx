@@ -9,10 +9,10 @@ import { buildBackTarget } from '@/lib/reports/reportNav';
 import { buildInsights, generateDetailedReportPdf } from '@/lib/reports/generateDetailedReportPdf';
 import { toPtBrDate } from '@/lib/dateRange';
 import { ReportBackLink } from './ReportBackLink';
-import { PeriodFilters } from './PeriodFilters';
 import { HybridMetricCards } from './HybridMetricCards';
 import { PipelineByStage } from './PipelineByStage';
-import { ReportActionsMenu } from './ReportActionsMenu';
+import { ReportToolbar } from './ReportToolbar';
+import { ForecastEvolution } from './ForecastEvolution';
 import { BrokerClientList } from './BrokerRankingCards';
 
 export function BrokerReportView({
@@ -133,14 +133,18 @@ export function BrokerReportView({
         </div>
       </div>
 
-      <PeriodFilters period={period} onPeriodChange={onPeriodChange} />
-
-      <div className="mb-6 flex justify-end">
-        <ReportActionsMenu label="PDF do Corretor" onDownloadPdf={handleDownloadPdf} pdfLoading={pdfLoading} />
-      </div>
+      <ReportToolbar
+        period={period}
+        onPeriodChange={onPeriodChange}
+        onDownloadPdf={handleDownloadPdf}
+        pdfLabel="PDF do Corretor"
+        pdfLoading={pdfLoading}
+      />
 
       <HybridMetricCards metrics={metrics} />
       <PipelineByStage pipeline={metrics.pipeline} totalClientes={metrics.totalClientes} />
+
+      <ForecastEvolution clients={scopedClients} />
 
       <section>
         <SectionHeader title="Clientes" subtitle="Clientes criados no período" />

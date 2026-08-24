@@ -10,10 +10,10 @@ import { rankBrokers } from '@/lib/reports/rankBrokers';
 import { buildInsights, generateDetailedReportPdf } from '@/lib/reports/generateDetailedReportPdf';
 import { toPtBrDate } from '@/lib/dateRange';
 import { ReportBackLink } from './ReportBackLink';
-import { PeriodFilters } from './PeriodFilters';
 import { HybridMetricCards } from './HybridMetricCards';
 import { PipelineByStage } from './PipelineByStage';
 import { ReportToolbar } from './ReportToolbar';
+import { ForecastEvolution } from './ForecastEvolution';
 import { BrokerRankingCards } from './BrokerRankingCards';
 
 export function CoordReportView({
@@ -89,8 +89,8 @@ export function CoordReportView({
         name: b.name,
         clientes: b.total,
         vendas: b.vendas,
-        aprovados: b.aprovados ?? 0,
-        vgv: b.vgv ?? 0,
+        aprovados: b.aprovados,
+        vgv: b.vgv,
       }));
 
       const clientsForPdf = metrics.createdInPeriod.map((c) => ({
@@ -162,11 +162,11 @@ export function CoordReportView({
         </div>
       </div>
 
-      <PeriodFilters period={period} onPeriodChange={onPeriodChange} />
-
       <ReportToolbar
         brokers={brokerRanking}
         onSelectBroker={openBroker}
+        period={period}
+        onPeriodChange={onPeriodChange}
         onDownloadPdf={handleDownloadPdf}
         pdfLabel="PDF da Coordenação"
         pdfLoading={pdfLoading}
@@ -174,6 +174,9 @@ export function CoordReportView({
 
       <HybridMetricCards metrics={metrics} />
       <PipelineByStage pipeline={metrics.pipeline} totalClientes={metrics.totalClientes} />
+
+      <ForecastEvolution clients={scopedClients} />
+
       <BrokerRankingCards brokers={brokerRanking} onSelect={openBroker} />
     </div>
   );

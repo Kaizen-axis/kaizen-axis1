@@ -11,10 +11,10 @@ import { rankBrokers } from '@/lib/reports/rankBrokers';
 import { buildInsights, generateDetailedReportPdf } from '@/lib/reports/generateDetailedReportPdf';
 import { toPtBrDate } from '@/lib/dateRange';
 import { ReportBackLink } from './ReportBackLink';
-import { PeriodFilters } from './PeriodFilters';
 import { HybridMetricCards } from './HybridMetricCards';
 import { PipelineByStage } from './PipelineByStage';
 import { ReportToolbar } from './ReportToolbar';
+import { ForecastEvolution } from './ForecastEvolution';
 
 export function TeamReportView({
   team, startDate, endDate, period, onPeriodChange,
@@ -111,8 +111,8 @@ export function TeamReportView({
         name: b.name,
         clientes: b.total,
         vendas: b.vendas,
-        aprovados: b.aprovados ?? 0,
-        vgv: b.vgv ?? 0,
+        aprovados: b.aprovados,
+        vgv: b.vgv,
       }));
 
       const clientsForPdf = metrics.createdInPeriod.map((c) => ({
@@ -185,11 +185,11 @@ export function TeamReportView({
         </div>
       </div>
 
-      <PeriodFilters period={period} onPeriodChange={onPeriodChange} />
-
       <ReportToolbar
         brokers={brokerRanking}
         onSelectBroker={openBroker}
+        period={period}
+        onPeriodChange={onPeriodChange}
         onDownloadPdf={handleDownloadPdf}
         pdfLabel="PDF da Equipe"
         pdfLoading={pdfLoading}
@@ -197,6 +197,8 @@ export function TeamReportView({
 
       <HybridMetricCards metrics={metrics} />
       <PipelineByStage pipeline={metrics.pipeline} totalClientes={metrics.totalClientes} />
+
+      <ForecastEvolution clients={scopedClients} />
 
       <section className="mb-6">
         <SectionHeader title="Visão por Coordenação" subtitle="Métricas e corretores de cada coordenação da equipe" />

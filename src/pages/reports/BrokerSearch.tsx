@@ -1,6 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
-import { PremiumCard } from '@/components/ui/PremiumComponents';
 import { SearchableBroker } from '@/lib/reports/rankBrokers';
 
 export type { SearchableBroker };
@@ -13,34 +12,43 @@ export function BrokerSearch({
   onSelect: (broker: SearchableBroker) => void;
 }) {
   const [query, setQuery] = useState('');
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const trimmed = query.trim().toLowerCase();
   const results = useMemo(
     () => (trimmed ? brokers.filter((b) => (b.name || '').toLowerCase().includes(trimmed)) : []),
     [brokers, trimmed],
   );
 
+  useEffect(() => {
+    if (!trimmed) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setQuery('');
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [trimmed]);
+
   return (
-    <section className="mb-6 print:hidden">
-      <div className="relative">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Buscar corretor…"
-          className="w-full pl-10 pr-3 py-2.5 rounded-xl bg-card-bg border border-surface-200 text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-gold-200"
-        />
-      </div>
+    <div ref={rootRef} className="relative">
+      <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" />
+      <input
+        type="search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Buscar corretor…"
+        className="w-full h-9 pl-10 pr-3 rounded-lg bg-card-bg border border-surface-200 text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-gold-200 shadow-sm"
+      />
       {trimmed && (
-        <div className="mt-2 space-y-2">
+        <div className="absolute left-0 right-0 top-full mt-2 z-20 bg-card-bg border border-surface-200 rounded-xl shadow-xl overflow-hidden p-2 space-y-1 max-h-72 overflow-y-auto">
           {results.length === 0 ? (
             <p className="text-xs text-text-secondary py-3 text-center">Nenhum corretor encontrado.</p>
           ) : (
             results.map((broker) => (
-              <PremiumCard
+              <button
                 key={broker.id}
-                className="flex items-center justify-between p-3 cursor-pointer hover:border-gold-300 transition-colors"
-                onClick={() => onSelect(broker)}
+                type="button"
+                className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-transparent hover:border-gold-300 hover:bg-gold-50 transition-colors text-left"
+                onClick={() => { setQuery(''); onSelect(broker); }}
               >
                 <div>
                   <h4 className="font-bold text-text-primary text-sm">{broker.name}</h4>
@@ -49,11 +57,11 @@ export function BrokerSearch({
                   </p>
                 </div>
                 <span className="text-gold-600 font-medium text-sm">Ver Relatório →</span>
-              </PremiumCard>
+              </button>
             ))
           )}
         </div>
       )}
-    </section>
+    </div>
   );
 }

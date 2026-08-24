@@ -3,8 +3,7 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { loadKaizenLogo, drawReportHeader, addStandardFooters } from '@/lib/pdf/reportKit';
 import { SectionHeader, PageHeader, PremiumCard, RoundedButton } from '@/components/ui/PremiumComponents';
 import { MetricCard } from '@/components/reports/MetricCard';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Loader2, Users, Shield, MoreHorizontal, FileText } from 'lucide-react';
+import { Loader2, Users, MoreHorizontal, FileText } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '@/context/AppContext';
@@ -14,7 +13,10 @@ import { useReportsData } from '@/hooks/useReportsData';
 import { toDateOnlyLocal, toPtBrDate } from '@/lib/dateRange';
 import { buildReportHref } from '@/lib/reports/reportNav';
 import { profileMatchesTeam } from '@/lib/reports/teamMembers';
-import { PeriodFilters } from './reports/PeriodFilters';
+import { ReportClientLike } from '@/lib/reports/computeHybridMetrics';
+import { FilterMenu } from './reports/FilterMenu';
+import { ForecastEvolution } from './reports/ForecastEvolution';
+import { TeamCardGrid } from './reports/TeamCardGrid';
 import { DiretoriaReportView } from './reports/DiretoriaReportView';
 import { TeamReportView } from './reports/TeamReportView';
 import { CoordReportView } from './reports/CoordReportView';
@@ -73,7 +75,7 @@ function CustomDateModal({
 export default function Reports() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { loading, teams, allProfiles, profile } = useApp();
+  const { loading, teams, allProfiles, profile, clients } = useApp();
   const { isAdmin, isDirector, isManager, isCoordinator, canViewAllClients } = useAuthorization();
 
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
@@ -96,7 +98,7 @@ export default function Reports() {
     : (searchParams.get('period') ?? defaultPeriod);
 
   const { start: startDate, end: endDate } = periodToDates(period);
-  const { globalMetrics, weightedPipeline, forecastTotal } = useReportsData({ startDate, endDate });
+  const { globalMetrics, forecastTotal } = useReportsData({ startDate, endDate });
 
   function handlePeriodChange(p: string) {
     if (p === 'Personalizado') {
@@ -290,31 +292,32 @@ export default function Reports() {
         subtitle="Visão global de desempenho e forecast comercial."
       />
 
-      <PeriodFilters period={period} onPeriodChange={handlePeriodChange} />
-
-      <div className="print:hidden flex justify-end mb-6 relative">
-        <button
-          onClick={() => setIsExportMenuOpen((v) => !v)}
-          className="h-9 w-9 flex items-center justify-center rounded-lg border border-surface-200 bg-card-bg text-text-secondary hover:text-gold-700 hover:border-gold-300 shadow-sm transition-all"
-        >
-          <MoreHorizontal size={18} />
-        </button>
-        {isExportMenuOpen && (
-          <>
-            <div className="fixed inset-0 z-10" onClick={() => setIsExportMenuOpen(false)} />
-            <div className="absolute right-0 top-full mt-2 z-20 w-56 bg-card-bg border border-surface-200 rounded-xl shadow-xl overflow-hidden p-2">
-              <p className="px-2 pb-2 text-[10px] font-bold uppercase tracking-wider text-text-secondary">Exportar relatório</p>
-              <div className="space-y-1.5">
-                <button
-                  onClick={() => { setIsExportMenuOpen(false); handleExport('pdf'); }}
-                  className="w-full flex items-center gap-2 px-2.5 py-2 border border-surface-200 rounded-lg text-text-secondary text-[11px] font-semibold hover:text-gold-700 hover:bg-gold-50 transition-colors"
-                >
-                  <FileText size={14} /> PDF
-                </button>
+      <div className="print:hidden flex items-center justify-end gap-2 mb-6">
+        <FilterMenu period={period} onPeriodChange={handlePeriodChange} />
+        <div className="relative">
+          <button
+            onClick={() => setIsExportMenuOpen((v) => !v)}
+            className="h-9 w-9 flex items-center justify-center rounded-lg border border-surface-200 bg-card-bg text-text-secondary hover:text-gold-700 hover:border-gold-300 shadow-sm transition-all"
+          >
+            <MoreHorizontal size={18} />
+          </button>
+          {isExportMenuOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setIsExportMenuOpen(false)} />
+              <div className="absolute right-0 top-full mt-2 z-20 w-56 bg-card-bg border border-surface-200 rounded-xl shadow-xl overflow-hidden p-2">
+                <p className="px-2 pb-2 text-[10px] font-bold uppercase tracking-wider text-text-secondary">Exportar relatório</p>
+                <div className="space-y-1.5">
+                  <button
+                    onClick={() => { setIsExportMenuOpen(false); handleExport('pdf'); }}
+                    className="w-full flex items-center gap-2 px-2.5 py-2 border border-surface-200 rounded-lg text-text-secondary text-[11px] font-semibold hover:text-gold-700 hover:bg-gold-50 transition-colors"
+                  >
+                    <FileText size={14} /> PDF
+                  </button>
+                </div>
               </div>
-            </div>
-          </>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       <section className="grid grid-cols-2 gap-3 mb-8">
@@ -323,48 +326,7 @@ export default function Reports() {
         ))}
       </section>
 
-      <section className="mb-8 print:break-inside-avoid">
-        <SectionHeader title="Forecast Comercial" subtitle="Pipeline Ponderado por Probabilidade de Estágio" />
-        <PremiumCard className="p-4 h-80">
-          <div className="flex justify-between items-center mb-4">
-            <div>
-              <p className="text-xs text-text-secondary uppercase">Receita Ponderada (Pipeline)</p>
-              <h3 className="font-ui text-xl font-bold text-text-primary">R$ {(forecastTotal / 1000000).toFixed(2)}M</h3>
-            </div>
-            <div className="text-right">
-              <p className="text-[10px] text-text-secondary uppercase">Período</p>
-              <p className="text-xs font-medium text-text-primary">{period}</p>
-            </div>
-          </div>
-          <div className="h-48 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={weightedPipeline}>
-                <defs>
-                  <linearGradient id="colorWeighted" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e2636" />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#8b94a3' }} dy={10} />
-                <YAxis hide />
-                <Tooltip
-                  contentStyle={{ borderRadius: '8px', border: '1px solid #2b3547', backgroundColor: '#0d111a', color: '#f4f6fb', boxShadow: '0 4px 20px rgba(0,0,0,0.4)' }}
-                  itemStyle={{ color: '#f4f6fb' }}
-                  labelStyle={{ color: '#8b94a3' }}
-                  formatter={(val: number, name: string) => [`R$ ${val.toFixed(0)}k`, name === 'weighted' ? 'Pipeline Ponderado' : 'Confirmado']}
-                />
-                <Area type="monotone" dataKey="weighted" stroke="#2563eb" strokeWidth={3} fillOpacity={1} fill="url(#colorWeighted)" />
-                <Area type="monotone" dataKey="confirmed" stroke="#22c55e" strokeWidth={2} strokeDasharray="5 5" fill="transparent" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="flex justify-center gap-4 mt-2">
-            <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-primary-500" /><span className="text-[10px] text-text-secondary">Pipeline Ponderado</span></div>
-            <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-green-500" /><span className="text-[10px] text-text-secondary">Confirmado</span></div>
-          </div>
-        </PremiumCard>
-      </section>
+      <ForecastEvolution clients={clients as ReportClientLike[]} />
 
       {isManager && (() => {
         const myCoords = allProfiles.filter(
@@ -423,39 +385,12 @@ export default function Reports() {
         return (
           <section className="mt-8 print:hidden">
             <SectionHeader title="Relatório por Equipe" subtitle="Análise segmentada por equipe comercial" />
-            <div className="grid grid-cols-1 gap-3">
-              {visibleTeams.map((team) => {
-                const memberCount = new Set([
-                  ...(team.members ?? []),
-                  ...allProfiles.filter((p) => profileMatchesTeam(p, team)).map((p) => p.id),
-                  ...(team.manager_id ? [team.manager_id] : []),
-                ]).size;
-                return (
-                  <PremiumCard
-                    key={team.id}
-                    className="flex items-center justify-between p-4 cursor-pointer hover:border-gold-300 transition-colors"
-                    onClick={() => navigate(buildReportHref({
-                      scope: 'equipe',
-                      id: team.id,
-                      name: team.name,
-                      start: startDate,
-                      end: endDate,
-                    }))}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-gold-50 dark:bg-gold-900/20 flex items-center justify-center">
-                        <Shield size={20} className="text-gold-500" />
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-text-primary">{team.name}</h4>
-                        <p className="text-xs text-text-secondary">{memberCount} membro{memberCount !== 1 ? 's' : ''}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-gold-600 font-medium text-sm">Ver Relatório →</div>
-                  </PremiumCard>
-                );
-              })}
-            </div>
+            <TeamCardGrid
+              teams={visibleTeams}
+              clients={clients as ReportClientLike[]}
+              startDate={startDate}
+              endDate={endDate}
+            />
           </section>
         );
       })()}
