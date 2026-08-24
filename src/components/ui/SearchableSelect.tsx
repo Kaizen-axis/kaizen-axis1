@@ -2,9 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Search, Check, X, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-/** Normaliza para comparação: remove acentos e caixa. */
-const norm = (s: string) =>
-  s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+/** Normaliza para comparação: remove acentos e caixa. Aceita null do banco. */
+const norm = (s: string | null | undefined) =>
+  String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 
 interface SearchableSelectProps {
   value: string;
@@ -36,6 +36,10 @@ export function SearchableSelect({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
+  const safeOptions = useMemo(
+    () => options.filter((o): o is string => typeof o === 'string' && o.trim().length > 0),
+    [options],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -50,9 +54,9 @@ export function SearchableSelect({
 
   const filtered = useMemo(() => {
     const q = norm(query);
-    if (!q) return options;
-    return options.filter(o => norm(o).includes(q));
-  }, [options, query]);
+    if (!q) return safeOptions;
+    return safeOptions.filter(o => norm(o).includes(q));
+  }, [safeOptions, query]);
 
   const select = (opt: string) => {
     onChange(opt);
@@ -61,7 +65,7 @@ export function SearchableSelect({
   };
 
   const trimmedQuery = query.trim();
-  const hasExactMatch = options.some(o => norm(o) === norm(trimmedQuery));
+  const hasExactMatch = safeOptions.some(o => norm(o) === norm(trimmedQuery));
   const showAddCustom = allowCustom && trimmedQuery.length > 0 && !hasExactMatch;
 
   return (

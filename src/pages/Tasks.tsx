@@ -379,7 +379,7 @@ export default function Tasks() {
                   const selected = assignableBrokers.find((p) => p.name === name);
                   setFormData((p) => ({ ...p, assigned_to: selected?.id, responsible: selected?.name || name }));
                 }}
-                options={assignableBrokers.map((p) => p.name)}
+                options={assignableBrokers.map((p) => p.name).filter((n): n is string => Boolean(n))}
                 placeholder="Selecione o responsável"
                 searchPlaceholder="Buscar responsável…"
                 allowClear={false}
