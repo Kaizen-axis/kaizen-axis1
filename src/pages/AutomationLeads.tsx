@@ -74,9 +74,9 @@ export default function AutomationLeads() {
   };
 
   const handleCreateClient = (lead: AutomationLead) => {
-    // Navigate to new client form with pre-filled data
-    navigate('/clients/new', { 
-      state: { 
+    navigate('/clients', {
+      state: {
+        openNewClient: true,
         prefill: {
           name: lead.name !== 'Contato via Instagram' && lead.name !== 'Visitante Site' ? lead.name : '',
           phone: lead.phone,

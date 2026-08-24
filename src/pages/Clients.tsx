@@ -13,6 +13,8 @@ import { useApp } from '@/context/AppContext';
 import { useAuthorization } from '@/hooks/useAuthorization';
 import { ClientHierarchyTags } from '@/components/ui/ClientHierarchyTags';
 import { ClientsKanban } from '@/components/clients/ClientsKanban';
+import { NewClientForm, NewClientPrefill } from '@/components/clients/NewClientForm';
+import { Modal } from '@/components/ui/Modal';
 import { supabase } from '@/lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -322,6 +324,18 @@ export default function Clients() {
   const [convertSuccess, setConvertSuccess] = useState(false);
   const [stageDropdownOpen, setStageDropdownOpen] = useState(false);
   const [moreDropdownOpen, setMoreDropdownOpen] = useState(false);
+  const [isNewClientModalOpen, setIsNewClientModalOpen] = useState(false);
+  const [newClientPrefill, setNewClientPrefill] = useState<NewClientPrefill | undefined>(undefined);
+
+  const closeNewClientModal = () => {
+    setIsNewClientModalOpen(false);
+    setNewClientPrefill(undefined);
+  };
+
+  const openNewClientModal = (prefill?: NewClientPrefill) => {
+    setNewClientPrefill(prefill);
+    setIsNewClientModalOpen(true);
+  };
 
   // Estágios principais (visíveis) e secundários (dropdown "Outros")
   const PRIMARY_STAGES = CLIENT_STAGES.slice(0, 8); // até "Contrato"
@@ -339,6 +353,11 @@ export default function Clients() {
     }
     if (location.state?.tab === 'documentacao') {
       setMainTab('documentacao');
+    }
+    if (location.state?.openNewClient) {
+      setNewClientPrefill(location.state.prefill);
+      setIsNewClientModalOpen(true);
+      navigate(location.pathname + location.search, { replace: true, state: { ...location.state, openNewClient: undefined, prefill: undefined } });
     }
   }, [location.state]);
 
@@ -424,15 +443,11 @@ export default function Clients() {
   );
 
   const handleConvert = (lead: AutomationLead) => {
-    navigate('/clients/new', {
-      state: {
-        prefill: {
-          name: lead.name || '',
-          phone: lead.phone || '',
-          notes: lead.aiSummary ? `Resumo IA: ${lead.aiSummary}` : '',
-          origin: lead.origin || 'Novo Lead',
-        }
-      }
+    openNewClientModal({
+      name: lead.name || '',
+      phone: lead.phone || '',
+      notes: lead.aiSummary ? `Resumo IA: ${lead.aiSummary}` : '',
+      origin: lead.origin || 'Novo Lead',
     });
   };
 
@@ -446,7 +461,7 @@ export default function Clients() {
             <h1 className="v3-serif text-2xl sm:text-3xl text-text-primary tracking-tight mt-1">Gestão de Clientes</h1>
             <p className="text-sm text-text-secondary mt-1">Acompanhe e mova seus clientes pelo funil de vendas.</p>
           </div>
-          <RoundedButton size="sm" onClick={() => navigate('/clients/new')} className="flex items-center gap-1">
+          <RoundedButton size="sm" onClick={() => openNewClientModal()} className="flex items-center gap-1">
             <Plus size={16} /> Novo Cliente
           </RoundedButton>
         </div>
@@ -787,7 +802,7 @@ export default function Clients() {
             {filteredClients.length === 0 && !loading && (
               <div className="flex flex-col items-center justify-center h-40 text-text-secondary gap-3">
                 <p>Nenhum cliente encontrado</p>
-                <RoundedButton size="sm" variant="outline" onClick={() => navigate('/clients/new')}>
+                <RoundedButton size="sm" variant="outline" onClick={() => openNewClientModal()}>
                   <Plus size={16} /> Adicionar cliente
                 </RoundedButton>
               </div>
@@ -859,6 +874,19 @@ export default function Clients() {
         </div>
       )}
 
+      <Modal
+        isOpen={isNewClientModalOpen}
+        onClose={closeNewClientModal}
+        title="Novo Cliente"
+        panelClassName="max-w-2xl"
+      >
+        <NewClientForm
+          key={isNewClientModalOpen ? `${newClientPrefill?.name ?? ''}-${newClientPrefill?.phone ?? 'new'}` : 'closed'}
+          embedded
+          prefill={newClientPrefill}
+          onSuccess={closeNewClientModal}
+        />
+      </Modal>
 
     </div>
   );
