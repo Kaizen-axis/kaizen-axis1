@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PageHeader, PremiumCard, RoundedButton } from '@/components/ui/PremiumComponents';
-import { Users, Shield, ShieldCheck, Target, Megaphone, BarChart3, Plus, Search, Trophy, Download, FileSpreadsheet, FileText, Trash2, Edit2, ChevronDown, ChevronLeft, ChevronRight, Calendar, Loader2, Building2, TrendingUp, Printer, Star, Award, Zap, Flame, MoreHorizontal, FileDown, MapPin } from 'lucide-react';
+import { Users, Shield, ShieldCheck, Target, Megaphone, BarChart3, Plus, Search, Trophy, Download, FileSpreadsheet, FileText, Trash2, Edit2, ChevronDown, ChevronLeft, Calendar, Loader2, Building2, TrendingUp, Printer, Star, Award, Zap, Flame, MoreHorizontal, FileDown, MapPin } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { useApp, Team, Goal, Announcement, Directorate } from '@/context/AppContext';
 import { useAuthorization } from '@/hooks/useAuthorization';
@@ -151,28 +151,6 @@ export default function AdminPanel() {
   const [xpReportLoading, setXpReportLoading] = useState(false);
 
   const navigate = useNavigate();
-
-  const tabsScrollRef = useRef<HTMLDivElement | null>(null);
-  const [canTabsScrollLeft, setCanTabsScrollLeft] = useState(false);
-  const [canTabsScrollRight, setCanTabsScrollRight] = useState(false);
-  const TAB_SCROLL_STEP = 160;
-
-  const updateTabsScrollState = () => {
-    const el = tabsScrollRef.current;
-    if (!el) return;
-    setCanTabsScrollLeft(el.scrollLeft > 4);
-    setCanTabsScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
-  };
-
-  const scrollTabsBy = (direction: 1 | -1) => {
-    tabsScrollRef.current?.scrollBy({ left: direction * TAB_SCROLL_STEP, behavior: 'smooth' });
-  };
-
-  useEffect(() => {
-    updateTabsScrollState();
-    window.addEventListener('resize', updateTabsScrollState);
-    return () => window.removeEventListener('resize', updateTabsScrollState);
-  }, [activeTab, isAdmin]);
 
   // ── Client-side metrics (reliable, bypass broken RPC fields) ───────────────
   const { globalMetrics } = useReportsData({ startDate: reportDateRange.start, endDate: reportDateRange.end });
@@ -1881,18 +1859,19 @@ export default function AdminPanel() {
                             const displayName = formatBrokerDisplayName(c.nome);
                             const fullName = String(c.nome || '').trim() || 'Sem nome';
                             return (
-                            <tr key={`${ranking.key}-${c.entity_id}`} className="border-b border-surface-50 last:border-0 hover:bg-surface-50/50 transition-colors">
-                              <td
-                                className={`p-3 text-[11px] font-bold text-text-primary flex items-center gap-2 ${rowHref ? 'cursor-pointer hover:bg-gold-50/40 dark:hover:bg-gold-900/10 transition-colors' : ''}`}
-                                onClick={rowHref ? () => navigate(rowHref) : undefined}
-                                role={rowHref ? 'button' : undefined}
-                                tabIndex={rowHref ? 0 : undefined}
-                                onKeyDown={rowHref ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(rowHref); } } : undefined}
-                                title={rowHref ? `${fullName} — abrir relatório` : fullName}
-                              >
-                                <span className={`text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold shadow-sm shrink-0 ${i === 0 ? 'bg-gradient-to-br from-yellow-300 to-yellow-500 text-white' : i === 1 ? 'bg-gradient-to-br from-gray-200 to-gray-400 text-white' : 'bg-gradient-to-br from-orange-300 to-orange-500 text-white'}`}>{i + 1}</span>
-                                <span className={`truncate max-w-[70px] ${rowHref ? 'hover:text-gold-600' : ''}`}>
-                                  {displayName}
+                            <tr
+                              key={`${ranking.key}-${c.entity_id}`}
+                              className={`border-b border-surface-50 last:border-0 transition-colors ${rowHref ? 'cursor-pointer hover:bg-gold-50/40 dark:hover:bg-gold-900/10' : 'hover:bg-surface-50/50'}`}
+                              onClick={rowHref ? () => navigate(rowHref) : undefined}
+                              role={rowHref ? 'button' : undefined}
+                              tabIndex={rowHref ? 0 : undefined}
+                              onKeyDown={rowHref ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(rowHref); } } : undefined}
+                              title={rowHref ? `${fullName} — abrir relatório` : fullName}
+                            >
+                              <td className="p-3 text-[11px] font-bold text-text-primary">
+                                <span className="flex items-center gap-2">
+                                  <span className={`text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold shadow-sm shrink-0 ${i === 0 ? 'bg-gradient-to-br from-yellow-300 to-yellow-500 text-white' : i === 1 ? 'bg-gradient-to-br from-gray-200 to-gray-400 text-white' : 'bg-gradient-to-br from-orange-300 to-orange-500 text-white'}`}>{i + 1}</span>
+                                  <span className="truncate max-w-[70px]">{displayName}</span>
                                 </span>
                               </td>
                               <td className="p-3 text-[11px] text-center text-text-secondary font-medium">{c.Li}</td>
@@ -2241,22 +2220,7 @@ export default function AdminPanel() {
         <PageHeader title="Painel Administrativo" subtitle="Governança, equipes e estratégia da operação." />
       </div>
 
-      <div className="relative mb-6 pb-2 print:hidden">
-        {canTabsScrollLeft && (
-          <button
-            type="button"
-            aria-label="Sub-abas anteriores"
-            onClick={() => scrollTabsBy(-1)}
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 rounded-full bg-card-bg border border-surface-200 shadow-md flex items-center justify-center text-text-secondary hover:text-gold-700 hover:border-gold-300 transition-all"
-          >
-            <ChevronLeft size={16} />
-          </button>
-        )}
-        <div
-          ref={tabsScrollRef}
-          onScroll={updateTabsScrollState}
-          className="w-full flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1"
-        >
+      <div className="w-full flex flex-wrap gap-1.5 mb-6 print:hidden">
         {[
           { id: 'users', label: 'Usuários', icon: Users },
           { id: 'teams', label: 'Equipes', icon: Shield },
@@ -2267,27 +2231,16 @@ export default function AdminPanel() {
           { id: 'gamification', label: 'Gamificação', icon: Zap },
         ].filter(tab => !tab.adminOnly || isAdmin).map((tab) => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id as Tab)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all shrink-0 ${activeTab === tab.id ? 'bg-gold-500 text-white shadow-md shadow-gold-500/20' : 'bg-card-bg dark:bg-surface-100 text-text-secondary border border-surface-200'}`}>
-            <tab.icon size={14} /> {tab.label}
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all ${activeTab === tab.id ? 'bg-gold-500 text-white shadow-md shadow-gold-500/20' : 'bg-card-bg dark:bg-surface-100 text-text-secondary border border-surface-200'}`}>
+            <tab.icon size={12} /> {tab.label}
           </button>
         ))}
         <button
           onClick={() => navigate('/admin/security')}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all shrink-0 bg-card-bg dark:bg-surface-100 text-text-secondary border border-surface-200 hover:border-gold-400 hover:text-gold-500"
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all bg-card-bg dark:bg-surface-100 text-text-secondary border border-surface-200 hover:border-gold-400 hover:text-gold-500"
         >
-          <ShieldCheck size={14} /> Painel de Segurança
+          <ShieldCheck size={12} /> Segurança
         </button>
-        </div>
-        {canTabsScrollRight && (
-          <button
-            type="button"
-            aria-label="Próximas sub-abas"
-            onClick={() => scrollTabsBy(1)}
-            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-8 w-8 rounded-full bg-card-bg border border-surface-200 shadow-md flex items-center justify-center text-text-secondary hover:text-gold-700 hover:border-gold-300 transition-all"
-          >
-            <ChevronRight size={16} />
-          </button>
-        )}
       </div>
 
       <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
