@@ -6,6 +6,8 @@ export interface SearchableBroker {
   name: string;
   total: number;
   vendas: number;
+  aprovados: number;
+  vgv: number;
 }
 
 export function rankBrokers(
@@ -23,6 +25,8 @@ export function rankBrokers(
         name: p.name,
         total: metrics.totalClientes,
         vendas: metrics.vendas,
+        aprovados: metrics.aprovados,
+        vgv: metrics.vgv,
       };
     })
     .sort((a, b) => b.vendas - a.vendas || b.total - a.total);

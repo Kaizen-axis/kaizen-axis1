@@ -17,7 +17,7 @@ export function HybridMetricCards({ metrics }: { metrics: HybridMetrics }) {
           <Users size={18} className="text-gold-500 mb-0.5" />
           <h3 className="font-ui text-2xl font-bold text-text-primary">{metrics.totalClientes}</h3>
         </div>
-        <p className="text-[10px] text-text-secondary">pipeline atual</p>
+        <p className="text-[10px] text-text-secondary">no período</p>
       </PremiumCard>
 
       <PremiumCard className="flex flex-col gap-1">

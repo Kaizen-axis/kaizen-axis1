@@ -18,13 +18,13 @@ describe('computeHybridMetrics', () => {
   const start = '2026-08-01';
   const end = '2026-08-31';
 
-  it('counts total clientes as snapshot, not created-in-period cohort', () => {
+  it('counts total clientes as created-in-period cohort', () => {
     const clients = [
       client({ id: 'old', createdAt: '2026-01-10T10:00:00', stage: 'Documentação' }),
       client({ id: 'new', createdAt: '2026-08-10T10:00:00', stage: 'Em Análise' }),
     ];
     const result = computeHybridMetrics(clients, start, end);
-    assert.equal(result.totalClientes, 2);
+    assert.equal(result.totalClientes, 1);
     assert.equal(result.createdInPeriodCount, 1);
   });
 

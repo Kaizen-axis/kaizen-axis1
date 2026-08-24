@@ -1,15 +1,19 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/context/AppContext';
-import { computeHybridMetrics, ReportClientLike } from '@/lib/reports/computeHybridMetrics';
+import { logAuditEvent } from '@/services/auditLogger';
+import { computeHybridMetrics, parseReportValue, ReportClientLike } from '@/lib/reports/computeHybridMetrics';
 import { buildBackTarget, buildReportHref } from '@/lib/reports/reportNav';
+import { isActiveProfile } from '@/lib/reports/teamMembers';
 import { rankBrokers } from '@/lib/reports/rankBrokers';
+import { buildInsights, generateDetailedReportPdf } from '@/lib/reports/generateDetailedReportPdf';
+import { toPtBrDate } from '@/lib/dateRange';
 import { ReportBackLink } from './ReportBackLink';
 import { PeriodFilters } from './PeriodFilters';
 import { HybridMetricCards } from './HybridMetricCards';
 import { PipelineByStage } from './PipelineByStage';
-import { BrokerSearch, SearchableBroker } from './BrokerSearch';
+import { ReportToolbar } from './ReportToolbar';
 import { BrokerRankingCards } from './BrokerRankingCards';
 
 export function CoordReportView({
@@ -26,10 +30,11 @@ export function CoordReportView({
   onPeriodChange: (period: string) => void;
 }) {
   const navigate = useNavigate();
-  const { allProfiles, clients, teams } = useApp();
+  const { allProfiles, clients, teams, userName } = useApp();
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const brokerProfiles = useMemo(
-    () => allProfiles.filter((p) => p.role?.toUpperCase() === 'CORRETOR' && p.coordinator_id === coordId),
+    () => allProfiles.filter((p) => p.role?.toUpperCase() === 'CORRETOR' && p.coordinator_id === coordId && isActiveProfile(p)),
     [allProfiles, coordId],
   );
   const memberIds = useMemo(
@@ -62,7 +67,7 @@ export function CoordReportView({
     end: endDate,
   });
 
-  const openBroker = (broker: SearchableBroker) => {
+  const openBroker = (broker: { id: string; name: string }) => {
     navigate(buildReportHref({
       scope: 'corretor',
       id: broker.id,
@@ -73,6 +78,71 @@ export function CoordReportView({
       start: startDate,
       end: endDate,
     }));
+  };
+
+  const periodLabel = `${toPtBrDate(startDate)} a ${toPtBrDate(endDate)}`;
+
+  const handleDownloadPdf = async () => {
+    setPdfLoading(true);
+    try {
+      const brokersForPdf = brokerRanking.map((b) => ({
+        name: b.name,
+        clientes: b.total,
+        vendas: b.vendas,
+        aprovados: b.aprovados ?? 0,
+        vgv: b.vgv ?? 0,
+      }));
+
+      const clientsForPdf = metrics.createdInPeriod.map((c) => ({
+        name: c.name || 'Sem nome',
+        stage: c.stage,
+        value: parseReportValue(c.intendedValue ?? ''),
+        updatedAt: toPtBrDate(c.createdAt),
+      }));
+
+      const pdfBytes = await generateDetailedReportPdf({
+        title: 'Relatorio por Coordenacao',
+        subtitle: coordName,
+        periodLabel,
+        generatedBy: userName,
+        kpis: {
+          totalClientes: metrics.totalClientes,
+          createdInPeriod: metrics.createdInPeriodCount,
+          vendas: metrics.vendas,
+          aprovados: metrics.aprovados,
+          taxaConversao: metrics.taxaConversao,
+          vgv: metrics.vgv,
+        },
+        pipeline: metrics.pipeline,
+        stageDistribution: metrics.pipeline.map((p) => ({ name: p.stage, value: p.count })),
+        brokers: brokersForPdf,
+        clients: clientsForPdf,
+        insights: buildInsights(
+          {
+            totalClientes: metrics.totalClientes,
+            createdInPeriod: metrics.createdInPeriodCount,
+            vendas: metrics.vendas,
+            aprovados: metrics.aprovados,
+            taxaConversao: metrics.taxaConversao,
+            vgv: metrics.vgv,
+          },
+          metrics.pipeline,
+        ),
+      });
+
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `relatorio-coordenacao-${coordName.replace(/\s+/g, '-')}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      logAuditEvent({ action: 'document_downloaded', entity: 'report', entityId: `relatorio-coordenacao-${coordId}`, metadata: { type: 'relatorio_coordenacao', coordenacao: coordName } });
+    } catch (err: any) {
+      alert(`Erro ao gerar PDF: ${err.message}`);
+    } finally {
+      setPdfLoading(false);
+    }
   };
 
   return (
@@ -93,9 +163,17 @@ export function CoordReportView({
       </div>
 
       <PeriodFilters period={period} onPeriodChange={onPeriodChange} />
+
+      <ReportToolbar
+        brokers={brokerRanking}
+        onSelectBroker={openBroker}
+        onDownloadPdf={handleDownloadPdf}
+        pdfLabel="PDF da Coordenação"
+        pdfLoading={pdfLoading}
+      />
+
       <HybridMetricCards metrics={metrics} />
       <PipelineByStage pipeline={metrics.pipeline} totalClientes={metrics.totalClientes} />
-      <BrokerSearch brokers={brokerRanking} onSelect={openBroker} />
       <BrokerRankingCards brokers={brokerRanking} onSelect={openBroker} />
     </div>
   );

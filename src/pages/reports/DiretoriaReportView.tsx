@@ -1,23 +1,22 @@
 import { useMemo, useState } from 'react';
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Building2, FileText, Loader2, MoreHorizontal, Shield } from 'lucide-react';
+import { Building2, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PremiumCard, SectionHeader } from '@/components/ui/PremiumComponents';
 import { useApp } from '@/context/AppContext';
 import { logAuditEvent } from '@/services/auditLogger';
-import { loadKaizenLogo, drawReportHeader, addStandardFooters } from '@/lib/pdf/reportKit';
 import { STAGE_WEIGHTS } from '@/types/reports';
 import { toPtBrDate } from '@/lib/dateRange';
 import { brl, computeHybridMetrics, parseReportValue, ReportClientLike } from '@/lib/reports/computeHybridMetrics';
 import { buildBackTarget, buildReportHref } from '@/lib/reports/reportNav';
-import { getTeamMemberIds } from '@/lib/reports/teamMembers';
+import { getTeamMemberIds, isActiveProfile } from '@/lib/reports/teamMembers';
 import { rankBrokers } from '@/lib/reports/rankBrokers';
+import { buildInsights, generateDetailedReportPdf } from '@/lib/reports/generateDetailedReportPdf';
 import { ReportBackLink } from './ReportBackLink';
 import { PeriodFilters } from './PeriodFilters';
 import { HybridMetricCards } from './HybridMetricCards';
 import { PipelineByStage } from './PipelineByStage';
-import { BrokerSearch, SearchableBroker } from './BrokerSearch';
+import { ReportToolbar } from './ReportToolbar';
 
 export function DiretoriaReportView({
   dirId, dirName, startDate, endDate, period, onPeriodChange,
@@ -30,9 +29,8 @@ export function DiretoriaReportView({
   onPeriodChange: (period: string) => void;
 }) {
   const navigate = useNavigate();
-  const { clients, teams, allProfiles } = useApp();
+  const { clients, teams, allProfiles, userName } = useApp();
   const [pdfLoading, setPdfLoading] = useState(false);
-  const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
 
   const dirTeams = useMemo(() => teams.filter((t) => t.directorate_id === dirId), [teams, dirId]);
   const dirTeamIds = useMemo(() => new Set(dirTeams.map((t) => t.id)), [dirTeams]);
@@ -48,7 +46,7 @@ export function DiretoriaReportView({
 
   const dirBrokers = useMemo(
     () => allProfiles.filter((p) => {
-      if (p.role?.toUpperCase() !== 'CORRETOR') return false;
+      if (p.role?.toUpperCase() !== 'CORRETOR' || !isActiveProfile(p)) return false;
       if (p.directorate_id === dirId) return true;
       return !!(p.team_id && dirTeamIds.has(p.team_id));
     }),
@@ -79,7 +77,7 @@ export function DiretoriaReportView({
 
   const back = buildBackTarget({ currentScope: 'diretoria', start: startDate, end: endDate });
 
-  const openBroker = (broker: SearchableBroker) => {
+  const openBroker = (broker: { id: string; name: string }) => {
     navigate(buildReportHref({
       scope: 'corretor',
       id: broker.id,
@@ -92,105 +90,71 @@ export function DiretoriaReportView({
     }));
   };
 
+  const periodLabel = `${toPtBrDate(startDate)} a ${toPtBrDate(endDate)}`;
+
   const handleDownloadPdf = async () => {
     setPdfLoading(true);
     try {
-      const pdfDoc = await PDFDocument.create();
-      const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-      const regular = await pdfDoc.embedFont(StandardFonts.Helvetica);
-      const logoImg = await loadKaizenLogo(pdfDoc);
-      const PAGE_W = 595, PAGE_H = 842, MARGIN = 36;
-      const TABLE_W = PAGE_W - MARGIN * 2;
-      const ROW_H = 18;
-      const HDR_H = 20;
-      const gold = rgb(0.145, 0.388, 0.922);
-      const dark = rgb(0.1, 0.1, 0.1);
-      const gray = rgb(0.45, 0.45, 0.45);
-      const light = rgb(0.96, 0.96, 0.96);
-      const white = rgb(1, 1, 1);
-
-      let page = pdfDoc.addPage([PAGE_W, PAGE_H]);
-      let y = PAGE_H - MARGIN;
-      const addContinuationPage = (label: string) => {
-        page = pdfDoc.addPage([PAGE_W, PAGE_H]);
-        y = PAGE_H - MARGIN;
-        page.drawText(label, { x: MARGIN, y, size: 8, font: regular, color: gray });
-        y -= 14;
-      };
-      const ensureSpace = (needed: number) => {
-        if (y < MARGIN + needed) addContinuationPage('Relatorio por Diretoria (continuacao)');
-      };
-
-      const rows = dirTeams.map((team) => {
+      const teamsForPdf = dirTeams.map((team) => {
         const memberIds = getTeamMemberIds(team, allProfiles);
         const teamClients = dirScopedClients.filter((c) => memberIds.includes(c.owner_id || ''));
         const teamMetrics = computeHybridMetrics(teamClients, startDate, endDate);
         return {
-          equipe: team.name,
+          name: team.name,
           clientes: teamMetrics.totalClientes,
           vendas: teamMetrics.vendas,
-          conversao: teamMetrics.taxaConversao,
-          receita: teamMetrics.vgv,
+          aprovados: teamMetrics.aprovados,
+          vgv: teamMetrics.vgv,
+          membros: memberIds.length,
         };
-      }).sort((a, b) => b.vendas - a.vendas || b.receita - a.receita);
-
-      y = drawReportHeader(page, { regular, bold }, logoImg, {
-        title: 'Relatório por Diretoria',
-        subtitle: `Diretoria: ${dirName} · Período: ${toPtBrDate(startDate)} a ${toPtBrDate(endDate)}`,
-      });
-      page.drawText('RESUMO', { x: MARGIN, y, size: 10, font: bold, color: gold });
-      y -= 18;
-      for (const [label, value] of [
-        ['Total de Clientes (pipeline)', String(metrics.totalClientes)],
-        ['Vendas Concluidas', String(metrics.vendas)],
-        ['Aprovados', String(metrics.aprovados)],
-        ['Taxa de Conversao', `${metrics.taxaConversao}%`],
-        ['VGV Concluido', brl(metrics.vgv)],
-        ['Receita Ponderada (Pipeline)', brl(forecastTotal)],
-      ] as [string, string][]) {
-        page.drawText(`${label}:`, { x: MARGIN, y, size: 9, font: bold, color: dark });
-        page.drawText(value, { x: MARGIN + 190, y, size: 9, font: regular, color: dark });
-        y -= 14;
-      }
-      y -= 8;
-      page.drawRectangle({ x: MARGIN, y, width: TABLE_W, height: 0.5, color: rgb(0.85, 0.85, 0.85) });
-      y -= 16;
-
-      const columns = [
-        { header: 'Equipe', width: 220 },
-        { header: 'Clientes', width: 75 },
-        { header: 'Vendas', width: 70 },
-        { header: 'Conv.%', width: 65 },
-        { header: 'Receita', width: 125 },
-      ];
-      const drawTableHeader = () => {
-        page.drawRectangle({ x: MARGIN, y: y - HDR_H, width: TABLE_W, height: HDR_H, color: gold });
-        let cx = MARGIN + 4;
-        columns.forEach((col) => {
-          page.drawText(col.header, { x: cx, y: y - HDR_H + 6, size: 7, font: bold, color: white });
-          cx += col.width;
-        });
-        y -= HDR_H;
-      };
-      page.drawText('DESEMPENHO POR EQUIPE', { x: MARGIN, y, size: 10, font: bold, color: gold });
-      y -= 16;
-      drawTableHeader();
-      rows.forEach((row, i) => {
-        ensureSpace(ROW_H + 10);
-        const cells = [row.equipe, String(row.clientes), String(row.vendas), `${row.conversao}%`, brl(row.receita)];
-        page.drawRectangle({ x: MARGIN, y: y - ROW_H, width: TABLE_W, height: ROW_H, color: i % 2 === 0 ? white : light });
-        let cx = MARGIN + 4;
-        cells.forEach((cell, idx) => {
-          const maxChars = Math.max(8, Math.floor(columns[idx].width / 4.5));
-          const text = cell.length > maxChars ? `${cell.slice(0, maxChars - 1)}.` : cell;
-          page.drawText(text, { x: cx, y: y - ROW_H + 6, size: 7, font: regular, color: dark });
-          cx += columns[idx].width;
-        });
-        y -= ROW_H;
       });
 
-      addStandardFooters(pdfDoc, { regular, bold });
-      const pdfBytes = await pdfDoc.save();
+      const brokersForPdf = brokerRanking.map((b) => ({
+        name: b.name,
+        clientes: b.total,
+        vendas: b.vendas,
+        aprovados: b.aprovados ?? 0,
+        vgv: b.vgv ?? 0,
+      }));
+
+      const clientsForPdf = metrics.createdInPeriod.map((c) => ({
+        name: c.name || 'Sem nome',
+        stage: c.stage,
+        value: parseReportValue(c.intendedValue ?? ''),
+        updatedAt: toPtBrDate(c.createdAt),
+      }));
+
+      const pdfBytes = await generateDetailedReportPdf({
+        title: 'Relatorio por Diretoria',
+        subtitle: dirName,
+        periodLabel,
+        generatedBy: userName,
+        kpis: {
+          totalClientes: metrics.totalClientes,
+          createdInPeriod: metrics.createdInPeriodCount,
+          vendas: metrics.vendas,
+          aprovados: metrics.aprovados,
+          taxaConversao: metrics.taxaConversao,
+          vgv: metrics.vgv,
+        },
+        pipeline: metrics.pipeline,
+        stageDistribution: metrics.pipeline.map((p) => ({ name: p.stage, value: p.count })),
+        teams: teamsForPdf,
+        brokers: brokersForPdf,
+        clients: clientsForPdf,
+        insights: buildInsights(
+          {
+            totalClientes: metrics.totalClientes,
+            createdInPeriod: metrics.createdInPeriodCount,
+            vendas: metrics.vendas,
+            aprovados: metrics.aprovados,
+            taxaConversao: metrics.taxaConversao,
+            vgv: metrics.vgv,
+          },
+          metrics.pipeline,
+        ),
+      });
+
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -225,33 +189,16 @@ export function DiretoriaReportView({
 
       <PeriodFilters period={period} onPeriodChange={onPeriodChange} />
 
-      <div className="print:hidden flex justify-end mb-4 relative">
-        <button
-          onClick={() => setIsActionsMenuOpen((v) => !v)}
-          className="h-9 w-9 flex items-center justify-center rounded-lg border border-surface-200 bg-card-bg text-text-secondary hover:text-gold-700 hover:border-gold-300 shadow-sm transition-all"
-        >
-          <MoreHorizontal size={18} />
-        </button>
-        {isActionsMenuOpen && (
-          <>
-            <div className="fixed inset-0 z-10" onClick={() => setIsActionsMenuOpen(false)} />
-            <div className="absolute right-0 top-full mt-2 z-20 w-56 bg-card-bg border border-surface-200 rounded-xl shadow-xl overflow-hidden p-2">
-              <p className="px-2 pb-2 text-[10px] font-bold uppercase tracking-wider text-text-secondary">Exportar relatório</p>
-              <button
-                onClick={() => { setIsActionsMenuOpen(false); handleDownloadPdf(); }}
-                disabled={pdfLoading}
-                className="w-full flex items-center gap-2 px-2.5 py-2 border border-surface-200 rounded-lg text-text-secondary text-[11px] font-semibold hover:text-gold-700 hover:bg-gold-50 transition-colors disabled:opacity-50"
-              >
-                {pdfLoading ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />} PDF da Diretoria
-              </button>
-            </div>
-          </>
-        )}
-      </div>
+      <ReportToolbar
+        brokers={brokerRanking}
+        onSelectBroker={openBroker}
+        onDownloadPdf={handleDownloadPdf}
+        pdfLabel="PDF da Diretoria"
+        pdfLoading={pdfLoading}
+      />
 
       <HybridMetricCards metrics={metrics} />
       <PipelineByStage pipeline={metrics.pipeline} totalClientes={metrics.totalClientes} />
-      <BrokerSearch brokers={brokerRanking} onSelect={openBroker} />
 
       <section className="mb-8">
         <SectionHeader title="Forecast Comercial" subtitle="Pipeline Ponderado por Probabilidade de Estágio" />

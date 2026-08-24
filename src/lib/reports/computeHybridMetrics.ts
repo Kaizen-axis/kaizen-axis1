@@ -81,7 +81,7 @@ export function computeHybridMetrics(
   const vgv = sales.reduce((acc, c) => acc + parseReportValue(c.intendedValue), 0);
 
   const counts = new Map<string, number>();
-  for (const c of snapshotClients) {
+  for (const c of createdInPeriod) {
     counts.set(c.stage, (counts.get(c.stage) ?? 0) + 1);
   }
   const known = new Set(CLIENT_STAGES as readonly string[]);
@@ -97,7 +97,7 @@ export function computeHybridMetrics(
     snapshotClients,
     createdInPeriod,
     sales,
-    totalClientes: snapshotClients.length,
+    totalClientes: createdInPeriodCount,
     createdInPeriodCount,
     vendas,
     aprovados,
