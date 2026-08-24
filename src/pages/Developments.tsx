@@ -418,13 +418,13 @@ export default function Developments() {
           )}
         </div>
       ) : (
-        <div className="relative px-11">
+        <div className="relative">
           <button
             type="button"
             aria-label="Empreendimentos anteriores"
-            onClick={() => scrollByCard(-1)}
+            onClick={(e) => { e.stopPropagation(); scrollByCard(-1); }}
             disabled={!canScrollLeft}
-            className={`absolute top-1/2 -translate-y-1/2 left-0 z-10 h-9 w-9 rounded-full bg-card-bg border border-surface-200 shadow-md flex items-center justify-center text-text-secondary hover:text-gold-700 hover:border-gold-300 transition-all ${
+            className={`absolute top-1/2 -translate-y-1/2 left-2 z-20 h-9 w-9 rounded-full bg-card-bg/90 backdrop-blur-sm border border-surface-200 shadow-md flex items-center justify-center text-text-secondary hover:text-gold-700 hover:border-gold-300 transition-all ${
               canScrollLeft ? '' : 'opacity-40 cursor-not-allowed'
             }`}
           >
@@ -499,9 +499,9 @@ export default function Developments() {
           <button
             type="button"
             aria-label="Próximos empreendimentos"
-            onClick={() => scrollByCard(1)}
+            onClick={(e) => { e.stopPropagation(); scrollByCard(1); }}
             disabled={!canScrollRight}
-            className={`absolute top-1/2 -translate-y-1/2 right-0 z-10 h-9 w-9 rounded-full bg-card-bg border border-surface-200 shadow-md flex items-center justify-center text-text-secondary hover:text-gold-700 hover:border-gold-300 transition-all ${
+            className={`absolute top-1/2 -translate-y-1/2 right-2 z-20 h-9 w-9 rounded-full bg-card-bg/90 backdrop-blur-sm border border-surface-200 shadow-md flex items-center justify-center text-text-secondary hover:text-gold-700 hover:border-gold-300 transition-all ${
               canScrollRight ? '' : 'opacity-40 cursor-not-allowed'
             }`}
           >
