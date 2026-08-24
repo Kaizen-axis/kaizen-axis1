@@ -7,7 +7,7 @@ import { logAuditEvent } from '@/services/auditLogger';
 import { computeHybridMetrics, parseReportValue, ReportClientLike } from '@/lib/reports/computeHybridMetrics';
 import { buildBackTarget, buildReportHref } from '@/lib/reports/reportNav';
 import { getTeamMemberIds, isActiveProfile } from '@/lib/reports/teamMembers';
-import { rankBrokers } from '@/lib/reports/rankBrokers';
+import { rankBrokers, sortBrokersForReport } from '@/lib/reports/rankBrokers';
 import { buildInsights, generateDetailedReportPdf } from '@/lib/reports/generateDetailedReportPdf';
 import { toPtBrDate } from '@/lib/dateRange';
 import { ReportBackLink } from './ReportBackLink';
@@ -107,7 +107,7 @@ export function TeamReportView({
         };
       });
 
-      const brokersForPdf = brokerRanking.map((b) => ({
+      const brokersForPdf = sortBrokersForReport(brokerRanking).map((b) => ({
         name: b.name,
         clientes: b.total,
         vendas: b.vendas,

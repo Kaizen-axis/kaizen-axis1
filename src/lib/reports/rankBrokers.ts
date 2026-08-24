@@ -31,3 +31,17 @@ export function rankBrokers(
     })
     .sort((a, b) => b.vendas - a.vendas || b.total - a.total);
 }
+
+/**
+ * Ordem para o ranking nos PDFs: quem vendeu no período primeiro (vendas desc,
+ * desempate alfabético), depois quem não vendeu, em ordem alfabética.
+ */
+export function sortBrokersForReport<T extends { name: string; vendas: number }>(brokers: T[]): T[] {
+  const sellers = brokers
+    .filter((b) => b.vendas > 0)
+    .sort((a, b) => b.vendas - a.vendas || a.name.localeCompare(b.name, 'pt-BR'));
+  const others = brokers
+    .filter((b) => b.vendas === 0)
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  return [...sellers, ...others];
+}
