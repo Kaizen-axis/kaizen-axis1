@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { PageHeader, PremiumCard, RoundedButton } from '@/components/ui/PremiumComponents';
-import { Users, Shield, ShieldCheck, Target, Megaphone, BarChart3, Plus, Search, Trophy, Trash2, Edit2, Loader2, Building2, Star, Award, Zap } from 'lucide-react';
+import { Users, Shield, ShieldCheck, Target, Megaphone, BarChart3, Plus, Search, Trophy, Download, FileSpreadsheet, FileText, Trash2, Edit2, ChevronDown, ChevronLeft, Calendar, Loader2, Building2, TrendingUp, Printer, Star, Award, Zap, Flame, MoreHorizontal, FileDown, MapPin } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { useApp, Team, Goal, Announcement, Directorate } from '@/context/AppContext';
 import { useAuthorization } from '@/hooks/useAuthorization';
 import { Navigate, useNavigate } from 'react-router-dom';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from 'recharts';
 import { supabase } from '@/lib/supabase';
-import { toDateOnlyLocal } from '@/lib/dateRange';
-import { getTeamMemberIds } from '@/lib/reportUtils';
+import { PDFDocument } from 'pdf-lib';
+import { PAGE, PDF_THEME, embedFonts, loadKaizenLogo, drawReportHeader, drawSectionTitle, drawKeyValues, drawDivider, drawContinuationHeader, drawHBars, addStandardFooters, downloadPdf, safeText } from '@/lib/pdf/reportKit';
+import PipelinePdfExport from '@/components/admin/PipelinePdfExport';
+import { useReportsData } from '@/hooks/useReportsData';
+import { parseDateOnlyLocal, parseDateOnlyLocalEnd, toDateOnlyLocal, toPtBrDate } from '@/lib/dateRange';
+import { CLIENT_STAGES } from '@/data/clients';
 
-type Tab = 'users' | 'teams' | 'goals' | 'announcements' | 'directorates' | 'gamification';
+type Tab = 'users' | 'teams' | 'goals' | 'announcements' | 'reports' | 'directorates' | 'gamification';
 
 export default function AdminPanel() {
   // ── Hard role guard: only ADMIN and DIRETOR can access this page ────────────
@@ -22,6 +27,7 @@ export default function AdminPanel() {
     goals, addGoal, updateGoal, deleteGoal,
     announcements, addAnnouncement, updateAnnouncement, deleteAnnouncement,
     directorates, addDirectorate, updateDirectorate, deleteDirectorate,
+    clients, leads, appointments,
     developments,
     loading, user
   } = useApp();
@@ -60,7 +66,11 @@ export default function AdminPanel() {
   const [dirForm, setDirForm] = useState<Partial<Directorate>>({ name: '', description: '' });
   const [isSavingDir, setIsSavingDir] = useState(false);
 
-  // Date range used by drill-through links (Equipes/Diretorias → /reports)
+  // Extra tools dropdown/modal
+  const [isToolsMenuOpen, setIsToolsMenuOpen] = useState(false);
+  const [isPipelineModalOpen, setIsPipelineModalOpen] = useState(false);
+
+  // Reports
   const [reportDateRange, setReportDateRange] = useState(() => {
     const today = new Date();
     return {
@@ -68,6 +78,12 @@ export default function AdminPanel() {
       end: toDateOnlyLocal(today),
     };
   });
+  const [reportPeriod, setReportPeriod] = useState<'este_mes' | '30_dias' | '60_dias' | '90_dias' | 'custom'>('este_mes');
+  const [drillCity, setDrillCity] = useState<string | null>(null); // drill-down de regiões: cidade → bairros
+  const [reportData, setReportData] = useState<any>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [isGeneratingCSV, setIsGeneratingCSV] = useState(false);
+  const [pdfExportType, setPdfExportType] = useState<'geral' | 'equipe' | 'coordenacao' | null>(null);
 
   // XP Report
   const [xpDateRange, setXpDateRange] = useState({
@@ -78,6 +94,782 @@ export default function AdminPanel() {
   const [xpReportLoading, setXpReportLoading] = useState(false);
 
   const navigate = useNavigate();
+
+  // ── Client-side metrics (reliable, bypass broken RPC fields) ───────────────
+  const { globalMetrics } = useReportsData({ startDate: reportDateRange.start, endDate: reportDateRange.end });
+
+  // Same parser as Reports.tsx — handles "R$ 1.500.000,00" and "1500000,00"
+  const parseCurrencyLocal = (v: string | undefined | null): number => {
+    if (!v) return 0;
+    return parseFloat(v.replace(/[R$\s.]/g, '').replace(',', '.')) || 0;
+  };
+
+  const normalizeTeamRef = (value?: string | null) => String(value || '').trim().toLowerCase();
+
+  const profileMatchesTeam = (profile: any, team: Team): boolean => {
+    if (!profile || !team) return false;
+    if (profile.team_id === team.id || profile.team === team.id) return true;
+    const profileTeamName = normalizeTeamRef(profile.team);
+    const teamName = normalizeTeamRef(team.name);
+    return profileTeamName.length > 0 && profileTeamName === teamName;
+  };
+
+  const getTeamMemberIds = (team: Team): string[] => {
+    const directMembers = allProfiles.filter((p: any) => profileMatchesTeam(p, team)).map((p: any) => p.id);
+    const managerId = team.manager_id || null;
+    const managerLinked = managerId
+      ? allProfiles.filter((p: any) => p.manager_id === managerId).map((p: any) => p.id)
+      : [];
+
+    const coordinatorIds = managerId
+      ? allProfiles
+        .filter((p: any) => p.role?.toUpperCase() === 'COORDENADOR' && p.manager_id === managerId)
+        .map((p: any) => p.id)
+      : [];
+
+    const coordinatorLinkedBrokers = coordinatorIds.length > 0
+      ? allProfiles
+        .filter((p: any) => p.role?.toUpperCase() === 'CORRETOR' && p.coordinator_id && coordinatorIds.includes(p.coordinator_id))
+        .map((p: any) => p.id)
+      : [];
+
+    return Array.from(new Set([
+      ...(team.members || []),
+      ...directMembers,
+      ...(managerId ? [managerId] : []),
+      ...managerLinked,
+      ...coordinatorIds,
+      ...coordinatorLinkedBrokers,
+    ]));
+  };
+
+  const formatBrokerDisplayName = (name?: string | null): string => {
+    const normalized = String(name || '').trim().replace(/\s+/g, ' ');
+    if (!normalized) return 'Sem nome';
+
+    const parts = normalized.split(' ');
+    const first = parts[0] || '';
+    if (!first || first === '.') return 'Sem nome';
+    if (parts.length === 1) return first;
+
+    const last = parts[parts.length - 1] || '';
+    const initial = last.charAt(0).toUpperCase();
+    if (!initial || initial === '.') return first;
+
+    return `${first} ${initial}.`;
+  };
+
+  const reportRangeStart = parseDateOnlyLocal(reportDateRange.start);
+  const reportRangeEnd = parseDateOnlyLocalEnd(reportDateRange.end);
+  const getSaleReferenceDate = (client: any): Date | null => {
+    const raw = client?.closed_at || null;
+    if (!raw) return null;
+    const parsed = new Date(raw);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  // Seletor de período no padrão do Dashboard (pílulas) → ajusta reportDateRange
+  const applyReportPeriod = (p: 'este_mes' | '30_dias' | '60_dias' | '90_dias' | 'custom') => {
+    setReportPeriod(p);
+    if (p === 'custom') return; // mantém o range atual e revela os inputs de data
+    const today = new Date();
+    const end = toDateOnlyLocal(today);
+    let start: string;
+    if (p === 'este_mes') {
+      start = toDateOnlyLocal(new Date(today.getFullYear(), today.getMonth(), 1));
+    } else {
+      const days = p === '30_dias' ? 30 : p === '60_dias' ? 60 : 90;
+      const d = new Date();
+      d.setDate(today.getDate() - days);
+      start = toDateOnlyLocal(d);
+    }
+    setReportDateRange({ start, end });
+  };
+
+  const selectedPeriodClients = clients.filter((c) => {
+    const created = new Date(c.createdAt);
+    return created >= reportRangeStart && created <= reportRangeEnd;
+  });
+
+  // ── Agregações para gráficos de Regiões de Interesse e Construtoras ──────────
+  // Normaliza (sem acento/caixa) p/ agrupar variações de digitação ("CAMPO GRANDE" = "campo grande")
+  const normText = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  const aggregateBy = (getter: (c: any) => string | undefined | null, list: any[] = selectedPeriodClients) => {
+    const map = new Map<string, { label: string; value: number }>();
+    list.forEach((c) => {
+      const raw = (getter(c) || '').trim().replace(/\s+/g, ' ');
+      if (!raw) return;
+      const key = normText(raw);
+      const existing = map.get(key);
+      if (existing) existing.value += 1;
+      else map.set(key, { label: raw, value: 1 });
+    });
+    const total = Array.from(map.values()).reduce((a, b) => a + b.value, 0);
+    return Array.from(map.values(), ({ label, value }) => ({
+      name: label,
+      value,
+      percentual: total > 0 ? Number(((value / total) * 100).toFixed(1)) : 0,
+    })).sort((a, b) => b.value - a.value);
+  };
+  const regionDataLocal = aggregateBy((c) => c.regionOfInterest).slice(0, 8);
+  const builderDataLocal = aggregateBy((c) => c.builder).slice(0, 8);
+  // Drill-down: bairros da cidade selecionada (clientes cuja cidade == drillCity)
+  const drillBairroData = drillCity
+    ? aggregateBy(
+        (c) => c.neighborhood,
+        selectedPeriodClients.filter((c) => normText(c.regionOfInterest || '') === normText(drillCity)),
+      ).slice(0, 10)
+    : [];
+  // Paleta de gráficos on-palette (azul/verde primeiro, depois acentos)
+  const CHART_COLORS = ['#2563eb', '#22c55e', '#8b5cf6', '#f59e0b', '#06b6d4', '#ec4899', '#ef4444', '#14b8a6'];
+
+  const selectedPeriodLeads = leads.filter((l) => {
+    const created = new Date((l as any).created_at || l.timestamp);
+    return created >= reportRangeStart && created <= reportRangeEnd;
+  });
+
+  const selectedPeriodSales = clients.filter((c) => {
+    if (c.stage !== 'Concluído') return false;
+    const saleDate = getSaleReferenceDate(c);
+    return !!saleDate && saleDate >= reportRangeStart && saleDate <= reportRangeEnd;
+  });
+  const selectedPeriodSalesCount = selectedPeriodSales.length;
+  const selectedPeriodConversion = selectedPeriodClients.length > 0
+    ? Number(((selectedPeriodSalesCount / selectedPeriodClients.length) * 100).toFixed(1))
+    : 0;
+  const selectedPeriodApproved = selectedPeriodClients.filter((c) => c.stage === 'Aprovado').length;
+
+  const pipelineDataLocal = CLIENT_STAGES
+    .map((stage) => {
+      const quantidade = selectedPeriodClients.filter((c) => c.stage === stage).length;
+      const percentual = selectedPeriodClients.length > 0
+        ? Number(((quantidade / selectedPeriodClients.length) * 100).toFixed(2))
+        : 0;
+      return { etapa: stage, quantidade, percentual };
+    })
+    .filter((row) => row.quantidade > 0);
+
+  const trendDataLocal = (() => {
+    const MS_DAY = 24 * 60 * 60 * 1000;
+    const daysDiff = Math.max(0, Math.floor((reportRangeEnd.getTime() - reportRangeStart.getTime()) / MS_DAY));
+    const groupByWeek = daysDiff > 31;
+
+    const normalizePeriod = (d: Date) => {
+      const local = new Date(d);
+      if (groupByWeek) {
+        const day = local.getDay();
+        const diffToMonday = day === 0 ? -6 : 1 - day;
+        local.setDate(local.getDate() + diffToMonday);
+      }
+      local.setHours(0, 0, 0, 0);
+      return toDateOnlyLocal(local);
+    };
+
+    const buckets = new Map<string, { periodo: string; Lt: number; Vt: number; Rt: number }>();
+
+    const cursor = new Date(reportRangeStart);
+    cursor.setHours(0, 0, 0, 0);
+    while (cursor <= reportRangeEnd) {
+      const key = normalizePeriod(cursor);
+      if (!buckets.has(key)) buckets.set(key, { periodo: key, Lt: 0, Vt: 0, Rt: 0 });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    selectedPeriodLeads.forEach((lead) => {
+      const key = normalizePeriod(new Date((lead as any).created_at || lead.timestamp));
+      const bucket = buckets.get(key);
+      if (bucket) bucket.Lt += 1;
+    });
+
+    selectedPeriodSales.forEach((client) => {
+      const saleDate = getSaleReferenceDate(client);
+      if (!saleDate) return;
+      const key = normalizePeriod(saleDate);
+      const bucket = buckets.get(key);
+      if (bucket) {
+        bucket.Vt += 1;
+        bucket.Rt += parseCurrencyLocal(client.intendedValue);
+      }
+    });
+
+    return Array.from(buckets.values()).sort((a, b) => a.periodo.localeCompare(b.periodo));
+  })();
+
+  // VGV aligned with selected report period and sales card criteria
+  const vgvLocal = selectedPeriodSales.reduce((acc, c) => acc + parseCurrencyLocal(c.intendedValue), 0);
+
+  const isEligibleForBrokerRanking = (role?: string | null) => {
+    const normalizedRole = String(role || '').toUpperCase();
+    return normalizedRole === 'CORRETOR' || normalizedRole === 'COORDENADOR' || normalizedRole === 'GERENTE';
+  };
+
+  // Broker ranking computed client-side (RPC Li=0 because leads table is empty per-broker)
+  const localBrokerRanking = (() => {
+    const brokers = allProfiles.filter((p) => isEligibleForBrokerRanking(p.role));
+
+    return brokers
+      .map((p) => {
+        const createdByBroker = selectedPeriodClients.filter((c) => (c as any).owner_id === p.id);
+        const salesByBroker = selectedPeriodSales.filter((c) => (c as any).owner_id === p.id);
+        if (createdByBroker.length === 0 && salesByBroker.length === 0) return null;
+
+        const vi = salesByBroker.length;
+        const ri = salesByBroker.reduce((acc, c) => acc + parseCurrencyLocal(c.intendedValue), 0);
+        return {
+          corretor_id: p.id,
+          nome: p.name,
+          Li: createdByBroker.length,
+          Vi: vi,
+          Taxa_Conversao_i: createdByBroker.length > 0 ? Math.round((vi / createdByBroker.length) * 100) : 0,
+          Ri: ri,
+        };
+      })
+      .filter(Boolean)
+      .sort((a: any, b: any) => b.Vi - a.Vi || b.Ri - a.Ri);
+  })();
+
+  const compareRankingRows = (a: any, b: any) => {
+    return (
+      Number(b.Ri || 0) - Number(a.Ri || 0) ||
+      Number(b.Vi || 0) - Number(a.Vi || 0) ||
+      Number(b.Li || 0) - Number(a.Li || 0) ||
+      String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR') ||
+      String(a.entity_id || '').localeCompare(String(b.entity_id || ''))
+    );
+  };
+
+  const selectedPeriodLabel = `${toPtBrDate(reportDateRange.start)} a ${toPtBrDate(reportDateRange.end)}`;
+
+  const periodBrokerRanking = (() => {
+
+    const brokers = allProfiles.filter((p) => isEligibleForBrokerRanking(p.role));
+
+    return brokers
+      .map((p) => {
+        const createdByBroker = selectedPeriodClients.filter((c) => (c as any).owner_id === p.id);
+        const salesByBroker = selectedPeriodSales.filter((c) => (c as any).owner_id === p.id);
+        if (createdByBroker.length === 0 && salesByBroker.length === 0) return null;
+
+        const vi = salesByBroker.length;
+        const ri = salesByBroker.reduce((acc, c) => acc + parseCurrencyLocal(c.intendedValue), 0);
+        return {
+          entity_id: p.id,
+          corretor_id: p.id,
+          nome: p.name,
+          Li: createdByBroker.length,
+          Vi: vi,
+          Taxa_Conversao_i: createdByBroker.length > 0 ? Math.round((vi / createdByBroker.length) * 100) : 0,
+          Ri: ri,
+        };
+      })
+      .filter(Boolean)
+      .sort(compareRankingRows)
+      .slice(0, 3);
+  })();
+
+  const periodManagerRanking = (() => {
+    const managers = allProfiles.filter((p) => p.role?.toUpperCase() === 'GERENTE');
+
+    return managers
+      .map((manager) => {
+        const managedTeams = teams.filter((t) => t.manager_id === manager.id);
+        const managedTeamIds = managedTeams.map((t) => t.id);
+
+        const memberIds = Array.from(new Set([
+          manager.id,
+          ...managedTeams.flatMap((t) => t.members ?? []),
+          ...allProfiles
+            .filter((p: any) => managedTeamIds.includes(p.team_id || p.team))
+            .map((p) => p.id),
+          ...allProfiles
+            .filter((p: any) => p.manager_id === manager.id)
+            .map((p) => p.id),
+        ]));
+
+        const createdByManager = selectedPeriodClients.filter((c) => memberIds.includes((c as any).owner_id));
+        const salesByManager = selectedPeriodSales.filter((c) => memberIds.includes((c as any).owner_id));
+        if (createdByManager.length === 0 && salesByManager.length === 0) return null;
+
+        const vi = salesByManager.length;
+        const ri = salesByManager.reduce((acc, c) => acc + parseCurrencyLocal(c.intendedValue), 0);
+        return {
+          entity_id: manager.id,
+          nome: manager.name,
+          Li: createdByManager.length,
+          Vi: vi,
+          Taxa_Conversao_i: createdByManager.length > 0 ? Math.round((vi / createdByManager.length) * 100) : 0,
+          Ri: ri,
+        };
+      })
+      .filter(Boolean)
+      .sort(compareRankingRows)
+      .slice(0, 3);
+  })();
+
+  const periodCoordinatorRanking = (() => {
+    const coordinators = allProfiles.filter((p) => p.role?.toUpperCase() === 'COORDENADOR');
+
+    return coordinators
+      .map((coord) => {
+        const brokerIds = Array.from(new Set(allProfiles
+          .filter((p: any) => p.role?.toUpperCase() === 'CORRETOR' && p.coordinator_id === coord.id)
+          .map((p) => p.id)));
+
+        const createdByCoord = selectedPeriodClients.filter((c) => brokerIds.includes((c as any).owner_id));
+        const salesByCoord = selectedPeriodSales.filter((c) => brokerIds.includes((c as any).owner_id));
+        if (createdByCoord.length === 0 && salesByCoord.length === 0) return null;
+
+        const vi = salesByCoord.length;
+        const ri = salesByCoord.reduce((acc, c) => acc + parseCurrencyLocal(c.intendedValue), 0);
+        return {
+          entity_id: coord.id,
+          nome: coord.name,
+          Li: createdByCoord.length,
+          Vi: vi,
+          Taxa_Conversao_i: createdByCoord.length > 0 ? Math.round((vi / createdByCoord.length) * 100) : 0,
+          Ri: ri,
+        };
+      })
+      .filter(Boolean)
+      .sort(compareRankingRows)
+      .slice(0, 3);
+  })();
+
+  const reportByTeam = (() => {
+    return teams
+      .map((team) => {
+        const teamMemberIds = Array.from(new Set([
+          ...getTeamMemberIds(team),
+          team.manager_id,
+        ].filter(Boolean) as string[]));
+        const brokerIds = Array.from(new Set(allProfiles
+          .filter((p: any) => profileMatchesTeam(p, team) && p.role?.toUpperCase() === 'CORRETOR')
+          .map((p) => p.id)));
+
+        const clientsByTeam = selectedPeriodClients.filter((c: any) => teamMemberIds.includes(String(c?.owner_id || '')));
+        const salesByTeam = selectedPeriodSales.filter((c: any) => teamMemberIds.includes(String(c?.owner_id || '')));
+        const clientes = clientsByTeam.length;
+        const vendas = salesByTeam.length;
+        const receita = salesByTeam.reduce((acc, c) => acc + parseCurrencyLocal(c.intendedValue), 0);
+        const conversao = clientes > 0 ? Math.round((vendas / clientes) * 100) : 0;
+
+        return {
+          nome: team.name,
+          corretores: brokerIds.length,
+          clientes,
+          vendas,
+          conversao,
+          receita,
+        };
+      })
+      .filter((row) => row.clientes > 0 || row.vendas > 0 || row.receita > 0)
+      .sort((a, b) => b.vendas - a.vendas || b.receita - a.receita);
+  })();
+
+  const reportByCoordination = (() => {
+    const brokerMap = new Map(localBrokerRanking.map((row: any) => [row.corretor_id, row]));
+
+    return allProfiles
+      .filter((p) => p.role?.toUpperCase() === 'COORDENADOR')
+      .map((coord) => {
+        const brokerIds = Array.from(new Set(allProfiles
+          .filter((p: any) => p.coordinator_id === coord.id && p.role?.toUpperCase() === 'CORRETOR')
+          .map((p) => p.id)));
+
+        const rows = brokerIds.map((id) => brokerMap.get(id)).filter(Boolean) as any[];
+        const clientes = rows.reduce((acc, row) => acc + Number(row.Li || 0), 0);
+        const vendas = rows.reduce((acc, row) => acc + Number(row.Vi || 0), 0);
+        const receita = rows.reduce((acc, row) => acc + Number(row.Ri || 0), 0);
+        const conversao = clientes > 0 ? Math.round((vendas / clientes) * 100) : 0;
+
+        return {
+          nome: coord.name,
+          corretores: brokerIds.length,
+          clientes,
+          vendas,
+          conversao,
+          receita,
+        };
+      })
+      .filter((row) => row.corretores > 0 || row.clientes > 0 || row.vendas > 0)
+      .sort((a, b) => b.vendas - a.vendas || b.receita - a.receita);
+  })();
+
+  const buildPdfReport = async ({
+    filename,
+    title,
+    subtitle,
+    metrics,
+    columns,
+    rows,
+    insights,
+    charts,
+  }: {
+    filename: string;
+    title: string;
+    subtitle: string;
+    metrics: Array<{ label: string; value: string }>;
+    columns: Array<{ header: string; width: number }>;
+    rows: string[][];
+    insights?: string[];
+    charts?: Array<{ title: string; data: Array<{ label: string; value: number; sub?: string }> }>;
+  }) => {
+    const doc = await PDFDocument.create();
+    const fonts = await embedFonts(doc);
+    const logo = await loadKaizenLogo(doc);
+
+    const { W, H, MARGIN } = PAGE;
+    const TABLE_W = W - (MARGIN * 2);
+    const ROW_H = 18;
+    const HEADER_H = 20;
+
+    let page = doc.addPage([W, H]);
+    let y = drawReportHeader(page, fonts, logo, { title, subtitle });
+
+    const drawTableHeader = () => {
+      page.drawRectangle({ x: MARGIN, y: y - HEADER_H, width: TABLE_W, height: HEADER_H, color: PDF_THEME.blue });
+      let cx = MARGIN + 4;
+      columns.forEach((col) => {
+        page.drawText(col.header, { x: cx, y: y - HEADER_H + 6, size: 7, font: fonts.bold, color: PDF_THEME.white });
+        cx += col.width;
+      });
+      y -= HEADER_H;
+    };
+
+    y = drawSectionTitle(page, fonts, y, 'Resumo');
+    y = drawKeyValues(page, fonts, y, metrics);
+    y -= 5;
+    y = drawDivider(page, y);
+
+    const ensure = (needed: number) => {
+      if (y < MARGIN + needed) {
+        page = doc.addPage([W, H]);
+        y = drawContinuationHeader(page, fonts, title);
+      }
+    };
+
+    // Insights (texto interpretando os números)
+    if (insights && insights.length > 0) {
+      ensure(30);
+      y = drawSectionTitle(page, fonts, y, 'Insights');
+      insights.forEach((line) => {
+        ensure(16);
+        const txt = safeText(line.length > 110 ? line.slice(0, 109) + '…' : line);
+        page.drawText(`•  ${txt}`, { x: MARGIN, y, size: 8.5, font: fonts.regular, color: PDF_THEME.ink });
+        y -= 13;
+      });
+      y -= 4;
+      y = drawDivider(page, y);
+    }
+
+    // Gráficos (barras nativas, on-brand)
+    if (charts && charts.length > 0) {
+      charts.forEach((ch) => {
+        if (ch.data.length === 0) return;
+        ensure(24 + ch.data.length * 16);
+        y = drawSectionTitle(page, fonts, y, ch.title);
+        y = drawHBars(page, fonts, y, ch.data);
+        y -= 6;
+      });
+      y = drawDivider(page, y);
+    }
+
+    ensure(60);
+    y = drawSectionTitle(page, fonts, y, 'Detalhamento');
+    drawTableHeader();
+
+    rows.forEach((row, rowIndex) => {
+      const rowLines = row.map((cell) => String(cell || '').split('\n').length);
+      const lineCount = Math.max(1, ...rowLines);
+      const rowHeight = Math.max(ROW_H, 10 + (lineCount * 8));
+
+      if (y < MARGIN + rowHeight + 18) {
+        page = doc.addPage([W, H]);
+        y = drawContinuationHeader(page, fonts, title);
+        drawTableHeader();
+      }
+
+      const isEven = rowIndex % 2 === 0;
+      page.drawRectangle({
+        x: MARGIN,
+        y: y - rowHeight,
+        width: TABLE_W,
+        height: rowHeight,
+        color: isEven ? PDF_THEME.white : PDF_THEME.rowAlt,
+      });
+
+      let cx = MARGIN + 4;
+      row.forEach((cell, cellIndex) => {
+        const colW = columns[cellIndex]?.width || 80;
+        const text = String(cell || '');
+        const maxChars = Math.max(8, Math.floor(colW / 4.2));
+        const lines = text.split('\n');
+        lines.forEach((line, lineIndex) => {
+          const clipped = safeText(line.length > maxChars ? `${line.slice(0, maxChars - 1)}…` : line);
+          page.drawText(clipped, {
+            x: cx,
+            y: y - 12 - (lineIndex * 8),
+            size: 7,
+            font: fonts.regular,
+            color: PDF_THEME.ink,
+          });
+        });
+        cx += colW;
+      });
+      y -= rowHeight;
+    });
+
+    addStandardFooters(doc, fonts);
+    await downloadPdf(doc, filename);
+  };
+
+  const handleExportGeneralPdf = async () => {
+    setPdfExportType('geral');
+    try {
+      const totalClientes = selectedPeriodClients.length;
+      const totalVendas = selectedPeriodSalesCount;
+      const receitaTotal = selectedPeriodSales.reduce((acc, c) => acc + parseCurrencyLocal(c.intendedValue), 0);
+      const taxaConversaoReal = totalClientes > 0 ? Number(((totalVendas / totalClientes) * 100).toFixed(1)) : 0;
+      const salesByUserMap = new Map<string, { clients: string[]; clientCount: number; salesCount: number; revenue: number }>();
+      selectedPeriodSales.forEach((client: any) => {
+        const ownerId = String(client?.owner_id || '');
+        if (!ownerId) return;
+        const row = salesByUserMap.get(ownerId) || { clients: [], clientCount: 0, salesCount: 0, revenue: 0 };
+        row.salesCount += 1;
+        row.revenue += parseCurrencyLocal(client.intendedValue);
+        if (client?.name) row.clients.push(String(client.name));
+        salesByUserMap.set(ownerId, row);
+      });
+
+      const clientsByUserMap = new Map<string, number>();
+      selectedPeriodClients.forEach((client: any) => {
+        const ownerId = String(client?.owner_id || '');
+        if (!ownerId) return;
+        clientsByUserMap.set(ownerId, (clientsByUserMap.get(ownerId) || 0) + 1);
+      });
+
+      const sellerRows = Array.from(salesByUserMap.entries())
+        .map(([ownerId, row]) => {
+          const profileRow = allProfiles.find((p) => p.id === ownerId);
+          const role = String(profileRow?.role || '').toUpperCase();
+          const userName = profileRow?.name || `Usuário ${ownerId.slice(0, 8)}`;
+          const uniqueClients = Array.from(new Set(row.clients));
+          const clientLines = uniqueClients.length > 0
+            ? uniqueClients.map((clientName) => `Cliente: ${clientName}`)
+            : ['Cliente: Cliente não identificado'];
+          const clientsCount = clientsByUserMap.get(ownerId) || 0;
+          const conversion = clientsCount > 0 ? Math.round((row.salesCount / clientsCount) * 100) : 0;
+          return {
+            userCell: `${userName} (${role || 'SEM CARGO'})\n${clientLines.join('\n')}`,
+            clientsCount,
+            salesCount: row.salesCount,
+            conversion,
+            revenue: row.revenue,
+          };
+        })
+        .sort((a, b) => b.salesCount - a.salesCount || b.revenue - a.revenue);
+
+      // ── Insights (interpretam os números) e gráficos nativos ──
+      const fmtBRL0 = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(n);
+      const topStage = [...pipelineDataLocal].sort((a, b) => b.quantidade - a.quantidade)[0];
+      const topRegion = regionDataLocal[0];
+      const topBuilder = builderDataLocal[0];
+      const ticketMedio = totalVendas > 0 ? receitaTotal / totalVendas : 0;
+      const insights: string[] = [];
+      insights.push(`Foram ${totalVendas} venda(s) concluída(s) no período, somando ${fmtBRL0(vgvLocal)} em VGV.`);
+      insights.push(`Taxa de conversão de ${taxaConversaoReal}% (${totalVendas} vendas para ${totalClientes} clientes no período).`);
+      if (totalVendas > 0) insights.push(`Ticket médio por venda: ${fmtBRL0(ticketMedio)}.`);
+      if (globalMetrics.cicloMedioDias > 0) insights.push(`Ciclo médio de venda (do lead à conclusão): ${Math.round(globalMetrics.cicloMedioDias)} dias.`);
+      if (topStage) insights.push(`Maior concentração no pipeline: "${topStage.etapa}" com ${topStage.quantidade} cliente(s) (${topStage.percentual}%) — atenção a possível gargalo.`);
+      if (topRegion) insights.push(`Cidade de maior interesse: ${topRegion.name} (${topRegion.percentual}% dos clientes com cidade informada).`);
+      if (topBuilder) insights.push(`Construtora mais procurada: ${topBuilder.name} (${topBuilder.value} cliente(s)).`);
+      insights.push(`Leads recebidos no período: ${selectedPeriodLeads.length}.`);
+
+      const generalCharts = [
+        { title: 'Distribuição do pipeline', data: pipelineDataLocal.map((d) => ({ label: d.etapa, value: d.quantidade, sub: `${d.quantidade} (${d.percentual}%)` })) },
+        { title: 'Cidades de interesse (top)', data: regionDataLocal.map((d) => ({ label: d.name, value: d.value, sub: `${d.value} (${d.percentual}%)` })) },
+        { title: 'Construtoras (top)', data: builderDataLocal.map((d) => ({ label: d.name, value: d.value, sub: `${d.value} (${d.percentual}%)` })) },
+      ].filter((c) => c.data.length > 0);
+
+      await buildPdfReport({
+        filename: `relatorio-geral-${reportDateRange.start}-${reportDateRange.end}.pdf`,
+        title: 'Relatorio Geral de Performance',
+        subtitle: `Periodo ${toPtBrDate(reportDateRange.start)} a ${toPtBrDate(reportDateRange.end)}`,
+        insights,
+        charts: generalCharts,
+        metrics: [
+          { label: 'Leads', value: String(selectedPeriodLeads.length) },
+          { label: 'Clientes', value: String(totalClientes) },
+          { label: 'Vendas concluidas', value: String(totalVendas) },
+          { label: 'Taxa de conversao', value: `${taxaConversaoReal}%` },
+          { label: 'Receita total', value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(receitaTotal) },
+          { label: 'VGV concluido', value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(vgvLocal) },
+        ],
+        columns: [
+          { header: 'Usuário / Cliente', width: 260 },
+          { header: 'Clientes', width: 70 },
+          { header: 'Vendas', width: 65 },
+          { header: 'Conv.%', width: 60 },
+          { header: 'Receita', width: 68 },
+        ],
+        rows: sellerRows.map((row: any) => [
+          row.userCell,
+          String(row.clientsCount || 0),
+          String(row.salesCount || 0),
+          `${row.conversion || 0}%`,
+          new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(Number(row.revenue || 0)),
+        ]),
+      });
+    } catch (error) {
+      console.error('Erro ao gerar PDF geral', error);
+      alert('Nao foi possivel gerar o PDF geral.');
+    } finally {
+      setPdfExportType(null);
+    }
+  };
+
+  const handleExportTeamPdf = async () => {
+    if (!reportData) return;
+    setPdfExportType('equipe');
+    try {
+      await buildPdfReport({
+        filename: `relatorio-equipes-${reportDateRange.start}-${reportDateRange.end}.pdf`,
+        title: 'Relatorio por Equipe',
+        subtitle: `Periodo ${toPtBrDate(reportDateRange.start)} a ${toPtBrDate(reportDateRange.end)}`,
+        metrics: [
+          { label: 'Equipes com resultado', value: String(reportByTeam.length) },
+          { label: 'Clientes no periodo', value: String(reportByTeam.reduce((acc, row) => acc + row.clientes, 0)) },
+          { label: 'Vendas concluidas', value: String(reportByTeam.reduce((acc, row) => acc + row.vendas, 0)) },
+          { label: 'Receita total', value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(reportByTeam.reduce((acc, row) => acc + row.receita, 0)) },
+        ],
+        columns: [
+          { header: 'Equipe', width: 185 },
+          { header: 'Corretores', width: 70 },
+          { header: 'Clientes', width: 62 },
+          { header: 'Vendas', width: 58 },
+          { header: 'Conv.%', width: 55 },
+          { header: 'Receita', width: 122 },
+        ],
+        rows: reportByTeam.map((row) => [
+          row.nome,
+          String(row.corretores),
+          String(row.clientes),
+          String(row.vendas),
+          `${row.conversao}%`,
+          new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(row.receita),
+        ]),
+      });
+    } catch (error) {
+      console.error('Erro ao gerar PDF por equipe', error);
+      alert('Nao foi possivel gerar o PDF por equipe.');
+    } finally {
+      setPdfExportType(null);
+    }
+  };
+
+  const handleExportCoordinationPdf = async () => {
+    if (!reportData) return;
+    setPdfExportType('coordenacao');
+    try {
+      await buildPdfReport({
+        filename: `relatorio-coordenacao-${reportDateRange.start}-${reportDateRange.end}.pdf`,
+        title: 'Relatorio por Coordenacao',
+        subtitle: `Periodo ${toPtBrDate(reportDateRange.start)} a ${toPtBrDate(reportDateRange.end)}`,
+        metrics: [
+          { label: 'Coordenacoes com resultado', value: String(reportByCoordination.length) },
+          { label: 'Corretores mapeados', value: String(reportByCoordination.reduce((acc, row) => acc + row.corretores, 0)) },
+          { label: 'Vendas concluidas', value: String(reportByCoordination.reduce((acc, row) => acc + row.vendas, 0)) },
+          { label: 'Receita total', value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(reportByCoordination.reduce((acc, row) => acc + row.receita, 0)) },
+        ],
+        columns: [
+          { header: 'Coordenacao', width: 185 },
+          { header: 'Corretores', width: 70 },
+          { header: 'Clientes', width: 62 },
+          { header: 'Vendas', width: 58 },
+          { header: 'Conv.%', width: 55 },
+          { header: 'Receita', width: 122 },
+        ],
+        rows: reportByCoordination.map((row) => [
+          row.nome,
+          String(row.corretores),
+          String(row.clientes),
+          String(row.vendas),
+          `${row.conversao}%`,
+          new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(row.receita),
+        ]),
+      });
+    } catch (error) {
+      console.error('Erro ao gerar PDF por coordenacao', error);
+      alert('Nao foi possivel gerar o PDF por coordenacao.');
+    } finally {
+      setPdfExportType(null);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'reports' && reportDateRange.start && reportDateRange.end) {
+      fetchReportData();
+    }
+  }, [activeTab, reportDateRange]);
+
+  const fetchReportData = async () => {
+    setReportLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('get_report_metrics', {
+        data_inicial: reportDateRange.start,
+        data_final: reportDateRange.end
+      });
+      if (error) throw error;
+      setReportData(data);
+    } catch (e) {
+      console.error('Erro ao buscar relatórios:', e);
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const handleExportCSV = () => {
+    setIsGeneratingCSV(true);
+    try {
+      const receitaTotal = selectedPeriodSales.reduce((acc, c) => acc + parseCurrencyLocal(c.intendedValue), 0);
+      const rows = [
+        ['Métrica', 'Valor'],
+        ['Total de Leads', String(selectedPeriodLeads.length)],
+        ['Total de Clientes', String(selectedPeriodClients.length)],
+        ['Vendas Concluídas', String(selectedPeriodSalesCount)],
+        ['Receita Total', receitaTotal.toFixed(2)],
+        ['Agendamentos', String(upcomingAppointmentsCount)],
+        ['Taxa de Conversão', `${selectedPeriodConversion.toFixed(1)}%`],
+        ['Ticket Médio', selectedPeriodSalesCount > 0 ? (receitaTotal / selectedPeriodSalesCount).toFixed(2) : '0'],
+        ['Tempo Médio de Conversão (dias)', String(globalMetrics.cicloMedioDias)],
+        [],
+        ['Pipeline - Etapa', 'Quantidade', 'Percentual']
+      ];
+
+      pipelineDataLocal.forEach((p: any) => {
+        rows.push([p.etapa, p.quantidade.toString(), `${p.percentual}%`]);
+      });
+
+      rows.push([]);
+      rows.push(['Corretores - Nome', 'Clientes', 'Vendas', 'Receita', 'Taxa Conversão']);
+      localBrokerRanking.forEach((c: any) => {
+        rows.push([c.nome, c.Li.toString(), c.Vi.toString(), c.Ri.toString(), `${c.Taxa_Conversao_i}%`]);
+      });
+
+      const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + rows.map(e => e.join(";")).join("\n");
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `relatorio_${reportDateRange.start}_${reportDateRange.end}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (e) {
+      console.error('Erro ao gerar CSV', e);
+    } finally {
+      setIsGeneratingCSV(false);
+    }
+  };
 
   // Approval Modal
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
@@ -313,7 +1105,7 @@ export default function AdminPanel() {
   const handleToggleMember = async (teamId: string, userId: string) => {
     const team = teams.find(t => t.id === teamId);
     if (!team) return;
-    const members = getTeamMemberIds(team, allProfiles);
+    const members = getTeamMemberIds(team);
     const isAdding = !members.includes(userId);
 
     try {
@@ -368,6 +1160,15 @@ export default function AdminPanel() {
       alert('Erro ao salvar anuncio: ' + (e?.message || 'Tente novamente.'));
     } finally { setIsSavingAnnouncement(false); }
   };
+
+  // ── Reports data ───────────────────────────────────────────────────────────
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const upcomingAppointmentsCount = appointments.filter(a => a.date >= todayStr).length;
+
+  const stageData = ['Em Análise', 'Aprovados', 'Condicionados', 'Reprovados', 'Em Tratativa', 'Contrato', 'Vendas Concluidas'].map(stage => ({
+    name: stage.length > 10 ? stage.substring(0, 10) + '…' : stage,
+    total: clients.filter(c => c.stage === stage).length
+  }));
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -530,7 +1331,7 @@ export default function AdminPanel() {
                           <button onClick={() => { if (confirm('Excluir equipe?')) deleteTeam(team.id); }} className="p-1.5 bg-surface-50 rounded-full hover:text-red-500"><Trash2 size={14} /></button>
                         </div>
                       </div>
-                      <p className="text-xs text-text-secondary">{getTeamMemberIds(team, allProfiles).length} membros</p>
+                      <p className="text-xs text-text-secondary">{getTeamMemberIds(team).length} membros</p>
                     </PremiumCard>
                   );
                 })}
@@ -682,6 +1483,423 @@ export default function AdminPanel() {
                     </PremiumCard>
                   );
                 })}
+          </div>
+        );
+
+      case 'reports':
+        return (
+          <div className="space-y-6 print:space-y-4">
+            {/* ── Modal: Pipeline por Corretor ── */}
+            <Modal isOpen={isPipelineModalOpen} onClose={() => setIsPipelineModalOpen(false)} title="Pipeline por Corretor (PDF)">
+              <PipelinePdfExport corretores={allProfiles} />
+            </Modal>
+
+            {/* ── Extra Tools: "..." button ── */}
+            <div className="print:hidden flex justify-end relative">
+              <button
+                onClick={() => setIsToolsMenuOpen(v => !v)}
+                className="flex items-center justify-center w-9 h-9 rounded-lg border border-surface-200 bg-card-bg dark:bg-surface-100 text-text-secondary hover:text-text-primary hover:border-gold-300 shadow-sm transition-all"
+              >
+                <MoreHorizontal size={18} />
+              </button>
+
+              {isToolsMenuOpen && (
+                <>
+                  {/* backdrop */}
+                  <div className="fixed inset-0 z-10" onClick={() => setIsToolsMenuOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1.5 z-20 w-72 bg-card-bg dark:bg-surface-100 border border-surface-200 rounded-xl shadow-xl overflow-hidden">
+                    <div className="px-4 pt-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-text-secondary">Exportar relatórios</div>
+                    <div className="px-3 pb-3 space-y-1.5">
+                      <button
+                        onClick={() => { setIsToolsMenuOpen(false); handleExportGeneralPdf(); }}
+                        disabled={reportLoading || !reportData || pdfExportType !== null}
+                        className="w-full flex items-center gap-2 px-2.5 py-2 border border-surface-200 rounded-lg text-text-secondary text-[11px] font-semibold hover:text-gold-700 hover:bg-gold-50 transition-colors disabled:opacity-50"
+                        title="Gerar PDF geral"
+                      >
+                        {pdfExportType === 'geral' ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />} PDF Geral
+                      </button>
+                      <button
+                        onClick={() => { setIsToolsMenuOpen(false); handleExportTeamPdf(); }}
+                        disabled={reportLoading || !reportData || pdfExportType !== null}
+                        className="w-full flex items-center gap-2 px-2.5 py-2 border border-surface-200 rounded-lg text-text-secondary text-[11px] font-semibold hover:text-gold-700 hover:bg-gold-50 transition-colors disabled:opacity-50"
+                        title="Gerar PDF por equipe"
+                      >
+                        {pdfExportType === 'equipe' ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />} PDF Equipe
+                      </button>
+                      <button
+                        onClick={() => { setIsToolsMenuOpen(false); handleExportCoordinationPdf(); }}
+                        disabled={reportLoading || !reportData || pdfExportType !== null}
+                        className="w-full flex items-center gap-2 px-2.5 py-2 border border-surface-200 rounded-lg text-text-secondary text-[11px] font-semibold hover:text-gold-700 hover:bg-gold-50 transition-colors disabled:opacity-50"
+                        title="Gerar PDF por coordenacao"
+                      >
+                        {pdfExportType === 'coordenacao' ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />} PDF Coordenacao
+                      </button>
+                    </div>
+
+                    <div className="border-t border-surface-100" />
+                    <div className="px-4 pt-3 pb-2 text-[10px] font-bold uppercase tracking-wider text-text-secondary">Ferramentas</div>
+                    <button
+                      onClick={() => { setIsToolsMenuOpen(false); setIsPipelineModalOpen(true); }}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface-50 dark:hover:bg-surface-200 transition-colors text-left"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
+                        <FileDown size={15} className="text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-text-primary">Pipeline por Corretor</p>
+                        <p className="text-[11px] text-text-secondary">Exportar PDF dos leads ativos</p>
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => { setIsToolsMenuOpen(false); navigate('/admin/reports/presence'); }}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface-50 dark:hover:bg-surface-200 transition-colors text-left"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-gold-100 dark:bg-gold-900/30 flex items-center justify-center shrink-0">
+                        <BarChart3 size={15} className="text-gold-600 dark:text-gold-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-text-primary">Presença e Engajamento</p>
+                        <p className="text-[11px] text-text-secondary">Check-ins, score e alertas</p>
+                      </div>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-3 print:hidden">
+              <div className="flex flex-wrap gap-2">
+                {([
+                  { id: 'este_mes', label: 'Este mês' },
+                  { id: '30_dias', label: '30 dias' },
+                  { id: '60_dias', label: '60 dias' },
+                  { id: '90_dias', label: '90 dias' },
+                  { id: 'custom', label: 'Personalizado' },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.id}
+                    onClick={() => applyReportPeriod(opt.id)}
+                    className={`px-4 py-2 rounded-lg text-xs font-semibold border transition-all ${
+                      reportPeriod === opt.id
+                        ? 'bg-primary-600 text-white border-primary-600'
+                        : 'bg-card-bg text-text-secondary border-surface-200 hover:border-primary-400'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {reportPeriod === 'custom' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-bold text-text-secondary uppercase mb-1">Início</span>
+                    <input
+                      type="date"
+                      value={reportDateRange.start}
+                      onChange={(e) => setReportDateRange(prev => ({ ...prev, start: e.target.value }))}
+                      className="w-full px-2 py-2 border border-surface-200 rounded-lg text-sm bg-surface-50 text-text-primary focus:border-primary-400 focus:ring-1 focus:ring-primary-400 outline-none transition-all"
+                      max={reportDateRange.end}
+                    />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-bold text-text-secondary uppercase mb-1">Fim</span>
+                    <input
+                      type="date"
+                      value={reportDateRange.end}
+                      onChange={(e) => setReportDateRange(prev => ({ ...prev, end: e.target.value }))}
+                      className="w-full px-2 py-2 border border-surface-200 rounded-lg text-sm bg-surface-50 text-text-primary focus:border-primary-400 focus:ring-1 focus:ring-primary-400 outline-none transition-all"
+                      min={reportDateRange.start}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {reportLoading || !reportData ? (
+              <div className="flex flex-col items-center justify-center py-20 bg-card-bg rounded-2xl border border-surface-200 shadow-sm">
+                <Loader2 size={40} className="animate-spin text-gold-500 mb-4" />
+                <p className="text-sm font-semibold text-text-primary">Processando indicadores no banco de dados...</p>
+                <p className="text-xs text-text-secondary mt-1">Isso pode levar alguns segundos dependendo do volume do período.</p>
+              </div>
+            ) : (
+              <>
+                {/* TOP NAVIGATION METRICS */}
+                <div className="hidden print:block text-center mt-4">
+                  <h2 className="text-xl font-bold">Relatório de Desempenho</h2>
+                  <p className="text-sm text-text-secondary">{toPtBrDate(reportDateRange.start)} a {toPtBrDate(reportDateRange.end)}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 print:grid-cols-4 print:gap-4 print:mt-4">
+                  {[
+                    { label: 'Leads', value: selectedPeriodLeads.length, cmp: null, icon: <Users size={14} />, color: 'text-text-primary', bg: 'bg-surface-100 text-text-secondary', route: '/clients', state: { tab: 'documentacao' } },
+                    { label: 'Clientes', value: selectedPeriodClients.length, cmp: null, icon: <Users size={14} />, color: 'text-primary-400', bg: 'bg-primary-500/15 text-primary-400', route: '/clients', state: undefined },
+                    { label: 'Aprovados', value: selectedPeriodApproved, cmp: null, icon: <Shield size={14} />, color: 'text-green-400', bg: 'bg-green-500/15 text-green-400', route: '/clients', state: { initialStage: 'Aprovado' } },
+                    { label: 'Agenda', value: upcomingAppointmentsCount, cmp: null, icon: <Calendar size={14} />, color: 'text-blue-400', bg: 'bg-blue-500/15 text-blue-400', route: '/schedule', state: undefined },
+                  ].map((stat, i) => (
+                    <PremiumCard key={i} className={`p-3 relative flex flex-col justify-between h-24 shadow-[0_2px_10px_rgba(0,0,0,0.02)] border-surface-100 ${stat.route ? 'cursor-pointer hover:border-primary-400/50 hover:shadow-md transition-all' : ''}`} onClick={() => stat.route && navigate(stat.route, { state: stat.state })}>
+                      <div className="flex justify-between items-start">
+                        <span className={`p-1.5 rounded-md ${stat.bg}`}>{stat.icon}</span>
+                        {stat.cmp !== null && (
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-sm ${stat.cmp > 0 ? 'bg-green-50 text-green-700' : stat.cmp < 0 ? 'bg-red-50 text-red-700' : 'bg-surface-50 text-text-secondary'}`}>
+                            {stat.cmp > 0 ? '+' : ''}{stat.cmp}%
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-1">
+                        <p className={`text-2xl font-bold ${stat.color} leading-none`}>{stat.value}</p>
+                        <p className="text-[10px] uppercase tracking-wider font-semibold text-text-secondary mt-1">{stat.label}</p>
+                      </div>
+                    </PremiumCard>
+                  ))}
+                </div>
+
+                {/* STRATEGIC DASHBOARD */}
+                <div className="grid grid-cols-2 gap-3 print:grid-cols-4 print:gap-4">
+                  <PremiumCard className="p-3 bg-gradient-to-br from-primary-500/10 to-card-bg border-primary-500/20 shadow-[0_2px_10px_rgba(0,0,0,0.03)] h-28 flex flex-col justify-between">
+                    <p className="text-[10px] uppercase font-bold tracking-wider text-primary-400 flex items-center gap-1"><Trophy size={12} /> Vendas</p>
+                    <div>
+                      <p className="text-2xl font-bold text-text-primary leading-none">{selectedPeriodSalesCount}</p>
+                      <p className="text-[9px] font-semibold text-text-secondary mt-1.5">no período selecionado</p>
+                    </div>
+                  </PremiumCard>
+
+                  <PremiumCard className="p-3 bg-gradient-to-br from-green-500/10 to-card-bg border-green-500/20 shadow-[0_2px_10px_rgba(0,0,0,0.03)] h-28 flex flex-col justify-between">
+                    <p className="text-[10px] uppercase font-bold tracking-wider text-green-400 flex items-center gap-1"><TrendingUp size={12} /> VGV</p>
+                    <div>
+                      <p className="text-xl font-bold text-text-primary leading-none whitespace-nowrap">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(vgvLocal)}
+                      </p>
+                      <p className="text-[9px] font-semibold text-text-secondary mt-1.5">vendas concluídas</p>
+                    </div>
+                  </PremiumCard>
+
+                  <PremiumCard className="p-3 bg-gradient-to-br from-blue-500/10 to-card-bg border-blue-500/20 shadow-[0_2px_10px_rgba(0,0,0,0.03)] h-28 flex flex-col justify-between">
+                    <p className="text-[10px] uppercase font-bold tracking-wider text-blue-400 flex items-center gap-1"><Target size={12} /> Conversão</p>
+                    <div>
+                      <div className="flex items-end gap-1 mb-1">
+                        <p className="text-2xl font-bold text-text-primary leading-none">{selectedPeriodConversion.toFixed(1)}%</p>
+                      </div>
+                      <p className="text-[9px] font-semibold text-text-secondary mt-0.5">vendas / total clientes</p>
+                    </div>
+                  </PremiumCard>
+
+                  <PremiumCard className="p-3 bg-gradient-to-br from-indigo-500/10 to-card-bg border-indigo-500/20 shadow-[0_2px_10px_rgba(0,0,0,0.03)] h-28 flex flex-col justify-between">
+                    <p className="text-[10px] uppercase font-bold tracking-wider text-indigo-400 flex items-center gap-1 justify-between">
+                      <span className="flex items-center gap-1"><Calendar size={12} /> Jornada</span>
+                    </p>
+                    <div>
+                      <p className="text-2xl font-bold text-text-primary leading-none">{Math.round(globalMetrics.cicloMedioDias)} <span className="text-[10px] font-bold text-text-secondary tracking-normal">dias</span></p>
+                      <p className="text-[9px] font-semibold text-text-secondary mt-1.5 flex items-center gap-1">TMC em média</p>
+                    </div>
+                  </PremiumCard>
+                </div>
+
+                {/* CHARTS LAYER — grid 2x2 de cards menores */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2 print:gap-6 print:break-inside-avoid">
+                  <PremiumCard className="p-4 border-surface-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
+                    <h4 className="text-[11px] uppercase tracking-wider font-bold text-text-secondary mb-4 flex items-center gap-1.5"><BarChart3 size={14} className="text-primary-400" /> Distribuição de Pipeline</h4>
+                    <div className="h-44 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={pipelineDataLocal}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e2636" />
+                          <XAxis dataKey="etapa" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#8b94a3' }} />
+                          <YAxis hide />
+                          <Tooltip
+                            cursor={{ fill: 'transparent' }}
+                            contentStyle={{ borderRadius: '8px', border: '1px solid #2b3547', backgroundColor: '#0d111a', color: '#f4f6fb', boxShadow: '0 4px 20px rgba(0,0,0,0.4)' }}
+                            itemStyle={{ color: '#f4f6fb' }}
+                            labelStyle={{ color: '#8b94a3' }}
+                            formatter={(value: any, name: any, props: any) => [`${value} Clientes (${props.payload.percentual}%)`, 'Quantidade']}
+                          />
+                          <Bar dataKey="quantidade" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </PremiumCard>
+
+                  <PremiumCard className="p-4 border-surface-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
+                    <h4 className="text-[11px] uppercase tracking-wider font-bold text-text-secondary mb-4 flex items-center gap-1.5"><TrendingUp size={14} className="text-blue-400" /> Tendência no Período</h4>
+                    <div className="h-44 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={trendDataLocal}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e2636" />
+                          <XAxis dataKey="periodo" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#8b94a3' }} tickFormatter={(v) => v.substring(8, 10) + '/' + v.substring(5, 7)} />
+                          <YAxis hide yAxisId="left" />
+                          <YAxis hide yAxisId="right" orientation="right" />
+                          <Tooltip
+                            contentStyle={{ borderRadius: '8px', border: '1px solid #2b3547', backgroundColor: '#0d111a', color: '#f4f6fb', boxShadow: '0 4px 20px rgba(0,0,0,0.4)' }}
+                            itemStyle={{ color: '#f4f6fb' }}
+                            labelStyle={{ color: '#8b94a3' }}
+                            labelFormatter={(label) => `Data: ${label.split('-').reverse().join('/')}`}
+                          />
+                          <Legend wrapperStyle={{ fontSize: '9px', paddingTop: '10px' }} />
+                          <Line yAxisId="left" type="monotone" dataKey="Lt" name="Leads Adquiridos" stroke="#8b94a3" strokeWidth={2} dot={false} />
+                          <Line yAxisId="left" type="monotone" dataKey="Vt" name="Vendas Concluídas" stroke="#22c55e" strokeWidth={3} dot={{ r: 3, strokeWidth: 2 }} activeDot={{ r: 5 }} />
+                          <Line yAxisId="right" type="monotone" dataKey="Rt" name="Receita" stroke="#2563eb" strokeWidth={2} dot={false} strokeDasharray="5 5" />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </PremiumCard>
+
+                  {/* Regiões de Interesse — drill-down: cidades → bairros */}
+                  <PremiumCard className="p-4 border-surface-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-[11px] uppercase tracking-wider font-bold text-text-secondary flex items-center gap-1.5">
+                        <MapPin size={14} className="text-primary-400" />
+                        {drillCity ? `Bairros — ${drillCity}` : 'Regiões de Interesse'}
+                      </h4>
+                      {drillCity ? (
+                        <button onClick={() => setDrillCity(null)} className="flex items-center gap-1 text-[10px] font-semibold text-primary-400 hover:text-primary-300 transition-colors">
+                          <ChevronLeft size={13} /> Cidades
+                        </button>
+                      ) : (
+                        regionDataLocal.length > 0 && <span className="text-[9px] text-text-secondary">clique p/ ver bairros</span>
+                      )}
+                    </div>
+                    <div className="h-44 w-full">
+                      {!drillCity ? (
+                        regionDataLocal.length === 0 ? (
+                          <div className="flex h-full items-center justify-center text-xs text-text-secondary text-center px-4">Sem dados de cidade no período.</div>
+                        ) : (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={regionDataLocal} dataKey="value" nameKey="name" cx="50%" cy="50%"
+                                innerRadius={38} outerRadius={64} paddingAngle={2} stroke="none" className="cursor-pointer"
+                                onClick={(d: any) => { const n = d?.name ?? d?.payload?.name; if (n) setDrillCity(n); }}
+                              >
+                                {regionDataLocal.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} className="cursor-pointer" />)}
+                              </Pie>
+                              <Tooltip
+                                contentStyle={{ borderRadius: '8px', border: '1px solid #2b3547', backgroundColor: '#0d111a', color: '#f4f6fb', boxShadow: '0 4px 20px rgba(0,0,0,0.4)' }}
+                                itemStyle={{ color: '#f4f6fb' }}
+                                formatter={(value: any, name: any, props: any) => [`${value} (${props.payload.percentual}%)`, name]}
+                              />
+                              <Legend wrapperStyle={{ fontSize: '9px' }} iconType="circle" />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        )
+                      ) : (
+                        drillBairroData.length === 0 ? (
+                          <div className="flex h-full items-center justify-center text-xs text-text-secondary text-center px-4">Sem bairros informados para {drillCity} no período.</div>
+                        ) : (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={drillBairroData} layout="vertical" margin={{ left: 8, right: 16 }}>
+                              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#1e2636" />
+                              <XAxis type="number" hide />
+                              <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} width={96} tick={{ fontSize: 9, fill: '#8b94a3' }} />
+                              <Tooltip
+                                cursor={{ fill: 'transparent' }}
+                                contentStyle={{ borderRadius: '8px', border: '1px solid #2b3547', backgroundColor: '#0d111a', color: '#f4f6fb', boxShadow: '0 4px 20px rgba(0,0,0,0.4)' }}
+                                itemStyle={{ color: '#f4f6fb' }}
+                                formatter={(value: any, name: any, props: any) => [`${value} clientes (${props.payload.percentual}%)`, 'Quantidade']}
+                              />
+                              <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                                {drillBairroData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        )
+                      )}
+                    </div>
+                  </PremiumCard>
+
+                  {/* Construtoras (origem: campo Construtora da ficha do cliente) */}
+                  <PremiumCard className="p-4 border-surface-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
+                    <h4 className="text-[11px] uppercase tracking-wider font-bold text-text-secondary mb-4 flex items-center gap-1.5"><Building2 size={14} className="text-green-400" /> Construtoras</h4>
+                    <div className="h-44 w-full">
+                      {builderDataLocal.length === 0 ? (
+                        <div className="flex h-full items-center justify-center text-xs text-text-secondary text-center px-4">Sem dados de construtora no período.</div>
+                      ) : (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={builderDataLocal} layout="vertical" margin={{ left: 8, right: 16 }}>
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#1e2636" />
+                            <XAxis type="number" hide />
+                            <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} width={90} tick={{ fontSize: 9, fill: '#8b94a3' }} />
+                            <Tooltip
+                              cursor={{ fill: 'transparent' }}
+                              contentStyle={{ borderRadius: '8px', border: '1px solid #2b3547', backgroundColor: '#0d111a', color: '#f4f6fb', boxShadow: '0 4px 20px rgba(0,0,0,0.4)' }}
+                              itemStyle={{ color: '#f4f6fb' }}
+                              formatter={(value: any, name: any, props: any) => [`${value} clientes (${props.payload.percentual}%)`, 'Quantidade']}
+                            />
+                            <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                              {builderDataLocal.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      )}
+                    </div>
+                  </PremiumCard>
+                </div>
+
+                {/* TOP 3 RANKINGS */}
+                {[{
+                  key: 'brokers',
+                  title: `Ranking de Corretores (Top 3 • ${selectedPeriodLabel})`,
+                  label: 'Corretor',
+                  rows: periodBrokerRanking,
+                  empty: `Nenhum corretor com dados no período ${selectedPeriodLabel}.`,
+                }, {
+                  key: 'managers',
+                  title: `Ranking de Gerentes (Top 3 • ${selectedPeriodLabel})`,
+                  label: 'Gerente',
+                  rows: periodManagerRanking,
+                  empty: `Nenhum gerente com dados no período ${selectedPeriodLabel}.`,
+                }, {
+                  key: 'coordinators',
+                  title: `Ranking de Coordenadores (Top 3 • ${selectedPeriodLabel})`,
+                  label: 'Coordenador',
+                  rows: periodCoordinatorRanking,
+                  empty: `Nenhum coordenador com dados no período ${selectedPeriodLabel}.`,
+                }].map((ranking) => (
+                  <PremiumCard key={ranking.key} className="p-0 overflow-hidden border-surface-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] mt-4">
+                    <div className="p-3 border-b border-surface-100 flex items-center justify-between bg-surface-50">
+                      <h4 className="text-[11px] uppercase tracking-wider font-bold text-text-secondary flex items-center gap-1.5"><Trophy size={14} className="text-gold-500" /> {ranking.title}</h4>
+                      <span className="text-[10px] font-bold text-text-secondary bg-card-bg px-2 py-0.5 border border-surface-200 rounded-md shadow-sm">{ranking.rows.length}/3</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse min-w-[760px]">
+                        <thead>
+                          <tr className="bg-card-bg text-text-secondary text-[9px] uppercase tracking-wider border-b border-surface-100">
+                            <th className="p-3 font-bold">{ranking.label}</th>
+                            <th className="p-3 font-bold text-center">Clientes</th>
+                            <th className="p-3 font-bold text-center">Vendas</th>
+                            <th className="p-3 font-bold text-center">Conversão</th>
+                            <th className="p-3 font-bold text-right">VGV / Receita</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ranking.rows.map((c: any, i: number) => (
+                            <tr key={`${ranking.key}-${c.entity_id}`} className="border-b border-surface-50 last:border-0 hover:bg-surface-50/50 transition-colors">
+                              <td className="p-3 text-[11px] font-bold text-text-primary flex items-center gap-2">
+                                <span className={`text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-bold shadow-sm shrink-0 ${i === 0 ? 'bg-gradient-to-br from-yellow-300 to-yellow-500 text-white' : i === 1 ? 'bg-gradient-to-br from-gray-200 to-gray-400 text-white' : 'bg-gradient-to-br from-orange-300 to-orange-500 text-white'}`}>{i + 1}</span>
+                                <span className="truncate max-w-[70px]" title={String(c.nome || '').trim() || 'Sem nome'}>
+                                  {formatBrokerDisplayName(c.nome)}
+                                </span>
+                              </td>
+                              <td className="p-3 text-[11px] text-center text-text-secondary font-medium">{c.Li}</td>
+                              <td className="p-3 text-[11px] text-center font-black text-green-600">{c.Vi}</td>
+                              <td className="p-3 text-center">
+                                <span className={`px-1.5 py-0.5 rounded-sm text-[9px] font-bold ${c.Taxa_Conversao_i >= 5 ? 'bg-green-50 text-green-700' : c.Taxa_Conversao_i > 0 ? 'bg-blue-50 text-blue-700' : 'bg-surface-50 text-text-secondary'}`}>
+                                  {c.Taxa_Conversao_i}%
+                                </span>
+                              </td>
+                              <td className="p-3 text-[11px] text-right font-bold text-text-primary tracking-tight">
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0, notation: 'compact' }).format(c.Ri)}
+                              </td>
+                            </tr>
+                          ))}
+                          {ranking.rows.length === 0 && (
+                            <tr><td colSpan={5} className="p-8 text-center text-text-secondary text-sm">{ranking.empty}</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </PremiumCard>
+                ))}
+              </>
+            )}
           </div>
         );
 
@@ -1030,20 +2248,15 @@ export default function AdminPanel() {
           { id: 'teams', label: 'Equipes', icon: Shield },
           { id: 'goals', label: 'Metas', icon: Target },
           { id: 'announcements', label: 'Anúncios', icon: Megaphone },
+          { id: 'reports', label: 'Relatórios', icon: BarChart3, adminOnly: true },
           { id: 'directorates', label: 'Diretorias', icon: Building2 },
           { id: 'gamification', label: 'Gamificação', icon: Zap },
-        ].map((tab) => (
+        ].filter(tab => !tab.adminOnly || isAdmin).map((tab) => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id as Tab)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${activeTab === tab.id ? 'bg-gold-500 text-white shadow-md shadow-gold-500/20' : 'bg-card-bg dark:bg-surface-100 text-text-secondary border border-surface-200'}`}>
             <tab.icon size={14} /> {tab.label}
           </button>
         ))}
-        <button
-          onClick={() => navigate('/reports')}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all bg-card-bg dark:bg-surface-100 text-text-secondary border border-surface-200 hover:border-gold-400 hover:text-gold-500"
-        >
-          <BarChart3 size={14} /> Central de Relatórios
-        </button>
         <button
           onClick={() => navigate('/admin/security')}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all bg-card-bg dark:bg-surface-100 text-text-secondary border border-surface-200 hover:border-gold-400 hover:text-gold-500"
@@ -1191,7 +2404,7 @@ export default function AdminPanel() {
           <div className="max-h-60 overflow-y-auto space-y-2">
             {allProfiles.filter(u => u.status === 'active' || u.status === 'Ativo').map(u => {
               const team = teams.find(t => t.id === selectedTeamId);
-              const isMember = team ? getTeamMemberIds(team, allProfiles).includes(u.id) : false;
+              const isMember = team ? getTeamMemberIds(team).includes(u.id) : false;
               return (
                 <div key={u.id} className="flex justify-between items-center p-2 bg-surface-50 rounded-lg">
                   <div className="flex items-center gap-2">

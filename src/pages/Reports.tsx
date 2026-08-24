@@ -1,26 +1,19 @@
 import { useState, useMemo } from 'react';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { loadKaizenLogo, drawReportHeader, addStandardFooters } from '@/lib/pdf/reportKit';
-import { buildPdfReport } from '@/lib/pdf/buildPdfReport';
 import { SectionHeader, PageHeader, PremiumCard, RoundedButton, StatusBadge } from '@/components/ui/PremiumComponents';
 import { MetricCard } from '@/components/reports/MetricCard';
 import { CircularScore } from '@/components/reports/CircularScore';
-import PipelinePdfExport from '@/components/reports/PipelinePdfExport';
-import { AreaChart, Area, BarChart, Bar, LineChart, Line, Legend, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Loader2, Building2, Users, TrendingUp, Target, ArrowLeft, AlertCircle, Timer, Shield, ChevronRight, ChevronLeft, X, MoreHorizontal, FileText, FileDown, FileSpreadsheet, Printer, MapPin, CalendarCheck, Trophy, BarChart3 } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { Loader2, Building2, Users, TrendingUp, Target, ArrowLeft, AlertCircle, Timer, Shield, ChevronRight, X, MoreHorizontal, FileText } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp, Team } from '@/context/AppContext';
 import { logAuditEvent } from '@/services/auditLogger';
 import { useAuthorization } from '@/hooks/useAuthorization';
 import { useReportsData } from '@/hooks/useReportsData';
-import { useOperationsReport } from '@/hooks/useOperationsReport';
 import { STAGE_WEIGHTS } from '@/types/reports';
 import { parseDateOnlyLocal, parseDateOnlyLocalEnd, toDateOnlyLocal, toPtBrDate } from '@/lib/dateRange';
-import { formatBrokerDisplayName, getTeamMemberIds, isSaleInPeriod, parseCurrency, profileMatchesTeam } from '@/lib/reportUtils';
-
-/** Palette for geography/builder charts (on-palette: blue/green first, then accents) */
-const CHART_COLORS = ['#2563eb', '#22c55e', '#8b5cf6', '#f59e0b', '#06b6d4', '#ec4899', '#ef4444', '#14b8a6'];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -77,6 +70,75 @@ function PeriodFilters({
   );
 }
 
+/** Parse "R$ 200.000,00" → 200000 */
+function parseValue(v: string): number {
+  if (!v) return 0;
+  const clean = v.replace(/[R$\s.]/g, '').replace(',', '.');
+  return parseFloat(clean) || 0;
+}
+
+const normalizeTeamRef = (value?: string | null) => String(value || '').trim().toLowerCase();
+
+function profileMatchesTeam(profile: { team?: string; team_id?: string | null }, team: Team): boolean {
+  if (profile.team_id === team.id || profile.team === team.id) return true;
+
+  // Legacy fallback: some older records store the team name in `profiles.team`
+  const profileTeamName = normalizeTeamRef(profile.team);
+  const teamName = normalizeTeamRef(team.name);
+  return profileTeamName.length > 0 && profileTeamName === teamName;
+}
+
+function getTeamMemberIds(team: Team, profiles: Array<{
+  id: string;
+  role?: string;
+  team?: string;
+  team_id?: string | null;
+  manager_id?: string | null;
+  coordinator_id?: string | null;
+}>): string[] {
+  const directMembers = profiles.filter(p => profileMatchesTeam(p, team)).map(p => p.id);
+  const managerId = team.manager_id || null;
+  const managerLinked = managerId
+    ? profiles.filter(p => p.manager_id === managerId).map(p => p.id)
+    : [];
+
+  const coordinatorIds = managerId
+    ? profiles
+      .filter(p => p.role?.toUpperCase() === 'COORDENADOR' && p.manager_id === managerId)
+      .map(p => p.id)
+    : [];
+
+  const coordinatorLinkedBrokers = coordinatorIds.length > 0
+    ? profiles
+      .filter(p => p.role?.toUpperCase() === 'CORRETOR' && p.coordinator_id && coordinatorIds.includes(p.coordinator_id))
+      .map(p => p.id)
+    : [];
+
+  return Array.from(new Set([
+    ...(team.members ?? []),
+    ...directMembers,
+    ...(managerId ? [managerId] : []),
+    ...managerLinked,
+    ...coordinatorIds,
+    ...coordinatorLinkedBrokers,
+  ]));
+}
+
+function parseIsoDate(value?: string | null): number | null {
+  if (!value) return null;
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function isSaleInPeriod(client: any, start: number | null, end: number | null): boolean {
+  if (client?.stage !== 'Concluído') return false;
+  const saleDate = parseIsoDate(client?.closed_at);
+  if (saleDate === null) return false;
+  if (start !== null && saleDate < start) return false;
+  if (end !== null && saleDate > end) return false;
+  return true;
+}
+
 // ─── Sub-view: Equipe Report ────────────────────────────────────────────────────
 
 function TeamReportView({
@@ -127,7 +189,7 @@ function TeamReportView({
   const vendas = teamSales.length;
   const aprovados = teamClients.filter(c => c.stage === 'Aprovado').length;
   const taxaConversao = totalClientes > 0 ? Math.round((vendas / totalClientes) * 100) : 0;
-  const vgv = teamSales.reduce((acc, c) => acc + parseCurrency(c.intendedValue), 0);
+  const vgv = teamSales.reduce((acc, c) => acc + parseValue(c.intendedValue), 0);
 
   // Stage breakdown
   const byStage: Record<string, number> = {};
@@ -524,7 +586,7 @@ function CoordReportView({
   const vendas = coordSales.length;
   const aprovados = coordClients.filter(c => c.stage === 'Aprovado').length;
   const taxaConversao = totalClientes > 0 ? Math.round((vendas / totalClientes) * 100) : 0;
-  const vgv = coordSales.reduce((acc, c) => acc + parseCurrency(c.intendedValue), 0);
+  const vgv = coordSales.reduce((acc, c) => acc + parseValue(c.intendedValue), 0);
 
   const byStage: Record<string, number> = {};
   coordClients.forEach(c => { byStage[c.stage] = (byStage[c.stage] ?? 0) + 1; });
@@ -777,7 +839,7 @@ function DiretoriaReportView({
         'Em Análise': 50, 'Documentação': 40, 'Novo Lead': 35, 'Desistência': 0, 'Reprovado': 10, 'Concluído': 100,
       };
       let score = stageBase[c.stage] ?? 50;
-      if (parseCurrency(c.intendedValue ?? '') > 0) score += 10;
+      if (parseValue(c.intendedValue ?? '') > 0) score += 10;
       if (c.updated_at) {
         const days = (Date.now() - new Date(c.updated_at).getTime()) / (1000 * 60 * 60 * 24);
         if (days > 10) score -= 15;
@@ -795,7 +857,7 @@ function DiretoriaReportView({
     const pipeline = months.map((m, i) => {
       // Pipeline uses ALL directorate clients grouped by creation month — not period-filtered.
       const mc = dirScopedClients.filter(c => new Date(c.createdAt).getMonth() === i);
-      const weighted = mc.reduce((acc, c) => acc + parseCurrency(c.intendedValue ?? '') * (STAGE_WEIGHTS[c.stage] ?? 0), 0);
+      const weighted = mc.reduce((acc, c) => acc + parseValue(c.intendedValue ?? '') * (STAGE_WEIGHTS[c.stage] ?? 0), 0);
       // confirmed = Concluído clients whose closed_at falls in month i.
       const confirmed = dirScopedClients
         .filter(c => {
@@ -804,7 +866,7 @@ function DiretoriaReportView({
           if (!closedRaw) return false;
           return new Date(closedRaw).getMonth() === i;
         })
-        .reduce((acc, c) => acc + parseCurrency(c.intendedValue ?? ''), 0);
+        .reduce((acc, c) => acc + parseValue(c.intendedValue ?? ''), 0);
       totalWeightedBRL += weighted;
       return { month: m, weighted: weighted / 1000, confirmed: confirmed / 1000 };
     });
@@ -854,7 +916,7 @@ function DiretoriaReportView({
           const vendasEquipe = isSingleTeamDirectorate
             ? dirScopedClients.filter((c) => isSaleInPeriod(c, startDate ? parseDateOnlyLocal(startDate).getTime() : null, endDate ? parseDateOnlyLocalEnd(endDate).getTime() : null))
             : dirScopedClients.filter((c) => memberIds.includes((c as any).owner_id) && isSaleInPeriod(c, startDate ? parseDateOnlyLocal(startDate).getTime() : null, endDate ? parseDateOnlyLocalEnd(endDate).getTime() : null));
-          const vgvEquipe = vendasEquipe.reduce((acc, c) => acc + parseCurrency(c.intendedValue), 0);
+          const vgvEquipe = vendasEquipe.reduce((acc, c) => acc + parseValue(c.intendedValue), 0);
           return {
             equipe: team.name,
             clientes: teamClients.length,
@@ -1062,7 +1124,7 @@ function DiretoriaReportView({
                   <div>
                     <h4 className="font-bold text-text-primary text-sm">{client.name}</h4>
                     <p className="text-xs text-text-secondary">
-                      {client.stage}{parseCurrency(client.potentialValue ?? '') > 0 ? ` • ${brl(parseCurrency(client.potentialValue ?? ''))}` : ''}
+                      {client.stage}{parseValue(client.potentialValue ?? '') > 0 ? ` • ${brl(parseValue(client.potentialValue ?? ''))}` : ''}
                     </p>
                   </div>
                 </div>
@@ -1161,24 +1223,6 @@ export default function Reports() {
     startDate,
     endDate,
   });
-
-  // ── Operational hub data (funil, tendências, geografia, rankings) — same date range
-  const ops = useOperationsReport({ startDate, endDate });
-  const canViewExecReports = isAdmin || isDirector;
-  const rawTab = searchParams.get('tab') ?? 'visao-geral';
-  const activeTab = (!canViewExecReports && (rawTab === 'geografia' || rawTab === 'rankings')) ? 'visao-geral' : rawTab;
-  const [drillCity, setDrillCity] = useState<string | null>(null);
-  const [isPipelineModalOpen, setIsPipelineModalOpen] = useState(false);
-  const [pdfExportType, setPdfExportType] = useState<'equipes' | 'coordenacao' | null>(null);
-  const drillBairroData = drillCity ? ops.getDrillBairroData(drillCity) : [];
-  const selectedPeriodLabel = `${toPtBrDate(startDate)} a ${toPtBrDate(endDate)}`;
-
-  function handleTabChange(tabId: string) {
-    const params = new URLSearchParams(searchParams);
-    if (tabId === 'visao-geral') params.delete('tab');
-    else params.set('tab', tabId);
-    setSearchParams(params);
-  }
 
   // ── Metric cards for display
   const metrics = [
@@ -1454,126 +1498,6 @@ export default function Reports() {
     }
   };
 
-  // ── Consolidated exports (absorbed from the old admin reports tab) ──────────
-  const handleExportTeamsPdf = async () => {
-    setPdfExportType('equipes');
-    try {
-      await buildPdfReport({
-        filename: `relatorio-equipes-${startDate}-${endDate}.pdf`,
-        title: 'Relatorio por Equipe',
-        subtitle: `Periodo ${selectedPeriodLabel}`,
-        metrics: [
-          { label: 'Equipes com resultado', value: String(ops.reportByTeam.length) },
-          { label: 'Clientes no periodo', value: String(ops.reportByTeam.reduce((acc, row) => acc + row.clientes, 0)) },
-          { label: 'Vendas concluidas', value: String(ops.reportByTeam.reduce((acc, row) => acc + row.vendas, 0)) },
-          { label: 'Receita total', value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(ops.reportByTeam.reduce((acc, row) => acc + row.receita, 0)) },
-        ],
-        columns: [
-          { header: 'Equipe', width: 185 },
-          { header: 'Corretores', width: 70 },
-          { header: 'Clientes', width: 62 },
-          { header: 'Vendas', width: 58 },
-          { header: 'Conv.%', width: 55 },
-          { header: 'Receita', width: 122 },
-        ],
-        rows: ops.reportByTeam.map((row) => [
-          row.nome,
-          String(row.corretores),
-          String(row.clientes),
-          String(row.vendas),
-          `${row.conversao}%`,
-          new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(row.receita),
-        ]),
-      });
-      logAuditEvent({ action: 'document_downloaded', entity: 'report', entityId: `relatorio-equipes-${startDate}-${endDate}`, metadata: { type: 'relatorio_equipes', start: startDate, end: endDate } });
-    } catch (error) {
-      console.error('Erro ao gerar PDF por equipe', error);
-      alert('Nao foi possivel gerar o PDF por equipe.');
-    } finally {
-      setPdfExportType(null);
-    }
-  };
-
-  const handleExportCoordinationsPdf = async () => {
-    setPdfExportType('coordenacao');
-    try {
-      await buildPdfReport({
-        filename: `relatorio-coordenacao-${startDate}-${endDate}.pdf`,
-        title: 'Relatorio por Coordenacao',
-        subtitle: `Periodo ${selectedPeriodLabel}`,
-        metrics: [
-          { label: 'Coordenacoes com resultado', value: String(ops.reportByCoordination.length) },
-          { label: 'Corretores mapeados', value: String(ops.reportByCoordination.reduce((acc, row) => acc + row.corretores, 0)) },
-          { label: 'Vendas concluidas', value: String(ops.reportByCoordination.reduce((acc, row) => acc + row.vendas, 0)) },
-          { label: 'Receita total', value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(ops.reportByCoordination.reduce((acc, row) => acc + row.receita, 0)) },
-        ],
-        columns: [
-          { header: 'Coordenacao', width: 185 },
-          { header: 'Corretores', width: 70 },
-          { header: 'Clientes', width: 62 },
-          { header: 'Vendas', width: 58 },
-          { header: 'Conv.%', width: 55 },
-          { header: 'Receita', width: 122 },
-        ],
-        rows: ops.reportByCoordination.map((row) => [
-          row.nome,
-          String(row.corretores),
-          String(row.clientes),
-          String(row.vendas),
-          `${row.conversao}%`,
-          new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(row.receita),
-        ]),
-      });
-      logAuditEvent({ action: 'document_downloaded', entity: 'report', entityId: `relatorio-coordenacao-${startDate}-${endDate}`, metadata: { type: 'relatorio_coordenacao', start: startDate, end: endDate } });
-    } catch (error) {
-      console.error('Erro ao gerar PDF por coordenação', error);
-      alert('Nao foi possivel gerar o PDF por coordenacao.');
-    } finally {
-      setPdfExportType(null);
-    }
-  };
-
-  const handleExportCsv = () => {
-    try {
-      const receitaTotal = ops.periodSales.reduce((acc, c) => acc + parseCurrency(c.intendedValue), 0);
-      const rows = [
-        ['Métrica', 'Valor'],
-        ['Total de Leads', String(ops.periodLeads.length)],
-        ['Total de Clientes', String(ops.periodClients.length)],
-        ['Vendas Concluídas', String(ops.periodSalesCount)],
-        ['Receita Total', receitaTotal.toFixed(2)],
-        ['Agendamentos', String(ops.upcomingAppointmentsCount)],
-        ['Taxa de Conversão', `${ops.conversion.toFixed(1)}%`],
-        ['Ticket Médio', ops.periodSalesCount > 0 ? (receitaTotal / ops.periodSalesCount).toFixed(2) : '0'],
-        ['Tempo Médio de Conversão (dias)', String(globalMetrics.cicloMedioDias)],
-        [],
-        ['Pipeline - Etapa', 'Quantidade', 'Percentual']
-      ];
-
-      ops.pipelineByStage.forEach((p) => {
-        rows.push([p.etapa, p.quantidade.toString(), `${p.percentual}%`]);
-      });
-
-      rows.push([]);
-      rows.push(['Corretores - Nome', 'Clientes', 'Vendas', 'Receita', 'Taxa Conversão']);
-      ops.brokerRanking.forEach((c) => {
-        rows.push([c.nome, c.Li.toString(), c.Vi.toString(), c.Ri.toString(), `${c.Taxa_Conversao_i}%`]);
-      });
-
-      const csvContent = "data:text/csv;charset=utf-8,﻿" + rows.map(e => e.join(";")).join("\n");
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `relatorio_${startDate}_${endDate}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      logAuditEvent({ action: 'document_downloaded', entity: 'report', entityId: `relatorio_${startDate}_${endDate}.csv`, metadata: { type: 'relatorio_csv', start: startDate, end: endDate } });
-    } catch (e) {
-      console.error('Erro ao gerar CSV', e);
-    }
-  };
-
   if (loading) return (
     <div className="flex items-center justify-center min-h-screen">
       <Loader2 className="w-8 h-8 text-gold-500 animate-spin" />
@@ -1590,29 +1514,6 @@ export default function Reports() {
 
       {/* ── Period Filters ── */}
       <PeriodFilters period={period} onPeriodChange={handlePeriodChange} />
-
-      {/* ── Hub Tabs ── */}
-      <div className="flex gap-2 mb-6 overflow-x-auto no-scrollbar pb-2 print:hidden">
-        {([
-          { id: 'visao-geral', label: 'Visão Geral' },
-          { id: 'funil', label: 'Funil & Tendências' },
-          { id: 'geografia', label: 'Geografia & Construtoras', execOnly: true },
-          { id: 'rankings', label: 'Rankings', execOnly: true },
-        ] as Array<{ id: string; label: string; execOnly?: boolean }>)
-          .filter((t) => !t.execOnly || canViewExecReports)
-          .map((t) => (
-            <button
-              key={t.id}
-              onClick={() => handleTabChange(t.id)}
-              className={`px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${activeTab === t.id
-                ? 'bg-primary-600 text-white shadow-md'
-                : 'bg-card-bg text-text-secondary border border-surface-200'
-                }`}
-            >
-              {t.label}
-            </button>
-          ))}
-      </div>
 
       <div className="print:hidden flex justify-end mb-6 relative">
         <button
@@ -1632,38 +1533,8 @@ export default function Reports() {
                   onClick={() => { setIsExportMenuOpen(false); handleExport('pdf'); }}
                   className="w-full flex items-center gap-2 px-2.5 py-2 border border-surface-200 rounded-lg text-text-secondary text-[11px] font-semibold hover:text-gold-700 hover:bg-gold-50 transition-colors"
                 >
-                  <FileText size={14} /> PDF Visão Global
+                  <FileText size={14} /> PDF
                 </button>
-                {isAdmin && (
-                  <>
-                    <button
-                      onClick={() => { setIsExportMenuOpen(false); handleExportTeamsPdf(); }}
-                      disabled={pdfExportType !== null}
-                      className="w-full flex items-center gap-2 px-2.5 py-2 border border-surface-200 rounded-lg text-text-secondary text-[11px] font-semibold hover:text-gold-700 hover:bg-gold-50 transition-colors disabled:opacity-50"
-                    >
-                      {pdfExportType === 'equipes' ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />} PDF por Equipes
-                    </button>
-                    <button
-                      onClick={() => { setIsExportMenuOpen(false); handleExportCoordinationsPdf(); }}
-                      disabled={pdfExportType !== null}
-                      className="w-full flex items-center gap-2 px-2.5 py-2 border border-surface-200 rounded-lg text-text-secondary text-[11px] font-semibold hover:text-gold-700 hover:bg-gold-50 transition-colors disabled:opacity-50"
-                    >
-                      {pdfExportType === 'coordenacao' ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />} PDF por Coordenações
-                    </button>
-                    <button
-                      onClick={() => { setIsExportMenuOpen(false); handleExportCsv(); }}
-                      className="w-full flex items-center gap-2 px-2.5 py-2 border border-surface-200 rounded-lg text-text-secondary text-[11px] font-semibold hover:text-gold-700 hover:bg-gold-50 transition-colors"
-                    >
-                      <FileSpreadsheet size={14} /> CSV Completo
-                    </button>
-                    <button
-                      onClick={() => { setIsExportMenuOpen(false); setIsPipelineModalOpen(true); }}
-                      className="w-full flex items-center gap-2 px-2.5 py-2 border border-surface-200 rounded-lg text-text-secondary text-[11px] font-semibold hover:text-gold-700 hover:bg-gold-50 transition-colors"
-                    >
-                      <Printer size={14} /> Pipeline por Corretor
-                    </button>
-                  </>
-                )}
               </div>
             </div>
           </>
@@ -1671,20 +1542,13 @@ export default function Reports() {
       </div>
 
       {/* ── Metric Cards ── */}
-      {activeTab === 'visao-geral' && (
       <section className="grid grid-cols-2 gap-3 mb-8">
         {metrics.map((metric) => (
           <MetricCard key={metric.id} {...metric} inverse={metric.label === 'Ciclo de Vendas'} />
         ))}
-        <PremiumCard highlight className="col-span-2 flex flex-col gap-1">
-          <p className="text-[10px] text-gold-700 dark:text-gold-400 uppercase tracking-wide">VGV Concluído</p>
-          <h3 className="font-ui text-2xl font-bold text-text-primary mt-1">{brl(ops.vgv)}</h3>
-        </PremiumCard>
       </section>
-      )}
 
       {/* ── Weighted Pipeline Chart ── */}
-      {activeTab === 'visao-geral' && (
       <section className="mb-8 print:break-inside-avoid">
         <SectionHeader title="Forecast Comercial" subtitle="Pipeline Ponderado por Probabilidade de Estágio" />
         <PremiumCard className="p-4 h-80">
@@ -1732,10 +1596,8 @@ export default function Reports() {
           </div>
         </PremiumCard>
       </section>
-      )}
 
       {/* ── Health Score ── */}
-      {activeTab === 'visao-geral' && (
       <section>
         <SectionHeader title="Health Score Comercial" subtitle="Risco e Probabilidade — Ponderado" />
         <div className="space-y-3">
@@ -1748,7 +1610,7 @@ export default function Reports() {
                   <div>
                     <h4 className="font-bold text-text-primary text-sm">{client.name}</h4>
                     <p className="text-xs text-text-secondary">
-                      {client.stage}{parseCurrency(client.potentialValue ?? '') > 0 ? ` • ${brl(parseCurrency(client.potentialValue ?? ''))}` : ''}
+                      {client.stage}{parseValue(client.potentialValue ?? '') > 0 ? ` • ${brl(parseValue(client.potentialValue ?? ''))}` : ''}
                     </p>
                   </div>
                 </div>
@@ -1762,10 +1624,9 @@ export default function Reports() {
             ))}
         </div>
       </section>
-      )}
 
       {/* ── Por Coordenação (GERENTE) ── */}
-      {activeTab === 'visao-geral' && isManager && (() => {
+      {isManager && (() => {
         const myCoords = allProfiles.filter(
           p => p.manager_id === profile?.id && p.role?.toUpperCase() === 'COORDENADOR'
         );
@@ -1801,7 +1662,7 @@ export default function Reports() {
       })()}
 
       {/* ── Por Equipe ── */}
-      {activeTab === 'visao-geral' && canViewAllClients && (() => {
+      {canViewAllClients && (() => {
         const myDirectorateId = profile?.directorate_id || allProfiles.find(p => p.id === profile?.id)?.directorate_id;
         const visibleTeams = isAdmin
           ? teams
@@ -1850,248 +1711,6 @@ export default function Reports() {
         </section>
         );
       })()}
-
-      {/* ── Presença & Engajamento (ADMIN/DIRETOR) ── */}
-      {activeTab === 'visao-geral' && canViewExecReports && (
-        <section className="mt-8 print:hidden">
-          <SectionHeader title="Presença & Engajamento" subtitle="Check-ins, score de engajamento e alertas de ausência" />
-          <PremiumCard
-            className="flex items-center justify-between p-4 cursor-pointer hover:border-gold-300 transition-colors"
-            onClick={() => navigate('/admin/reports/presence')}
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gold-50 dark:bg-gold-900/20 flex items-center justify-center">
-                <CalendarCheck size={20} className="text-gold-500" />
-              </div>
-              <div>
-                <h4 className="font-bold text-text-primary">Relatório de Presença</h4>
-                <p className="text-xs text-text-secondary">Check-ins diários, ranking de presença e score de engajamento da equipe</p>
-              </div>
-            </div>
-            <span className="text-gold-600 font-medium text-sm">Abrir →</span>
-          </PremiumCard>
-        </section>
-      )}
-
-      {/* ── Tab: Funil & Tendências ── */}
-      {activeTab === 'funil' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2 print:gap-6 print:break-inside-avoid">
-          <PremiumCard className="p-4 border-surface-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
-            <h4 className="text-[11px] uppercase tracking-wider font-bold text-text-secondary mb-4 flex items-center gap-1.5"><BarChart3 size={14} className="text-primary-400" /> Distribuição de Pipeline</h4>
-            <div className="h-44 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={ops.pipelineByStage}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e2636" />
-                  <XAxis dataKey="etapa" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#8b94a3' }} />
-                  <YAxis hide />
-                  <Tooltip
-                    cursor={{ fill: 'transparent' }}
-                    contentStyle={{ borderRadius: '8px', border: '1px solid #2b3547', backgroundColor: '#0d111a', color: '#f4f6fb', boxShadow: '0 4px 20px rgba(0,0,0,0.4)' }}
-                    itemStyle={{ color: '#f4f6fb' }}
-                    labelStyle={{ color: '#8b94a3' }}
-                    formatter={(value: any, name: any, props: any) => [`${value} Clientes (${props.payload.percentual}%)`, 'Quantidade']}
-                  />
-                  <Bar dataKey="quantidade" fill="#2563eb" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </PremiumCard>
-
-          <PremiumCard className="p-4 border-surface-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
-            <h4 className="text-[11px] uppercase tracking-wider font-bold text-text-secondary mb-4 flex items-center gap-1.5"><TrendingUp size={14} className="text-blue-400" /> Tendência no Período</h4>
-            <div className="h-44 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={ops.trendData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e2636" />
-                  <XAxis dataKey="periodo" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: '#8b94a3' }} tickFormatter={(v) => v.substring(8, 10) + '/' + v.substring(5, 7)} />
-                  <YAxis hide yAxisId="left" />
-                  <YAxis hide yAxisId="right" orientation="right" />
-                  <Tooltip
-                    contentStyle={{ borderRadius: '8px', border: '1px solid #2b3547', backgroundColor: '#0d111a', color: '#f4f6fb', boxShadow: '0 4px 20px rgba(0,0,0,0.4)' }}
-                    itemStyle={{ color: '#f4f6fb' }}
-                    labelStyle={{ color: '#8b94a3' }}
-                    labelFormatter={(label) => `Data: ${label.split('-').reverse().join('/')}`}
-                  />
-                  <Legend wrapperStyle={{ fontSize: '9px', paddingTop: '10px' }} />
-                  <Line yAxisId="left" type="monotone" dataKey="Lt" name="Leads Adquiridos" stroke="#8b94a3" strokeWidth={2} dot={false} />
-                  <Line yAxisId="left" type="monotone" dataKey="Vt" name="Vendas Concluídas" stroke="#22c55e" strokeWidth={3} dot={{ r: 3, strokeWidth: 2 }} activeDot={{ r: 5 }} />
-                  <Line yAxisId="right" type="monotone" dataKey="Rt" name="Receita" stroke="#2563eb" strokeWidth={2} dot={false} strokeDasharray="5 5" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </PremiumCard>
-        </div>
-      )}
-
-      {/* ── Tab: Geografia & Construtoras (ADMIN/DIRETOR) ── */}
-      {activeTab === 'geografia' && canViewExecReports && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2 print:gap-6 print:break-inside-avoid">
-          <PremiumCard className="p-4 border-surface-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="text-[11px] uppercase tracking-wider font-bold text-text-secondary flex items-center gap-1.5">
-                <MapPin size={14} className="text-primary-400" />
-                {drillCity ? `Bairros — ${drillCity}` : 'Regiões de Interesse'}
-              </h4>
-              {drillCity ? (
-                <button onClick={() => setDrillCity(null)} className="flex items-center gap-1 text-[10px] font-semibold text-primary-400 hover:text-primary-300 transition-colors">
-                  <ChevronLeft size={13} /> Cidades
-                </button>
-              ) : (
-                ops.regionData.length > 0 && <span className="text-[9px] text-text-secondary">clique p/ ver bairros</span>
-              )}
-            </div>
-            <div className="h-44 w-full">
-              {!drillCity ? (
-                ops.regionData.length === 0 ? (
-                  <div className="flex h-full items-center justify-center text-xs text-text-secondary text-center px-4">Sem dados de cidade no período.</div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={ops.regionData} dataKey="value" nameKey="name" cx="50%" cy="50%"
-                        innerRadius={38} outerRadius={64} paddingAngle={2} stroke="none" className="cursor-pointer"
-                        onClick={(d: any) => { const n = d?.name ?? d?.payload?.name; if (n) setDrillCity(n); }}
-                      >
-                        {ops.regionData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} className="cursor-pointer" />)}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{ borderRadius: '8px', border: '1px solid #2b3547', backgroundColor: '#0d111a', color: '#f4f6fb', boxShadow: '0 4px 20px rgba(0,0,0,0.4)' }}
-                        itemStyle={{ color: '#f4f6fb' }}
-                        formatter={(value: any, name: any, props: any) => [`${value} (${props.payload.percentual}%)`, name]}
-                      />
-                      <Legend wrapperStyle={{ fontSize: '9px' }} iconType="circle" />
-                    </PieChart>
-                  </ResponsiveContainer>
-                )
-              ) : (
-                drillBairroData.length === 0 ? (
-                  <div className="flex h-full items-center justify-center text-xs text-text-secondary text-center px-4">Sem bairros informados para {drillCity} no período.</div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={drillBairroData} layout="vertical" margin={{ left: 8, right: 16 }}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#1e2636" />
-                      <XAxis type="number" hide />
-                      <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} width={96} tick={{ fontSize: 9, fill: '#8b94a3' }} />
-                      <Tooltip
-                        cursor={{ fill: 'transparent' }}
-                        contentStyle={{ borderRadius: '8px', border: '1px solid #2b3547', backgroundColor: '#0d111a', color: '#f4f6fb', boxShadow: '0 4px 20px rgba(0,0,0,0.4)' }}
-                        itemStyle={{ color: '#f4f6fb' }}
-                        formatter={(value: any, name: any, props: any) => [`${value} clientes (${props.payload.percentual}%)`, 'Quantidade']}
-                      />
-                      <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                        {drillBairroData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                )
-              )}
-            </div>
-          </PremiumCard>
-
-          <PremiumCard className="p-4 border-surface-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
-            <h4 className="text-[11px] uppercase tracking-wider font-bold text-text-secondary mb-4 flex items-center gap-1.5"><Building2 size={14} className="text-green-400" /> Construtoras</h4>
-            <div className="h-44 w-full">
-              {ops.builderData.length === 0 ? (
-                <div className="flex h-full items-center justify-center text-xs text-text-secondary text-center px-4">Sem dados de construtora no período.</div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={ops.builderData} layout="vertical" margin={{ left: 8, right: 16 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#1e2636" />
-                    <XAxis type="number" hide />
-                    <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} width={90} tick={{ fontSize: 9, fill: '#8b94a3' }} />
-                    <Tooltip
-                      cursor={{ fill: 'transparent' }}
-                      contentStyle={{ borderRadius: '8px', border: '1px solid #2b3547', backgroundColor: '#0d111a', color: '#f4f6fb', boxShadow: '0 4px 20px rgba(0,0,0,0.4)' }}
-                      itemStyle={{ color: '#f4f6fb' }}
-                      formatter={(value: any, name: any, props: any) => [`${value} clientes (${props.payload.percentual}%)`, 'Quantidade']}
-                    />
-                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                      {ops.builderData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-          </PremiumCard>
-        </div>
-      )}
-
-      {/* ── Tab: Rankings (ADMIN/DIRETOR) ── */}
-      {activeTab === 'rankings' && canViewExecReports && (
-        <div className="space-y-4">
-          {[{
-            key: 'brokers',
-            title: `Ranking de Corretores (Top 3 • ${selectedPeriodLabel})`,
-            label: 'Corretor',
-            rows: ops.brokerRankingTop3,
-            empty: `Nenhum corretor com dados no período ${selectedPeriodLabel}.`,
-          }, {
-            key: 'managers',
-            title: `Ranking de Gerentes (Top 3 • ${selectedPeriodLabel})`,
-            label: 'Gerente',
-            rows: ops.managerRankingTop3,
-            empty: `Nenhum gerente com dados no período ${selectedPeriodLabel}.`,
-          }, {
-            key: 'coordinators',
-            title: `Ranking de Coordenadores (Top 3 • ${selectedPeriodLabel})`,
-            label: 'Coordenador',
-            rows: ops.coordinatorRankingTop3,
-            empty: `Nenhum coordenador com dados no período ${selectedPeriodLabel}.`,
-          }].map((ranking) => (
-            <PremiumCard key={ranking.key} className="p-0 overflow-hidden border-surface-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)]">
-              <div className="p-4 border-b border-surface-200/70 bg-surface-50/50 flex items-center gap-2">
-                <Trophy size={14} className="text-primary-400" />
-                <h4 className="text-[11px] uppercase tracking-wider font-bold text-text-secondary">{ranking.title}</h4>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-surface-50/50 text-text-secondary uppercase text-[10px] font-bold">
-                    <tr>
-                      <th className="px-4 py-2.5">{ranking.label}</th>
-                      <th className="px-4 py-2.5 text-center">Clientes</th>
-                      <th className="px-4 py-2.5 text-center">Vendas</th>
-                      <th className="px-4 py-2.5 text-center">Taxa Conv.</th>
-                      <th className="px-4 py-2.5 text-right">Receita</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-surface-200/50">
-                    {ranking.rows.length === 0 && (
-                      <tr>
-                        <td colSpan={5} className="px-4 py-4 text-center text-text-secondary text-xs">
-                          {ranking.empty}
-                        </td>
-                      </tr>
-                    )}
-                    {ranking.rows.map((c, i) => (
-                      <tr key={c.entity_id} className="hover:bg-surface-50/50 transition-colors">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2.5">
-                            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${i === 0 ? 'bg-primary-100 text-primary-700' : 'bg-surface-100 text-text-secondary'}`}>{i + 1}</div>
-                            <span className="font-medium text-text-primary">{formatBrokerDisplayName(c.nome)}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-center text-text-secondary">{c.Li}</td>
-                        <td className="px-4 py-3 text-center font-bold text-text-primary">{c.Vi}</td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold ${c.Taxa_Conversao_i > 50 ? 'bg-green-50 text-green-600' : c.Taxa_Conversao_i > 20 ? 'bg-blue-50 text-blue-600' : 'bg-surface-100 text-text-secondary'}`}>
-                            {c.Taxa_Conversao_i}%
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right font-bold text-text-primary">R$ {c.Ri.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </PremiumCard>
-          ))}
-        </div>
-      )}
-
-      {/* ── Modal: Pipeline por Corretor (PDF) ── */}
-      <Modal isOpen={isPipelineModalOpen} onClose={() => setIsPipelineModalOpen(false)} title="Pipeline por Corretor">
-        <PipelinePdfExport corretores={allProfiles} />
-      </Modal>
 
       {/* ── Custom Date Modal ── */}
       <Modal isOpen={isDateModalOpen} onClose={() => setIsDateModalOpen(false)} title="Período Personalizado">
