@@ -1744,6 +1744,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error;
       await refreshAnnouncements();
+      logAuditEvent({
+        action: 'announcement_created',
+        entity: 'announcement',
+        metadata: { title: data.title, assignee_type: data.assignee_type },
+      });
     } catch (e: any) {
       console.error('Erro ao adicionar anúncio:', e);
       throw e;
@@ -1755,6 +1760,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase.from('announcements').update(data).eq('id', id);
       if (error) throw error;
       await refreshAnnouncements();
+      logAuditEvent({ action: 'announcement_updated', entity: 'announcement', entityId: id });
     } catch (e: any) {
       console.error('Erro ao atualizar anúncio:', e);
       throw e;
@@ -1766,6 +1772,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase.from('announcements').delete().eq('id', id);
       if (error) throw error;
       await refreshAnnouncements();
+      logAuditEvent({ action: 'announcement_deleted', entity: 'announcement', entityId: id });
     } catch (e: any) {
       console.error('Erro ao deletar anúncio:', e);
       throw e;

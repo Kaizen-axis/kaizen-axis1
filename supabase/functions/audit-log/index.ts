@@ -48,12 +48,15 @@ const ALLOWED_ACTIONS = new Set([
   'client_proponent_added', 'client_proponent_updated', 'client_proponent_deleted',
   'document_uploaded', 'document_deleted', 'document_downloaded',
   'permissions_updated', 'profile_updated', 'lead_converted', 'sale_updated',
+  'user_deactivated', 'user_deleted',
+  'announcement_created', 'announcement_updated', 'announcement_deleted',
   'custom', 'test_event',
 ]);
 
 const ALLOWED_ENTITIES = new Set([
   'auth', 'client', 'lead', 'profile',
   'client_document', 'report', 'income_report', 'security_panel',
+  'announcement',
 ]);
 
 function recordLocalHit(key: string) {

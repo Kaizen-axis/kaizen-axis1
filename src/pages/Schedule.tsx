@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Calendar as CalendarIcon, MapPin, Plus, Loader2, ChevronLeft, ChevronRight, ChevronDown, Filter } from 'lucide-react';
-import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import {
@@ -33,14 +32,14 @@ const TYPE_BLOCK: Record<string, string> = {
   Outro:      'bg-amber-100 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 border-l-2 border-amber-400',
 };
 
-const FIELD_CLASS = 'w-full h-12 px-3 py-0 bg-subtle-bg rounded-xl border border-line-subtle focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-text-primary text-sm';
+import { CreateAppointmentModal } from '@/components/schedule/CreateAppointmentModal';
 
 // ─── Schedule Page ────────────────────────────────────────────────────────────
 
 export default function Schedule() {
   const location  = useLocation();
   const navigate  = useNavigate();
-  const { appointments, addAppointment, updateAppointment, deleteAppointment, loading, allProfiles, teams, directorates } = useApp();
+  const { appointments, updateAppointment, deleteAppointment, loading, allProfiles, teams, directorates } = useApp();
   const { canViewAllClients } = useAuthorization();
   const { requestConfirm, confirmDialogProps } = useConfirmDialog();
 
@@ -55,7 +54,6 @@ export default function Schedule() {
 
   const [isModalOpen,        setIsModalOpen]        = useState(false);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
-  const [isSaving,           setIsSaving]           = useState(false);
   const [formData, setFormData] = useState<Partial<Appointment>>({
     title: '', client_name: '', time: '09:00', location: '', type: 'Visita',
     date: format(today, 'yyyy-MM-dd'), completed: false,
@@ -140,23 +138,6 @@ export default function Schedule() {
       });
     }
     setIsModalOpen(true);
-  };
-
-  const handleSave = async () => {
-    if (!formData.title || !formData.date || !formData.time) return;
-    setIsSaving(true);
-    try {
-      if (editingAppointment) {
-        await updateAppointment(editingAppointment.id, formData);
-      } else {
-        await addAppointment(formData as Omit<Appointment, 'id' | 'created_at'>);
-      }
-      setIsModalOpen(false);
-    } catch (e: any) {
-      alert(`Erro ao salvar: ${e.message ?? 'Erro desconhecido'}`);
-    } finally {
-      setIsSaving(false);
-    }
   };
 
   const handleDelete = (id: string) => {
@@ -596,87 +577,12 @@ export default function Schedule() {
       </div>
 
       {/* ── Modal (shared between mobile and desktop) ─────────────────────── */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingAppointment ? 'Editar Agendamento' : 'Novo Agendamento'}>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">Título</label>
-            <input
-              value={formData.title ?? ''}
-              onChange={e => setFormData(p => ({ ...p, title: e.target.value }))}
-              className={FIELD_CLASS}
-              placeholder="Ex: Visita ao Decorado"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">Cliente</label>
-            <input
-              value={formData.client_name ?? ''}
-              onChange={e => setFormData(p => ({ ...p, client_name: e.target.value }))}
-              className={FIELD_CLASS}
-              placeholder="Nome do cliente"
-            />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
-            <div className="min-w-0">
-              <label className="block text-sm font-medium text-text-secondary mb-1">Data</label>
-              <input
-                type="date"
-                value={formData.date ?? ''}
-                onChange={e => setFormData(p => ({ ...p, date: e.target.value }))}
-                onClick={e => e.currentTarget.showPicker?.()}
-                className={`${FIELD_CLASS} cursor-pointer`}
-                aria-label="Data"
-              />
-            </div>
-            <div className="min-w-0">
-              <label className="block text-sm font-medium text-text-secondary mb-1">Hora</label>
-              <input
-                type="time"
-                value={formData.time ?? ''}
-                onChange={e => setFormData(p => ({ ...p, time: e.target.value }))}
-                onClick={e => e.currentTarget.showPicker?.()}
-                className={`${FIELD_CLASS} cursor-pointer`}
-                aria-label="Hora"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">Local</label>
-            <input
-              value={formData.location ?? ''}
-              onChange={e => setFormData(p => ({ ...p, location: e.target.value }))}
-              className={FIELD_CLASS}
-              placeholder="Endereço ou local"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">Tipo</label>
-            <div className="flex gap-2 flex-wrap">
-              {(['Visita', 'Reunião', 'Assinatura', 'Outro'] as const).map(type => (
-                <button
-                  key={type}
-                  onClick={() => setFormData(p => ({ ...p, type }))}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                    formData.type === type
-                      ? 'bg-primary-500/10 border-blue-400 text-blue-700'
-                      : 'bg-card-bg border-line-subtle text-text-secondary hover:border-line-strong'
-                  }`}
-                >
-                  {type}
-                </button>
-              ))}
-            </div>
-          </div>
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-colors mt-2"
-          >
-            {isSaving ? <Loader2 size={16} className="animate-spin" /> : null}
-            {isSaving ? 'Salvando...' : editingAppointment ? 'Salvar Alterações' : 'Criar Agendamento'}
-          </button>
-        </div>
-      </Modal>
+      <CreateAppointmentModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        editing={editingAppointment}
+        initialValues={formData}
+      />
 
       <ConfirmDialog {...confirmDialogProps} />
     </div>

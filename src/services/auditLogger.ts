@@ -34,15 +34,19 @@ class AuditLogger {
     const now = Date.now();
     if ((this._recent.get(key) ?? 0) > now - 3000) return;
     this._recent.set(key, now);
-    queueMicrotask(() => this.dispatch(event));
+    queueMicrotask(() => { void this.dispatch(event); });
   }
 
-  private async dispatch(event: AuditEventInput) {
+  async logNow(event: AuditEventInput): Promise<{ ok: boolean; message?: string }> {
+    return this.dispatch(event);
+  }
+
+  private async dispatch(event: AuditEventInput): Promise<{ ok: boolean; message?: string }> {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token ?? null;
 
-      const { error } = await supabase.functions.invoke('audit-log', {
+      const { data, error } = await supabase.functions.invoke('audit-log', {
         body: {
           action: String(event.action).slice(0, 80),
           entity: String(event.entity).slice(0, 80),
@@ -57,12 +61,19 @@ class AuditLogger {
 
       if (error) {
         console.warn('[audit] Falha ao gravar evento via Edge Function:', error.message);
+        return { ok: false, message: error.message };
       }
-    } catch (err) {
+      if (data?.message && data?.status !== 'logged') {
+        return { ok: false, message: String(data.message) };
+      }
+      return { ok: true };
+    } catch (err: any) {
       console.warn('[audit] Erro ao gravar evento', err);
+      return { ok: false, message: err?.message || String(err) };
     }
   }
 }
 
 export const auditLogger = new AuditLogger();
 export const logAuditEvent = (input: AuditEventInput) => auditLogger.log(input);
+export const logAuditEventNow = (input: AuditEventInput) => auditLogger.logNow(input);

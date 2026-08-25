@@ -28,57 +28,9 @@ import { TeamCardGrid } from '@/pages/reports/TeamCardGrid';
 import { DiretoriaCardGrid } from '@/pages/reports/DiretoriaCardGrid';
 import { FilterMenu } from '@/pages/reports/FilterMenu';
 import { buildReportHref } from '@/lib/reports/reportNav';
-import { ReportClientLike } from '@/lib/reports/computeHybridMetrics';
+import { logAuditEvent } from '@/services/auditLogger';
 
-type Tab = 'users' | 'teams' | 'goals' | 'announcements' | 'reports' | 'directorates' | 'gamification';
-
-interface CardActionItem {
-  label: string;
-  icon: React.ReactNode;
-  onClick: () => void;
-  danger?: boolean;
-}
-
-function CardActionsMenu({ items }: { items: CardActionItem[] }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = React.useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [open]);
-
-  return (
-    <div ref={rootRef} className="relative">
-      <button
-        type="button"
-        aria-label="Ações"
-        onClick={() => setOpen(v => !v)}
-        className="w-7 h-7 flex items-center justify-center rounded-lg border border-surface-200 bg-card-bg text-text-secondary hover:text-gold-700 hover:border-gold-300 shadow-sm transition-all"
-      >
-        <MoreHorizontal size={14} />
-      </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1.5 z-20 w-44 bg-card-bg border border-surface-200 rounded-xl shadow-xl overflow-hidden p-1.5">
-          {items.map(item => (
-            <button
-              key={item.label}
-              type="button"
-              onClick={() => { setOpen(false); item.onClick(); }}
-              className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[11px] font-semibold transition-colors ${item.danger ? 'text-red-500 hover:bg-danger-subtle' : 'text-text-secondary hover:bg-surface-100'}`}
-            >
-              {item.icon} {item.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+import { CardActionsMenu } from '@/components/ui/CardActionsMenu';
 
 export default function AdminPanel() {
   // ── Hard role guard: only ADMIN and DIRETOR can access this page ────────────
@@ -1078,6 +1030,7 @@ export default function AdminPanel() {
 
         if (error) throw error;
 
+        logAuditEvent({ action: 'user_deactivated', entity: 'profile', entityId: userId, metadata: { name: userName } });
         alert(`Usuário "${userName}" foi desativado com sucesso. O histórico foi preservado.`);
         await refreshProfiles();
       },
@@ -1117,7 +1070,7 @@ export default function AdminPanel() {
           </ul>
         </>
       ),
-      confirmLabel: 'Excluir permanentemente',
+      confirmLabel: 'Excluir',
       requireTypedConfirm: true,
       variant: 'danger',
       onConfirm: async () => {
@@ -1130,6 +1083,7 @@ export default function AdminPanel() {
           throw new Error((data as { message?: string }).message || 'Falha ao excluir usuário.');
         }
         alert(`Usuário "${userName}" foi excluído. O histórico comercial foi preservado.`);
+        logAuditEvent({ action: 'user_deleted', entity: 'profile', entityId: userId, metadata: { name: userName } });
         await refreshProfiles();
       },
     });
@@ -1373,14 +1327,14 @@ export default function AdminPanel() {
                           <p className="font-semibold text-text-primary truncate">{u.name}</p>
                           <p className="text-xs text-text-secondary">{u.role}</p>
                         </div>
-                        {/* Botão desativar visível no mobile ao lado do nome */}
-                        <button
+                        <RoundedButton
+                          size="sm"
+                          variant="outline"
                           onClick={() => handleDeactivateUser(u.id, u.name || 'Usuário')}
-                          className="md:hidden p-2 rounded-lg hover:bg-danger-subtle text-red-500 transition-colors flex-shrink-0"
-                          title="Desativar usuário"
+                          className="md:hidden border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300 whitespace-nowrap flex-shrink-0"
                         >
-                          <Trash2 size={16} />
-                        </button>
+                          Desativar acesso
+                        </RoundedButton>
                       </div>
 
                       {/* Dropdowns + botão desativar desktop */}
@@ -1420,14 +1374,14 @@ export default function AdminPanel() {
                               .map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                           </select>
                         </div>
-                        {/* Botão desativar visível só no desktop */}
-                        <button
+                        <RoundedButton
+                          size="sm"
+                          variant="outline"
                           onClick={() => handleDeactivateUser(u.id, u.name || 'Usuário')}
-                          className="hidden md:flex p-2 rounded-lg hover:bg-danger-subtle text-red-500 transition-colors flex-shrink-0"
-                          title="Desativar usuário"
+                          className="hidden md:flex border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300 whitespace-nowrap flex-shrink-0"
                         >
-                          <Trash2 size={16} />
-                        </button>
+                          Desativar acesso
+                        </RoundedButton>
                       </div>
                     </PremiumCard>
                   ))}
@@ -2690,6 +2644,7 @@ export default function AdminPanel() {
             onChange={({ type, id }) => setAnnouncementForm(p => ({ ...p, assignee_type: type, assignee_id: id }))}
             directorates={scopedDirectorates}
             teams={scopedTeams}
+            coordinators={scopedCoordinators}
             profiles={scopedProfiles}
           />
           <div>

@@ -86,21 +86,20 @@ export function ConfirmDialog({
         <div className="flex gap-3 pt-2">
           <RoundedButton
             variant="secondary"
-            fullWidth
+            className="flex-1 min-w-0"
             onClick={onClose}
             disabled={isBusy}
           >
             {cancelLabel}
           </RoundedButton>
           <RoundedButton
-            fullWidth
-            onClick={() => { void handleConfirm(); }}
-            disabled={isBusy || !canConfirm}
             className={
               variant === 'danger'
-                ? '!bg-red-500 hover:!bg-red-600 text-white border-none disabled:opacity-60'
-                : undefined
+                ? 'flex-1 min-w-0 !bg-red-500 hover:!bg-red-600 text-white border-none disabled:opacity-60'
+                : 'flex-1 min-w-0'
             }
+            onClick={() => { void handleConfirm(); }}
+            disabled={isBusy || !canConfirm}
           >
             {isBusy ? (
               <>

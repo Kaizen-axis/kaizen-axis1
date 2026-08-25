@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Client, ClientStage } from '@/data/clients';
@@ -16,10 +16,12 @@ export function ClientsKanban({
   clients,
   stages,
   onMove,
+  renderActions,
 }: {
   clients: Client[];
   stages: ClientStage[];
   onMove: (clientId: string, stage: ClientStage) => void;
+  renderActions?: (client: Client) => ReactNode;
 }) {
   const navigate = useNavigate();
   const boardRef = useRef<HTMLDivElement>(null);
@@ -213,9 +215,12 @@ export function ClientsKanban({
                     dragId === c.id && 'opacity-30',
                   )}
                 >
-                  <div className="min-w-0">
-                    <p className="line-clamp-2 text-[15px] font-semibold leading-snug text-text-primary">{c.name}</p>
-                    <p className="mt-1 line-clamp-2 text-xs leading-snug text-text-secondary">{c.development || 'Sem empreendimento'}</p>
+                  <div className="flex min-w-0 items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="line-clamp-2 text-[15px] font-semibold leading-snug text-text-primary">{c.name}</p>
+                      <p className="mt-1 line-clamp-2 text-xs leading-snug text-text-secondary">{c.development || 'Sem empreendimento'}</p>
+                    </div>
+                    {renderActions?.(c)}
                   </div>
                   {c.intendedValue && (
                     <p className="font-ui mt-auto inline-block w-fit rounded-md bg-surface-100 px-2 py-0.5 text-xs font-semibold text-text-primary">

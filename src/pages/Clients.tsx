@@ -5,7 +5,7 @@ import { PremiumCard, StatusBadge, RoundedButton } from '@/components/ui/Premium
 import {
   Search, Filter, Phone, Mail, MessageCircle, UserPlus,
   Clock, Plus, Loader2, Zap, Brain, AlertTriangle, CheckCircle2,
-  Sparkles, X, BadgeCheck, ChevronDown, LayoutGrid, List
+  Sparkles, X, BadgeCheck, ChevronDown, LayoutGrid, List, Edit2, Trash2, Calendar, Video
 } from 'lucide-react';
 import { CLIENT_STAGES, ClientStage, Client, isStageRestrictedForRole, missingFieldsForConcluido } from '@/data/clients';
 import { AutomationLead } from '@/data/leads';
@@ -15,6 +15,10 @@ import { ClientHierarchyTags } from '@/components/ui/ClientHierarchyTags';
 import { ClientsKanban } from '@/components/clients/ClientsKanban';
 import { NewClientForm, NewClientPrefill } from '@/components/clients/NewClientForm';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
+import { CardActionsMenu, type CardActionItem } from '@/components/ui/CardActionsMenu';
+import { CreateAppointmentModal } from '@/components/schedule/CreateAppointmentModal';
 import { supabase } from '@/lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -313,7 +317,7 @@ function ConvertLeadModal({ lead, onClose, onConfirm }: {
 export default function Clients() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { clients, leads, loading, userRole, allProfiles, teams, directorates, user, updateClient } = useApp();
+  const { clients, leads, loading, userRole, allProfiles, teams, directorates, user, updateClient, deleteClient } = useApp();
   const [pipelineView, setPipelineView] = useState<'list' | 'kanban'>('list');
   const { isAdmin, isDirector, canViewAllClients, role } = useAuthorization();
   const canViewUrgencyState = isAdmin || isDirector;
@@ -326,6 +330,8 @@ export default function Clients() {
   const [moreDropdownOpen, setMoreDropdownOpen] = useState(false);
   const [isNewClientModalOpen, setIsNewClientModalOpen] = useState(false);
   const [newClientPrefill, setNewClientPrefill] = useState<NewClientPrefill | undefined>(undefined);
+  const [appointmentClient, setAppointmentClient] = useState<{ id: string; name: string } | null>(null);
+  const { requestConfirm, confirmDialogProps } = useConfirmDialog();
 
   const closeNewClientModal = () => {
     setIsNewClientModalOpen(false);
@@ -336,6 +342,37 @@ export default function Clients() {
     setNewClientPrefill(prefill);
     setIsNewClientModalOpen(true);
   };
+
+  const clientCardActions = (client: Client): CardActionItem[] => [
+    {
+      label: 'Editar',
+      icon: <Edit2 size={13} />,
+      onClick: () => navigate(`/clients/${client.id}`, { state: { editInfo: true } }),
+    },
+    {
+      label: 'Agendar',
+      icon: <Calendar size={13} />,
+      onClick: () => setAppointmentClient({ id: client.id, name: client.name }),
+    },
+    {
+      label: 'Videochamada',
+      icon: <Video size={13} />,
+      disabled: true,
+    },
+    {
+      label: 'Excluir',
+      icon: <Trash2 size={13} />,
+      danger: true,
+      onClick: () => {
+        requestConfirm({
+          title: 'Excluir cliente',
+          message: `Tem certeza que deseja excluir "${client.name}"? Esta ação não poderá ser desfeita.`,
+          confirmLabel: 'Excluir',
+          onConfirm: () => deleteClient(client.id),
+        });
+      },
+    },
+  ];
 
   // Estágios principais (visíveis) e secundários (dropdown "Outros")
   const PRIMARY_STAGES = CLIENT_STAGES.slice(0, 8); // até "Contrato"
@@ -533,6 +570,7 @@ export default function Clients() {
         <ClientsKanban
           clients={kanbanClients}
           stages={CLIENT_STAGES}
+          renderActions={(client) => <CardActionsMenu items={clientCardActions(client)} />}
           onMove={(id, stage) => {
             if (isStageRestrictedForRole(stage, role)) {
               alert('⚠️ Você não tem permissão para mover clientes para a etapa "' + stage + '".');
@@ -740,18 +778,21 @@ export default function Clients() {
                     <h3 className="font-bold text-text-primary text-lg">{client.name}</h3>
                     <p className="text-sm text-text-secondary">{client.development || 'Sem empreendimento'}</p>
                   </div>
-                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    <StatusBadge status={client.stage} />
-                    {canViewUrgencyState && urgency.level && (
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        urgency.level === 'critical' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' :
-                        urgency.level === 'urgent'   ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400' :
-                                                       'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
-                      }`}>
-                        <AlertTriangle size={9} />
-                        {urgency.level === 'critical' ? 'Crítico' : urgency.level === 'urgent' ? 'Urgente' : 'Atenção'} · {urgency.days}d
-                      </span>
-                    )}
+                  <div className="flex items-start gap-2 flex-shrink-0">
+                    <div className="flex flex-col items-end gap-1">
+                      <StatusBadge status={client.stage} />
+                      {canViewUrgencyState && urgency.level && (
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          urgency.level === 'critical' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' :
+                          urgency.level === 'urgent'   ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400' :
+                                                         'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'
+                        }`}>
+                          <AlertTriangle size={9} />
+                          {urgency.level === 'critical' ? 'Crítico' : urgency.level === 'urgent' ? 'Urgente' : 'Atenção'} · {urgency.days}d
+                        </span>
+                      )}
+                    </div>
+                    <CardActionsMenu items={clientCardActions(client)} />
                   </div>
                 </div>
                 {/* Tags hierárquicas — visíveis para liderança */}
@@ -888,6 +929,19 @@ export default function Clients() {
           onSuccess={closeNewClientModal}
         />
       </Modal>
+
+      <CreateAppointmentModal
+        isOpen={!!appointmentClient}
+        onClose={() => setAppointmentClient(null)}
+        initialValues={appointmentClient ? {
+          title: `Visita — ${appointmentClient.name}`,
+          client_name: appointmentClient.name,
+          client_id: appointmentClient.id,
+          type: 'Visita',
+        } : undefined}
+      />
+
+      <ConfirmDialog {...confirmDialogProps} />
 
     </div>
   );

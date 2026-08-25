@@ -1,6 +1,6 @@
 export type ScopeType = 'All' | 'Directorate' | 'Team' | 'Coordinator' | 'User';
 
-export const ANNOUNCEMENT_SCOPES: ScopeType[] = ['All', 'Directorate', 'Team', 'User'];
+export const ANNOUNCEMENT_SCOPES: ScopeType[] = ['All', 'Directorate', 'Team', 'Coordinator', 'User'];
 export const GOAL_SCOPES: ScopeType[] = ['All', 'Directorate', 'Team', 'Coordinator', 'User'];
 
 export const SCOPE_LABELS: Record<ScopeType, string> = {

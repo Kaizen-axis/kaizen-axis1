@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { PremiumCard, StatusBadge, SectionHeader, RoundedButton } from '@/components/ui/PremiumComponents';
-import { ChevronLeft, Phone, Mail, Calendar, Edit2, Check, Building2, Wallet, History, Trash2, FileText, Save, X, UploadCloud, Plus, ChevronDown, ChevronUp } from 'lucide-react';
-import { Client, CLIENT_STAGES, ClientStage, isStageRestrictedForRole, missingFieldsForConcluido } from '@/data/clients';
+import { ChevronLeft, Phone, Mail, Calendar, Edit2, Check, Building2, Wallet, History, Trash2, FileText, Save, X, UploadCloud, Plus, ChevronDown, ChevronUp, FileDown } from 'lucide-react';
+import { Client, ClientDocument, CLIENT_STAGES, ClientStage, isStageRestrictedForRole, missingFieldsForConcluido } from '@/data/clients';
 import { RJ_CITIES, getNeighborhoods } from '@/data/cities';
 import { BUILDERS } from '@/data/builders';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
+import { CardActionsMenu } from '@/components/ui/CardActionsMenu';
 import { useApp } from '@/context/AppContext';
 import { useAuthorization } from '@/hooks/useAuthorization';
 import { supabase } from '@/lib/supabase';
@@ -17,6 +18,14 @@ import { logAuditEvent } from '@/services/auditLogger';
 import { ClientHierarchyTags } from '@/components/ui/ClientHierarchyTags';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { loadKaizenLogo, drawReportHeader, addStandardFooters } from '@/lib/pdf/reportKit';
+import { imageToPdf } from '@/lib/pdf-tools/imageToPdf';
+
+const IMAGE_DOC_RE = /\.(jpe?g|png|webp)$/i;
+
+function isImageDocument(doc: ClientDocument) {
+  const type = (doc.type || '').toLowerCase();
+  return IMAGE_DOC_RE.test(doc.name || '') || type.startsWith('image/') || ['jpg', 'jpeg', 'png', 'webp'].includes(type);
+}
 
 type SalesMirrorForm = {
   diretoria: string;
@@ -66,6 +75,7 @@ const formatDateInput = (raw: string) => {
 export default function ClientDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     getClient,
     updateClient,
@@ -95,6 +105,7 @@ export default function ClientDetails() {
   const [documentToDelete, setDocumentToDelete] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<Client>>({});
   const [isUploading, setIsUploading] = useState(false);
+  const [isConvertingPdf, setIsConvertingPdf] = useState(false);
   const [newProponent, setNewProponent] = useState({
     name: '',
     cpf: '',
@@ -136,6 +147,13 @@ export default function ClientDetails() {
       setEditForm(found);
     }
   }, [id, getClient, clients]);
+
+  useEffect(() => {
+    if ((location.state as { editInfo?: boolean } | null)?.editInfo) {
+      setIsEditingInfo(true);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.pathname, location.state, navigate]);
 
   useEffect(() => {
     if (id && client) {
@@ -265,6 +283,63 @@ export default function ClientDetails() {
 
   const handleDeleteDocument = (docId: string) => {
     setDocumentToDelete(docId);
+  };
+
+  const handleConvertDocumentToPdf = async (doc: ClientDocument) => {
+    if (!id || isConvertingPdf) return;
+    const rawPath = (doc as any).file_path || doc.url;
+    if (!rawPath) {
+      alert('Caminho do arquivo não encontrado.');
+      return;
+    }
+
+    setIsConvertingPdf(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        alert('Sessão expirada. Faça login novamente.');
+        return;
+      }
+
+      const { data: v2Data, error: v2Error } = await supabase.functions.invoke('get-doc-url-v2', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: { documentId: doc.id, rawPath, expiresIn: 300 },
+      });
+
+      const signedUrl = v2Data?.signedUrl ?? null;
+      if (v2Error || !signedUrl) {
+        alert('Erro ao baixar a imagem para conversão.');
+        return;
+      }
+
+      const response = await fetch(signedUrl);
+      if (!response.ok) throw new Error('Falha ao baixar a imagem.');
+      const blob = await response.blob();
+      const imageFile = new File([blob], doc.name || 'imagem.jpg', { type: blob.type || 'image/jpeg' });
+      const pdfBlob = await imageToPdf([imageFile]);
+      const pdfName = (doc.name || 'documento').replace(IMAGE_DOC_RE, '') + '.pdf';
+      const pdfFile = new File([pdfBlob], pdfName, { type: 'application/pdf' });
+      const uploadedPath = await uploadFile(pdfFile, `${id}/${Date.now()}-${pdfName}`, 'client-documents');
+
+      if (!uploadedPath) {
+        alert('Erro ao enviar o PDF.');
+        return;
+      }
+
+      const dbResult = await addDocumentToClient(id, pdfName, uploadedPath);
+      if (!dbResult.success) {
+        alert(`Erro do Banco de Dados: ${dbResult.error}`);
+        return;
+      }
+      alert('PDF criado. A imagem original permanece na ficha.');
+    } catch (e: any) {
+      alert(e?.message || 'Erro ao converter para PDF.');
+    } finally {
+      setIsConvertingPdf(false);
+    }
   };
 
   const handleAddProponent = async () => {
@@ -1116,15 +1191,24 @@ export default function ClientDetails() {
                       <p className="text-xs text-text-secondary">{doc.uploadDate}</p>
                     </div>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteDocument(doc.id);
-                    }}
-                    className="p-2 text-text-secondary hover:text-red-500 hover:bg-danger-subtle rounded-full transition-colors"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <CardActionsMenu
+                      items={[
+                        ...(isImageDocument(doc) ? [{
+                          label: isConvertingPdf ? 'Convertendo…' : 'Converter para PDF',
+                          icon: <FileDown size={13} />,
+                          disabled: isConvertingPdf,
+                          onClick: () => { void handleConvertDocumentToPdf(doc); },
+                        }] : []),
+                        {
+                          label: 'Excluir',
+                          icon: <Trash2 size={13} />,
+                          danger: true,
+                          onClick: () => handleDeleteDocument(doc.id),
+                        },
+                      ]}
+                    />
+                  </div>
                 </PremiumCard>
               ))
             ) : (
