@@ -12,6 +12,14 @@ import { supabase } from '@/lib/supabase';
 import { PDFDocument } from 'pdf-lib';
 import { PAGE, PDF_THEME, embedFonts, loadKaizenLogo, drawReportHeader, drawSectionTitle, drawKeyValues, drawDivider, drawContinuationHeader, drawHBars, addStandardFooters, downloadPdf, safeText } from '@/lib/pdf/reportKit';
 import PipelinePdfExport from '@/components/admin/PipelinePdfExport';
+import { ScopeTargetPicker } from '@/components/admin/ScopeTargetPicker';
+import {
+  ANNOUNCEMENT_SCOPES,
+  GOAL_SCOPES,
+  normalizeScopeType,
+  resolveAssigneeLabel,
+  resolveDirectorateIdForTarget,
+} from '@/lib/admin/scopeTarget';
 import { useReportsData } from '@/hooks/useReportsData';
 import { parseDateOnlyLocal, parseDateOnlyLocalEnd, toDateOnlyLocal, toPtBrDate } from '@/lib/dateRange';
 import { CLIENT_STAGES } from '@/data/clients';
@@ -74,7 +82,7 @@ function CardActionsMenu({ items }: { items: CardActionItem[] }) {
 
 export default function AdminPanel() {
   // ── Hard role guard: only ADMIN and DIRETOR can access this page ────────────
-  const { isAdmin, isDirector } = useAuthorization();
+  const { isAdmin, isDirector, directorateId } = useAuthorization();
   if (!isAdmin && !isDirector) return <Navigate to="/" replace />;
 
   const {
@@ -103,14 +111,13 @@ export default function AdminPanel() {
   // Goal modal
   const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
-  const [isMission, setIsMission] = useState(false);
   const [goalForm, setGoalForm] = useState<Partial<Goal>>({ title: '', description: '', target: 0, start_date: '', deadline: '', type: 'Mensal', assignee_type: 'All', points: 0 });
   const [isSavingGoal, setIsSavingGoal] = useState(false);
 
   // Announcement modal
   const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
-  const [announcementForm, setAnnouncementForm] = useState<Partial<Announcement>>({ title: '', content: '', priority: 'Normal', start_date: '', end_date: '' });
+  const [announcementForm, setAnnouncementForm] = useState<Partial<Announcement>>({ title: '', content: '', priority: 'Normal', start_date: '', end_date: '', assignee_type: 'All' });
   const [isSavingAnnouncement, setIsSavingAnnouncement] = useState(false);
 
   // Manage members
@@ -971,6 +978,14 @@ export default function AdminPanel() {
     return normalized === 'active' || normalized === 'ativo';
   };
 
+  const scopedDirectorates = isAdmin ? directorates : directorates.filter(d => d.id === directorateId);
+  const scopedTeams = isAdmin ? teams : teams.filter(t => t.directorate_id === directorateId);
+  const scopedProfiles = isAdmin ? allProfiles : allProfiles.filter(p => p.directorate_id === directorateId);
+  const scopedCoordinators = scopedProfiles.filter(p => p.role?.toUpperCase() === 'COORDENADOR' && isProfileActive(p.status));
+  const announcementScopes = isAdmin ? ANNOUNCEMENT_SCOPES : ANNOUNCEMENT_SCOPES.filter(scope => scope !== 'All');
+  const goalScopes = isAdmin ? GOAL_SCOPES : GOAL_SCOPES.filter(scope => scope !== 'All');
+  const assigneeCatalogs = { directorates, teams, profiles: allProfiles };
+
   // ── Users Actions ──────────────────────────────────────────────────────────
   const handleRoleChange = async (id: string, role: string) => {
     try {
@@ -1083,11 +1098,43 @@ export default function AdminPanel() {
 
         if (error) throw error;
 
-        alert(`Usuário "${userName}" foi reativado com sucesso.`);
+        alert(`Usuário "${userName}" foi reativado.`);
         await refreshProfiles();
       },
     });
   };
+
+  const handlePermanentDeleteUser = (userId: string, userName: string) => {
+    requestConfirm({
+      title: 'Excluir permanentemente',
+      message: (
+        <>
+          <p>O login de <span className="font-bold text-text-primary">"{userName}"</span> será removido de vez.</p>
+          <ul className="mt-3 space-y-1 list-disc list-inside text-sm">
+            <li>O acesso e o perfil desaparecem da lista</li>
+            <li>Vendas, clientes e check-ins permanecem no histórico, desvinculados</li>
+            <li>Esta ação não pode ser desfeita</li>
+          </ul>
+        </>
+      ),
+      confirmLabel: 'Excluir permanentemente',
+      requireTypedConfirm: true,
+      variant: 'danger',
+      onConfirm: async () => {
+        const { data, error } = await supabase.rpc('delete_user_permanently', { user_id: userId });
+        if (error) {
+          alert(error.message || 'Não foi possível excluir o usuário.');
+          throw error;
+        }
+        if (data && typeof data === 'object' && 'success' in data && (data as { success?: boolean }).success === false) {
+          throw new Error((data as { message?: string }).message || 'Falha ao excluir usuário.');
+        }
+        alert(`Usuário "${userName}" foi excluído. O histórico comercial foi preservado.`);
+        await refreshProfiles();
+      },
+    });
+  };
+
   // ── Approval Flow ──────────────────────────────────────────────────────────
   const handleOpenApprovalModal = (userId: string) => {
     setSelectedPendingUserId(userId);
@@ -1204,36 +1251,82 @@ export default function AdminPanel() {
   };
 
   // ── Goal Actions ───────────────────────────────────────────────────────────
-  const openGoalModal = (goal?: Goal, missionMode = false) => {
-    setIsMission(missionMode);
-    if (goal) { setEditingGoal(goal); setGoalForm({ ...goal }); }
-    else { setEditingGoal(null); setGoalForm({ title: '', description: '', target: 0, start_date: '', deadline: '', type: missionMode ? 'Missão' : 'Mensal', assignee_type: 'All', points: missionMode ? 100 : 0, measure_type: 'currency', objective_type: 'sales' }); }
+  const openGoalModal = (goal?: Goal) => {
+    if (goal) {
+      setEditingGoal(goal);
+      setGoalForm({
+        ...goal,
+        assignee_type: normalizeScopeType(goal.assignee_type),
+      });
+    } else {
+      setEditingGoal(null);
+      setGoalForm({ title: '', description: '', target: 0, start_date: '', deadline: '', type: 'Mensal', assignee_type: isAdmin ? 'All' : 'Directorate', assignee_id: isAdmin ? undefined : directorateId || undefined, points: 0, measure_type: 'currency', objective_type: 'sales' });
+    }
     setIsGoalModalOpen(true);
   };
   const handleSaveGoal = async () => {
     if (!goalForm.title) return;
+    const assigneeType = normalizeScopeType(goalForm.assignee_type);
+    if (assigneeType !== 'All' && !goalForm.assignee_id) {
+      alert('Selecione o destino da meta.');
+      return;
+    }
     setIsSavingGoal(true);
     try {
-      if (editingGoal) await updateGoal(editingGoal.id, goalForm);
-      else await addGoal({ ...goalForm, current_progress: 0 } as Omit<Goal, 'id'>);
+      const payload = {
+        ...goalForm,
+        type: editingGoal?.type || 'Mensal',
+        assignee_type: assigneeType,
+        assignee_id: assigneeType === 'All' ? null : goalForm.assignee_id,
+        directorate_id: resolveDirectorateIdForTarget(
+          { type: assigneeType, id: goalForm.assignee_id || undefined },
+          { teams: scopedTeams, profiles: scopedProfiles, fallbackDirectorateId: isAdmin ? null : directorateId },
+        ),
+      } as Omit<Goal, 'id'> & { directorate_id?: string | null };
+      if (editingGoal) await updateGoal(editingGoal.id, payload);
+      else await addGoal({ ...payload, current_progress: 0 });
       setIsGoalModalOpen(false);
     } catch (e: any) {
-      alert('Erro ao salvar meta/missao: ' + (e?.message || 'Tente novamente.'));
+      alert('Erro ao salvar meta: ' + (e?.message || 'Tente novamente.'));
     } finally { setIsSavingGoal(false); }
   };
 
   // ── Announcement Actions ───────────────────────────────────────────────────
   const openAnnouncementModal = (ann?: Announcement) => {
-    if (ann) { setEditingAnnouncement(ann); setAnnouncementForm({ ...ann }); }
-    else { setEditingAnnouncement(null); setAnnouncementForm({ title: '', content: '', priority: 'Normal', start_date: '', end_date: '' }); }
+    if (ann) {
+      const type = normalizeScopeType(ann.assignee_type || (ann.directorate_id ? 'Directorate' : 'All'));
+      setEditingAnnouncement(ann);
+      setAnnouncementForm({
+        ...ann,
+        assignee_type: type,
+        assignee_id: ann.assignee_id || (type === 'Directorate' ? ann.directorate_id || undefined : undefined),
+      });
+    } else {
+      setEditingAnnouncement(null);
+      setAnnouncementForm({ title: '', content: '', priority: 'Normal', start_date: '', end_date: '', assignee_type: isAdmin ? 'All' : 'Directorate', assignee_id: isAdmin ? undefined : directorateId || undefined });
+    }
     setIsAnnouncementModalOpen(true);
   };
   const handleSaveAnnouncement = async () => {
     if (!announcementForm.title) return;
+    const assigneeType = normalizeScopeType(announcementForm.assignee_type);
+    if (assigneeType !== 'All' && !announcementForm.assignee_id) {
+      alert('Selecione o destino do anúncio.');
+      return;
+    }
     setIsSavingAnnouncement(true);
     try {
-      if (editingAnnouncement) await updateAnnouncement(editingAnnouncement.id, announcementForm);
-      else await addAnnouncement({ ...announcementForm, author_id: user?.id } as Omit<Announcement, 'id' | 'created_at'>);
+      const payload = {
+        ...announcementForm,
+        assignee_type: assigneeType,
+        assignee_id: assigneeType === 'All' ? null : announcementForm.assignee_id,
+        directorate_id: resolveDirectorateIdForTarget(
+          { type: assigneeType, id: announcementForm.assignee_id || undefined },
+          { teams: scopedTeams, profiles: scopedProfiles, fallbackDirectorateId: isAdmin ? null : directorateId },
+        ),
+      };
+      if (editingAnnouncement) await updateAnnouncement(editingAnnouncement.id, payload);
+      else await addAnnouncement({ ...payload, author_id: user?.id } as Omit<Announcement, 'id' | 'created_at'>);
       setIsAnnouncementModalOpen(false);
     } catch (e: any) {
       alert('Erro ao salvar anuncio: ' + (e?.message || 'Tente novamente.'));
@@ -1363,13 +1456,25 @@ export default function AdminPanel() {
                           <p className="font-semibold text-text-primary truncate">{u.name}</p>
                           <p className="text-xs text-text-secondary">{u.role}</p>
                         </div>
-                        <RoundedButton
-                          size="sm"
-                          onClick={() => handleReactivateUser(u.id, u.name || 'Usuário')}
-                          className="bg-green-500 hover:bg-green-600 text-white border-0"
-                        >
-                          Reativar
-                        </RoundedButton>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <RoundedButton
+                            size="sm"
+                            onClick={() => handleReactivateUser(u.id, u.name || 'Usuário')}
+                            className="bg-green-500 hover:bg-green-600 text-white border-0"
+                          >
+                            Reativar
+                          </RoundedButton>
+                          {isAdmin && (
+                            <RoundedButton
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handlePermanentDeleteUser(u.id, u.name || 'Usuário')}
+                              className="border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                            >
+                              Excluir
+                            </RoundedButton>
+                          )}
+                        </div>
                       </div>
                     </PremiumCard>
                   ))
@@ -1438,14 +1543,7 @@ export default function AdminPanel() {
                   <span className={`text-xs px-1.5 py-0.5 rounded-full font-bold bg-surface-200 text-text-secondary`}>{endedGoals.length}</span>
                 </button>
               </div>
-              {/* Action buttons */}
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => openGoalModal(undefined, true)}
-                  className="flex items-center justify-center gap-2 py-3 px-4 rounded-2xl border-2 border-gold-200 dark:border-gold-800 text-gold-600 dark:text-gold-400 bg-accent-subtle hover:bg-accent-hover font-semibold text-sm transition-all duration-200 active:scale-95"
-                >
-                  <Trophy size={16} /> Nova Missão
-                </button>
+              <div className="flex justify-end">
                 <button
                   onClick={() => openGoalModal()}
                   className="flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-gold-500 hover:bg-gold-600 text-white font-semibold text-sm transition-all duration-200 shadow-sm active:scale-95"
@@ -1468,38 +1566,36 @@ export default function AdminPanel() {
 
                   let progressColor = 'bg-blue-500';
                   let tierText = '';
-                  let remainingToNextTier = 0;
 
                   if (progress >= 100) {
-                    progressColor = 'bg-green-500';
-                    tierText = '🎉 Meta Batida!';
+                    progressColor = 'bg-emerald-500';
+                    tierText = 'Meta batida';
                   } else if (progress >= 67) {
-                    progressColor = 'bg-green-500';
+                    progressColor = 'bg-emerald-500';
                     tierText = 'Prata';
-                    remainingToNextTier = (goal.target || 0) - (goal.current_progress || 0);
                   } else if (progress >= 34) {
                     progressColor = 'bg-orange-400';
                     tierText = 'Bronze';
-                    remainingToNextTier = ((goal.target || 0) * 0.67) - (goal.current_progress || 0);
                   } else {
                     progressColor = 'bg-blue-500';
-                    tierText = 'Em Andamento';
-                    remainingToNextTier = ((goal.target || 0) * 0.34) - (goal.current_progress || 0);
+                    tierText = 'Em andamento';
                   }
 
                   return (
                     <PremiumCard key={goal.id} className="p-4">
                       <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            {goal.type === 'Missão' && <Trophy size={14} className="text-gold-500 flex-shrink-0" />}
+                          <div className="flex items-center gap-2 flex-wrap">
                             <h4 className="font-bold text-text-primary truncate">{goal.title}</h4>
-                            {goal.status === 'achieved' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Atingida</span>}
-                            {goal.status === 'failed' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Falhou</span>}
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-surface-100 text-text-secondary">
+                              {resolveAssigneeLabel(goal, assigneeCatalogs)}
+                            </span>
+                            {goal.status === 'achieved' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">Atingida</span>}
+                            {goal.status === 'failed' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-400">Falhou</span>}
                           </div>
                           {goal.description && <p className="text-xs text-text-secondary mt-1">{goal.description}</p>}
                           {goal.property_id && (
-                            <p className="text-xs text-gold-600 mt-1 flex items-center gap-1">
+                            <p className="text-xs text-gold-500 mt-1 flex items-center gap-1">
                               <Building2 size={12} /> {developments?.find(d => d.id === goal.property_id)?.name || 'Empreendimento'}
                             </p>
                           )}
@@ -1515,7 +1611,7 @@ export default function AdminPanel() {
                           </div>
                         </div>
                         <div className="flex gap-2 ml-3 flex-shrink-0">
-                          <button onClick={() => openGoalModal(goal, goal.type === 'Missão')} className="p-1.5 bg-surface-50 rounded-full hover:text-gold-600"><Edit2 size={14} /></button>
+                          <button onClick={() => openGoalModal(goal)} className="p-1.5 bg-surface-50 rounded-full hover:text-gold-600"><Edit2 size={14} /></button>
                           <button onClick={() => {
                             requestConfirm({
                               title: 'Excluir meta',
@@ -1543,13 +1639,20 @@ export default function AdminPanel() {
             {loading ? <Loader2 size={24} className="animate-spin mx-auto text-gold-400 py-4" /> :
               announcements.length === 0 ? <p className="text-center text-text-secondary py-8">Nenhum anúncio cadastrado.</p> :
                 announcements.map(ann => {
-                  const priorityColors: Record<string, string> = { Urgente: 'text-red-600 bg-red-50', Importante: 'text-amber-600 bg-amber-50', Normal: 'text-blue-600 bg-blue-50' };
+                  const priorityColors: Record<string, string> = {
+                    Urgente: 'text-red-400 bg-red-500/15',
+                    Importante: 'text-amber-400 bg-amber-500/15',
+                    Normal: 'text-blue-400 bg-blue-500/15',
+                  };
                   return (
                     <PremiumCard key={ann.id} className="p-4">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${priorityColors[ann.priority || 'Normal']}`}>{ann.priority}</span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-surface-100 text-text-secondary">
+                              {resolveAssigneeLabel(ann, assigneeCatalogs)}
+                            </span>
                             <h4 className="font-bold text-text-primary truncate">{ann.title}</h4>
                           </div>
                           <p className="text-sm text-text-secondary line-clamp-2">{ann.content}</p>
@@ -2070,9 +2173,9 @@ export default function AdminPanel() {
                           <thead>
                             <tr className="bg-surface-50 text-text-secondary text-[10px] uppercase tracking-wider border-b border-surface-100">
                               <th className="p-4 font-bold">Usuário / Corretor</th>
-                              <th className="p-4 font-bold text-center">🏆 Vendas</th>
-                              <th className="p-4 font-bold text-center">🎯 Missões/Metas</th>
-                              <th className="p-4 font-bold text-center">📚 Treinamentos</th>
+                              <th className="p-4 font-bold text-center">Vendas</th>
+                              <th className="p-4 font-bold text-center">Metas</th>
+                              <th className="p-4 font-bold text-center">Treinamentos</th>
                               <th className="p-4 font-bold text-right">XP Total no Período</th>
                             </tr>
                           </thead>
@@ -2123,7 +2226,7 @@ export default function AdminPanel() {
                                 <span className="text-xs font-bold text-blue-600">{row.sales_xp}</span>
                               </div>
                               <div className="flex flex-col items-center text-center border-l border-r border-surface-200">
-                                <span className="text-[9px] font-bold text-text-secondary uppercase mb-0.5">Missões</span>
+                                <span className="text-[9px] font-bold text-text-secondary uppercase mb-0.5">Metas</span>
                                 <span className="text-xs font-bold text-green-600">{row.missions_xp}</span>
                               </div>
                               <div className="flex flex-col items-center text-center">
@@ -2174,7 +2277,7 @@ export default function AdminPanel() {
     streak_days: 'Dias Seguidos',
     approved_count: '# Fichas Aprovadas',
     goals_count: '# Metas Concluídas',
-    missions_count: '# Missões Concluídas',
+    missions_count: '# Metas concluídas',
   };
   const ICON_OPTIONS = ['Award', 'Trophy', 'Star', 'Zap', 'Flame', 'Shield', 'Target', 'TrendingUp'];
 
@@ -2459,7 +2562,7 @@ export default function AdminPanel() {
       </Modal>
 
       {/* Goal Modal */}
-      <Modal isOpen={isGoalModalOpen} onClose={() => setIsGoalModalOpen(false)} title={editingGoal ? (isMission ? 'Editar Missão' : 'Editar Meta') : (isMission ? 'Nova Missão' : 'Nova Meta')}>
+      <Modal isOpen={isGoalModalOpen} onClose={() => setIsGoalModalOpen(false)} title={editingGoal ? 'Editar Meta' : 'Nova Meta'}>
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-text-secondary mb-1">Título</label>
@@ -2471,36 +2574,15 @@ export default function AdminPanel() {
             <textarea value={goalForm.description || ''} onChange={e => setGoalForm(p => ({ ...p, description: e.target.value }))}
               className="w-full p-3 bg-surface-50 rounded-xl border-none focus:ring-2 focus:ring-gold-200 text-text-primary h-20" />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-text-secondary mb-1">Atribuir para</label>
-            <select
-              value={goalForm.assignee_type === 'All' ? 'All' : goalForm.assignee_type === 'Team' ? `team_${goalForm.assignee_id}` : goalForm.assignee_type === 'Directorate' ? `dir_${goalForm.assignee_id}` : goalForm.assignee_id}
-              onChange={e => {
-                const val = e.target.value;
-                if (val === 'All') setGoalForm(p => ({ ...p, assignee_id: undefined, assignee_type: 'All' }));
-                else if (val.startsWith('dir_')) setGoalForm(p => ({ ...p, assignee_id: val.replace('dir_', ''), assignee_type: 'Directorate' }));
-                else if (val.startsWith('team_')) setGoalForm(p => ({ ...p, assignee_id: val.replace('team_', ''), assignee_type: 'Team' }));
-                else setGoalForm(p => ({ ...p, assignee_id: val, assignee_type: 'User' }));
-              }}
-              className="w-full p-3 bg-surface-50 rounded-xl border-none focus:ring-2 focus:ring-gold-200 text-text-primary">
-              <optgroup label="Geral">
-                <option value="All">Todos (Global)</option>
-              </optgroup>
-              {directorates.length > 0 && (
-                <optgroup label="Diretorias">
-                  {directorates.map(d => <option key={d.id} value={`dir_${d.id}`}>{d.name}</option>)}
-                </optgroup>
-              )}
-              {teams.length > 0 && (
-                <optgroup label="Equipes">
-                  {teams.map(t => <option key={t.id} value={`team_${t.id}`}>{t.name}</option>)}
-                </optgroup>
-              )}
-              <optgroup label="Usuários (Individuais)">
-                {allProfiles.map(p => <option key={p.id} value={p.id}>{p.name} ({p.role})</option>)}
-              </optgroup>
-            </select>
-          </div>
+          <ScopeTargetPicker
+            scopes={goalScopes}
+            value={{ type: normalizeScopeType(goalForm.assignee_type), id: goalForm.assignee_id || undefined }}
+            onChange={({ type, id }) => setGoalForm(p => ({ ...p, assignee_type: type, assignee_id: id }))}
+            directorates={scopedDirectorates}
+            teams={scopedTeams}
+            coordinators={scopedCoordinators}
+            profiles={scopedProfiles}
+          />
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-1">Medição</label>
@@ -2542,8 +2624,8 @@ export default function AdminPanel() {
               <label className="block text-sm font-medium text-text-secondary mb-1">Objetivo</label>
               <select value={goalForm.objective_type || 'sales'} onChange={e => setGoalForm(p => ({ ...p, objective_type: e.target.value as 'sales' | 'approved_clients' }))}
                 className="w-full p-3 bg-surface-50 rounded-xl border-none focus:ring-2 focus:ring-gold-200 text-text-primary">
-                <option value="sales">🏆 Vendas Concluídas</option>
-                <option value="approved_clients">✅ Fichas Aprovadas</option>
+                <option value="sales">Vendas concluídas</option>
+                <option value="approved_clients">Fichas aprovadas</option>
               </select>
             </div>
             <div>
@@ -2569,18 +2651,18 @@ export default function AdminPanel() {
           </div>
           <div>
             <label className="block text-sm font-medium text-text-secondary mb-1">
-              ⚡ Recompensa XP ao concluir
+              Recompensa XP ao concluir
             </label>
             <input
               type="number"
               min={0}
-              placeholder={isMission ? '500 (padrão para Missão)' : '300 (padrão para Meta)'}
+              placeholder="300 (padrão)"
               value={goalForm.points || ''}
               onChange={e => setGoalForm(p => ({ ...p, points: e.target.value ? Number(e.target.value) : undefined }))}
               className="w-full p-3 bg-surface-50 rounded-xl border-none focus:ring-2 focus:ring-gold-200 text-text-primary"
             />
             <p className="text-[11px] text-text-secondary mt-1 opacity-75">
-              Deixe em branco para usar o padrão ({isMission ? '500' : '300'} XP)
+              Deixe em branco para usar o padrão (300 XP)
             </p>
           </div>
           <RoundedButton fullWidth onClick={handleSaveGoal} disabled={isSavingGoal}>
@@ -2602,6 +2684,14 @@ export default function AdminPanel() {
             <textarea value={announcementForm.content || ''} onChange={e => setAnnouncementForm(p => ({ ...p, content: e.target.value }))}
               className="w-full p-3 bg-surface-50 rounded-xl border-none focus:ring-2 focus:ring-gold-200 text-text-primary h-24" />
           </div>
+          <ScopeTargetPicker
+            scopes={announcementScopes}
+            value={{ type: normalizeScopeType(announcementForm.assignee_type), id: announcementForm.assignee_id || undefined }}
+            onChange={({ type, id }) => setAnnouncementForm(p => ({ ...p, assignee_type: type, assignee_id: id }))}
+            directorates={scopedDirectorates}
+            teams={scopedTeams}
+            profiles={scopedProfiles}
+          />
           <div>
             <label className="block text-sm font-medium text-text-secondary mb-1">Prioridade</label>
             <select value={announcementForm.priority} onChange={e => setAnnouncementForm(p => ({ ...p, priority: e.target.value as any }))}
@@ -2688,7 +2778,7 @@ export default function AdminPanel() {
                 <option value="streak_days">Dias Seguidos</option>
                 <option value="approved_count"># Fichas Aprovadas</option>
                 <option value="goals_count"># Metas Concluídas</option>
-                <option value="missions_count"># Missões Concluídas</option>
+                <option value="missions_count"># Metas concluídas</option>
               </select>
             </div>
             <div>

@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { AnnouncementCard } from '@/components/admin/AnnouncementCard';
 import { useApp, Goal } from '@/context/AppContext';
+import { isGoalVisibleToUser } from '@/lib/admin/scopeTarget';
 import { useAuthorization } from '@/hooks/useAuthorization';
 import { NotificationBell } from '@/components/ui/NotificationBell';
 import { GamificationProfile } from '@/components/gamification/GamificationProfile';
@@ -387,21 +388,20 @@ export default function Dashboard() {
               </div>
             </section>
 
-            {/* Metas and Missions */}
+            {/* Metas */}
             <section className="space-y-6">
               {(() => {
-                const corretorGoals = goals.filter(g =>
-                  g.assignee_type === 'All' ||
-                  (g.assignee_type === 'User' && g.assignee_id === user?.id) ||
-                  (g.assignee_type === 'Team' && g.assignee_id === profile?.team_id)
-                );
-                const metas = corretorGoals.filter(g => g.type !== 'Missão');
-                const missoes = corretorGoals.filter(g => g.type === 'Missão');
+                const corretorGoals = goals.filter(g => isGoalVisibleToUser(g, {
+                  userId: user?.id,
+                  directorateId: profile?.directorate_id,
+                  teamIds: [profile?.team_id, profile?.team],
+                  coordinatorId: profile?.coordinator_id,
+                }));
 
                 if (corretorGoals.length === 0) {
                   return (
                     <div>
-                      <SectionHeader title="Metas e Missões" subtitle="Objetivos pessoais" />
+                      <SectionHeader title="Metas" subtitle="Seus objetivos" />
                       <PremiumCard className="text-center py-6">
                         <Target className="mx-auto mb-2 text-surface-300 dark:text-surface-700" size={32} />
                         <p className="text-text-secondary text-sm">Nenhuma meta ativa atribuída.</p>
@@ -411,136 +411,46 @@ export default function Dashboard() {
                 }
 
                 return (
-                  <>
-                    {metas.length > 0 && (
-                      <div>
-                        <SectionHeader title="Metas" subtitle="Seus objetivos" />
-                        <div className="space-y-3">
-                          {metas.slice(0, 3).map((goal) => {
-                            const progress = goal.target ? ((goal.current_progress || 0) / goal.target) * 100 : 0;
-                            const pct = Math.min(100, Math.round(progress));
+                  <div>
+                    <SectionHeader title="Metas" subtitle="Seus objetivos" />
+                    <div className="space-y-3">
+                      {corretorGoals.slice(0, 5).map((goal) => {
+                        const progress = goal.target ? ((goal.current_progress || 0) / goal.target) * 100 : 0;
+                        const pct = Math.min(100, Math.round(progress));
+                        const progressColor = pct >= 67 ? 'bg-emerald-500' : pct >= 34 ? 'bg-orange-400' : 'bg-blue-500';
+                        const tierText = pct >= 100 ? 'Batida' : pct >= 67 ? 'Prata' : pct >= 34 ? 'Bronze' : 'Em andamento';
+                        const formatGoalVal = (g: Goal, val: number) =>
+                          g.measure_type === 'quantity'
+                            ? val.toString()
+                            : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
-                            let progressColor = 'bg-blue-500';
-                            let tierText = '';
-                            let remainingToNextTier = 0;
-
-                            if (pct >= 100) {
-                              progressColor = 'bg-green-500';
-                              tierText = '🎉 Batida!';
-                            } else if (pct >= 67) {
-                              progressColor = 'bg-green-500';
-                              tierText = 'Prata';
-                              remainingToNextTier = (goal.target || 0) - (goal.current_progress || 0);
-                            } else if (pct >= 34) {
-                              progressColor = 'bg-orange-400';
-                              tierText = 'Bronze';
-                              remainingToNextTier = ((goal.target || 0) * 0.67) - (goal.current_progress || 0);
-                            } else {
-                              progressColor = 'bg-blue-500';
-                              tierText = 'Em Andamento';
-                              remainingToNextTier = ((goal.target || 0) * 0.34) - (goal.current_progress || 0);
-                            }
-
-                            const formatGoalVal = (g: Goal, val: number) =>
-                              g.measure_type === 'quantity'
-                                ? val.toString()
-                                : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-
-                            return (
-                              <PremiumCard key={goal.id}>
-                                <div className="flex justify-between items-start mb-2">
-                                  <div className="flex-1 min-w-0">
-                                    <span className="font-semibold text-text-primary text-sm flex items-center gap-2">
-                                      {goal.title}
-                                      {goal.status === 'achieved' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-500/15 text-green-400">Atingida</span>}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${pct >= 100 ? 'bg-green-500/15 text-green-400' : pct >= 60 ? 'bg-blue-500/15 text-blue-400' : 'bg-surface-100 text-text-secondary'}`}>{pct}%</span>
-                                  </div>
-                                </div>
-                                <div className="h-2 w-full bg-surface-200 rounded-full overflow-hidden">
-                                  <div className={`h-full rounded-full transition-all duration-700 ${progressColor}`} style={{ width: `${pct}%` }} />
-                                </div>
-                                <div className="flex justify-between items-end mt-1">
-                                  <div className="flex flex-col text-[10px] text-text-secondary">
-                                    <span>{tierText}: {formatGoalVal(goal, goal.current_progress || 0)} de {formatGoalVal(goal, goal.target || 0)}</span>
-
-                                  </div>
-                                  {goal.deadline && <span className="text-[10px] text-text-secondary">Até {new Date(goal.deadline).toLocaleDateString('pt-BR')}</span>}
-                                </div>
-                              </PremiumCard>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {missoes.length > 0 && (
-                      <div>
-                        <SectionHeader title="Missões" subtitle="Conquiste pontos" />
-                        <div className="space-y-3">
-                          {missoes.slice(0, 3).map((goal) => {
-                            const progress = goal.target ? ((goal.current_progress || 0) / goal.target) * 100 : 0;
-                            const pct = Math.min(100, Math.round(progress));
-
-                            let progressColor = 'bg-blue-500';
-                            let tierText = '';
-                            let remainingToNextTier = 0;
-
-                            if (pct >= 100) {
-                              progressColor = 'bg-green-500';
-                              tierText = '🎉 Batida!';
-                            } else if (pct >= 67) {
-                              progressColor = 'bg-green-500';
-                              tierText = 'Prata';
-                              remainingToNextTier = (goal.target || 0) - (goal.current_progress || 0);
-                            } else if (pct >= 34) {
-                              progressColor = 'bg-orange-400';
-                              tierText = 'Bronze';
-                              remainingToNextTier = ((goal.target || 0) * 0.67) - (goal.current_progress || 0);
-                            } else {
-                              progressColor = 'bg-blue-500';
-                              tierText = 'Em Andamento';
-                              remainingToNextTier = ((goal.target || 0) * 0.34) - (goal.current_progress || 0);
-                            }
-
-                            const formatGoalVal = (g: Goal, val: number) =>
-                              g.measure_type === 'quantity'
-                                ? val.toString()
-                                : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-
-                            return (
-                              <PremiumCard key={goal.id}>
-                                <div className="flex justify-between items-start mb-2">
-                                  <div className="flex-1 min-w-0">
-                                    <span className="font-semibold text-text-primary text-sm flex items-center gap-2">
-                                      {goal.title}
-                                      {goal.status === 'achieved' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-500/15 text-green-400">Atingida</span>}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                                    {goal.points != null && <span className="text-xs font-bold text-primary-300 px-2 py-0.5 bg-primary-500/15 rounded-full">{goal.points} pts</span>}
-                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${pct >= 100 ? 'bg-green-500/15 text-green-400' : pct >= 60 ? 'bg-blue-500/15 text-blue-400' : 'bg-surface-100 text-text-secondary'}`}>{pct}%</span>
-                                  </div>
-                                </div>
-                                <div className="h-2 w-full bg-surface-200 rounded-full overflow-hidden">
-                                  <div className={`h-full rounded-full transition-all duration-700 ${progressColor}`} style={{ width: `${pct}%` }} />
-                                </div>
-                                <div className="flex justify-between items-end mt-1">
-                                  <div className="flex flex-col text-[10px] text-text-secondary">
-                                    <span>{tierText}: {formatGoalVal(goal, goal.current_progress || 0)} de {formatGoalVal(goal, goal.target || 0)}</span>
-
-                                  </div>
-                                  {goal.deadline && <span className="text-[10px] text-text-secondary">Até {new Date(goal.deadline).toLocaleDateString('pt-BR')}</span>}
-                                </div>
-                              </PremiumCard>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </>
+                        return (
+                          <PremiumCard key={goal.id}>
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="flex-1 min-w-0">
+                                <span className="font-semibold text-text-primary text-sm flex items-center gap-2">
+                                  {goal.title}
+                                  {goal.status === 'achieved' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">Atingida</span>}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${pct >= 100 ? 'bg-emerald-500/15 text-emerald-400' : pct >= 60 ? 'bg-blue-500/15 text-blue-400' : 'bg-surface-100 text-text-secondary'}`}>{pct}%</span>
+                              </div>
+                            </div>
+                            <div className="h-2 w-full bg-surface-200 rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full transition-all duration-700 ${progressColor}`} style={{ width: `${pct}%` }} />
+                            </div>
+                            <div className="flex justify-between items-end mt-1">
+                              <div className="flex flex-col text-[10px] text-text-secondary">
+                                <span>{tierText}: {formatGoalVal(goal, goal.current_progress || 0)} de {formatGoalVal(goal, goal.target || 0)}</span>
+                              </div>
+                              {goal.deadline && <span className="text-[10px] text-text-secondary">Até {new Date(goal.deadline).toLocaleDateString('pt-BR')}</span>}
+                            </div>
+                          </PremiumCard>
+                        );
+                      })}
+                    </div>
+                  </div>
                 );
               })()}
             </section>
@@ -593,162 +503,80 @@ export default function Dashboard() {
 
           <section><FunnelChart clientsData={periodClients} /></section>
 
-          {/* Metas and Missions for the team */}
-          {goals.length > 0 ? (
-            <section className="space-y-6">
-              {(() => {
-                // Teams the current manager/coordinator belongs to or leads
-                const myTeamIds = teams
-                  .filter(t => t.manager_id === user?.id || (t.members || []).includes(user?.id || ''))
-                  .map(t => t.id);
-                const isGoalVisible = (g: Goal) =>
-                  g.assignee_type === 'All' ||
-                  (g.assignee_type === 'Team' && myTeamIds.includes(g.assignee_id || '')) ||
-                  (g.assignee_type === 'User' && g.assignee_id === user?.id);
-                const teamMetas = goals.filter(g => g.type !== 'Missão' && isGoalVisible(g));
-                const teamMissoes = goals.filter(g => g.type === 'Missão' && isGoalVisible(g));
-                const formatGoalVal = (g: Goal, val: number) =>
-                  g.measure_type === 'quantity'
-                    ? val.toString()
-                    : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+          {/* Metas da equipe */}
+          {(() => {
+            const myTeamIds = [
+              profile?.team_id,
+              profile?.team,
+              ...teams
+                .filter(t => t.manager_id === user?.id || (t.members || []).includes(user?.id || ''))
+                .map(t => t.id),
+            ];
+            const teamGoals = goals.filter(g => isGoalVisibleToUser(g, {
+              userId: user?.id,
+              directorateId: profile?.directorate_id,
+              teamIds: myTeamIds,
+              coordinatorId: profile?.coordinator_id,
+            }));
+            const formatGoalVal = (g: Goal, val: number) =>
+              g.measure_type === 'quantity'
+                ? val.toString()
+                : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
-                return (
-                  <>
-                    {teamMetas.length > 0 && (
-                      <div>
-                        <SectionHeader title="Metas da Equipe" subtitle="Acompanhe o progresso das metas" />
-                        <div className="space-y-3">
-                          {teamMetas.slice(0, 5).map((goal) => {
-                            const progress = goal.target ? ((goal.current_progress || 0) / goal.target) * 100 : 0;
-                            const pct = Math.min(100, Math.round(progress));
+            if (teamGoals.length === 0) {
+              return (
+                <section>
+                  <SectionHeader title="Metas da Equipe" />
+                  <PremiumCard className="text-center py-6">
+                    <Target className="mx-auto mb-2 text-surface-300" size={28} />
+                    <p className="text-text-secondary text-sm">Nenhuma meta ativa no momento.</p>
+                  </PremiumCard>
+                </section>
+              );
+            }
 
-                            let progressColor = 'bg-blue-500';
-                            let tierText = '';
-                            let remainingToNextTier = 0;
+            return (
+              <section className="space-y-6">
+                <div>
+                  <SectionHeader title="Metas da Equipe" subtitle="Acompanhe o progresso das metas" />
+                  <div className="space-y-3">
+                    {teamGoals.slice(0, 5).map((goal) => {
+                      const progress = goal.target ? ((goal.current_progress || 0) / goal.target) * 100 : 0;
+                      const pct = Math.min(100, Math.round(progress));
+                      const progressColor = pct >= 67 ? 'bg-emerald-500' : pct >= 34 ? 'bg-orange-400' : 'bg-blue-500';
+                      const tierText = pct >= 100 ? 'Batida' : pct >= 67 ? 'Prata' : pct >= 34 ? 'Bronze' : 'Em andamento';
 
-                            if (pct >= 100) {
-                              progressColor = 'bg-green-500';
-                              tierText = '🎉 Batida!';
-                            } else if (pct >= 67) {
-                              progressColor = 'bg-green-500';
-                              tierText = 'Prata';
-                              remainingToNextTier = (goal.target || 0) - (goal.current_progress || 0);
-                            } else if (pct >= 34) {
-                              progressColor = 'bg-orange-400';
-                              tierText = 'Bronze';
-                              remainingToNextTier = ((goal.target || 0) * 0.67) - (goal.current_progress || 0);
-                            } else {
-                              progressColor = 'bg-blue-500';
-                              tierText = 'Em Andamento';
-                              remainingToNextTier = ((goal.target || 0) * 0.34) - (goal.current_progress || 0);
-                            }
-
-                            return (
-                              <PremiumCard key={goal.id}>
-                                <div className="flex justify-between items-start mb-2">
-                                  <div className="flex-1 min-w-0">
-                                    <span className="font-semibold text-text-primary text-sm flex items-center gap-2">
-                                      {goal.title}
-                                      {goal.status === 'achieved' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-500/15 text-green-400">Atingida</span>}
-                                    </span>
-                                    {goal.description && <p className="text-[11px] text-text-secondary mt-0.5 line-clamp-1">{goal.description}</p>}
-                                  </div>
-                                  <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${pct >= 100 ? 'bg-green-500/15 text-green-400' : pct >= 60 ? 'bg-blue-500/15 text-blue-400' : 'bg-surface-100 text-text-secondary'}`}>{pct}%</span>
-                                  </div>
-                                </div>
-                                <div className="h-2 w-full bg-surface-200 rounded-full overflow-hidden">
-                                  <div className={`h-full rounded-full transition-all duration-700 ${progressColor}`} style={{ width: `${pct}%` }} />
-                                </div>
-                                <div className="flex justify-between items-end mt-1">
-                                  <div className="flex flex-col text-[10px] text-text-secondary">
-                                    <span>{tierText}: {formatGoalVal(goal, goal.current_progress || 0)} de {formatGoalVal(goal, goal.target || 0)}</span>
-                                    {pct < 100 && remainingToNextTier > 0 && goal.status !== 'failed' && (
-                                      <span className="opacity-75">Falta {formatGoalVal(goal, remainingToNextTier)} para {pct >= 67 ? 'Atingir' : pct >= 34 ? 'Prata' : 'Bronze'}</span>
-                                    )}
-                                  </div>
-                                  {goal.deadline && <span className="text-[10px] text-text-secondary">Até {new Date(goal.deadline).toLocaleDateString('pt-BR')}</span>}
-                                </div>
-                              </PremiumCard>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}                    {teamMissoes.length > 0 && (
-                      <div>
-                        <SectionHeader title="Missões da Equipe" subtitle="Acompanhe as missões globais" />
-                        <div className="space-y-3">
-                          {teamMissoes.slice(0, 5).map((goal) => {
-                            const progress = goal.target ? ((goal.current_progress || 0) / goal.target) * 100 : 0;
-                            const pct = Math.min(100, Math.round(progress));
-
-                            let progressColor = 'bg-blue-500';
-                            let tierText = '';
-                            let remainingToNextTier = 0;
-
-                            if (pct >= 100) {
-                              progressColor = 'bg-green-500';
-                              tierText = '🎉 Batida!';
-                            } else if (pct >= 67) {
-                              progressColor = 'bg-green-500';
-                              tierText = 'Prata';
-                              remainingToNextTier = (goal.target || 0) - (goal.current_progress || 0);
-                            } else if (pct >= 34) {
-                              progressColor = 'bg-orange-400';
-                              tierText = 'Bronze';
-                              remainingToNextTier = ((goal.target || 0) * 0.67) - (goal.current_progress || 0);
-                            } else {
-                              progressColor = 'bg-blue-500';
-                              tierText = 'Em Andamento';
-                              remainingToNextTier = ((goal.target || 0) * 0.34) - (goal.current_progress || 0);
-                            }
-
-                            return (
-                              <PremiumCard key={goal.id}>
-                                <div className="flex justify-between items-start mb-2">
-                                  <div className="flex-1 min-w-0">
-                                    <span className="font-semibold text-text-primary text-sm flex items-center gap-2">
-                                      {goal.title}
-                                      {goal.status === 'achieved' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-500/15 text-green-400">Atingida</span>}
-                                    </span>
-                                    {goal.description && <p className="text-[11px] text-text-secondary mt-0.5 line-clamp-1">{goal.description}</p>}
-                                  </div>
-                                  <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                                    {goal.points != null && <span className="text-xs font-bold text-primary-300 px-2 py-0.5 bg-primary-500/15 rounded-full">{goal.points} pts</span>}
-                                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${pct >= 100 ? 'bg-green-500/15 text-green-400' : pct >= 60 ? 'bg-blue-500/15 text-blue-400' : 'bg-surface-100 text-text-secondary'}`}>{pct}%</span>
-                                  </div>
-                                </div>
-                                <div className="h-2 w-full bg-surface-200 rounded-full overflow-hidden">
-                                  <div className={`h-full rounded-full transition-all duration-700 ${progressColor}`} style={{ width: `${pct}%` }} />
-                                </div>
-                                <div className="flex justify-between items-end mt-1">
-                                  <div className="flex flex-col text-[10px] text-text-secondary">
-                                    <span>{tierText}: {formatGoalVal(goal, goal.current_progress || 0)} de {formatGoalVal(goal, goal.target || 0)}</span>
-                                    {pct < 100 && remainingToNextTier > 0 && goal.status !== 'failed' && (
-                                      <span className="opacity-75">Falta {formatGoalVal(goal, remainingToNextTier)} para {pct >= 67 ? 'Atingir' : pct >= 34 ? 'Prata' : 'Bronze'}</span>
-                                    )}
-                                  </div>
-                                  {goal.deadline && <span className="text-[10px] text-text-secondary">Até {new Date(goal.deadline).toLocaleDateString('pt-BR')}</span>}
-                                </div>
-                              </PremiumCard>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
-            </section>
-          ) : (
-            <section>
-              <SectionHeader title="Metas e Missões da Equipe" />
-              <PremiumCard className="text-center py-6">
-                <Target className="mx-auto mb-2 text-surface-300" size={28} />
-                <p className="text-text-secondary text-sm">Nenhuma meta ativa no momento.</p>
-              </PremiumCard>
-            </section>
-          )}
+                      return (
+                        <PremiumCard key={goal.id}>
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex-1 min-w-0">
+                              <span className="font-semibold text-text-primary text-sm flex items-center gap-2">
+                                {goal.title}
+                                {goal.status === 'achieved' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">Atingida</span>}
+                              </span>
+                              {goal.description && <p className="text-[11px] text-text-secondary mt-0.5 line-clamp-1">{goal.description}</p>}
+                            </div>
+                            <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${pct >= 100 ? 'bg-emerald-500/15 text-emerald-400' : pct >= 60 ? 'bg-blue-500/15 text-blue-400' : 'bg-surface-100 text-text-secondary'}`}>{pct}%</span>
+                            </div>
+                          </div>
+                          <div className="h-2 w-full bg-surface-200 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full transition-all duration-700 ${progressColor}`} style={{ width: `${pct}%` }} />
+                          </div>
+                          <div className="flex justify-between items-end mt-1">
+                            <div className="flex flex-col text-[10px] text-text-secondary">
+                              <span>{tierText}: {formatGoalVal(goal, goal.current_progress || 0)} de {formatGoalVal(goal, goal.target || 0)}</span>
+                            </div>
+                            {goal.deadline && <span className="text-[10px] text-text-secondary">Até {new Date(goal.deadline).toLocaleDateString('pt-BR')}</span>}
+                          </div>
+                        </PremiumCard>
+                      );
+                    })}
+                  </div>
+                </div>
+              </section>
+            );
+          })()}
         </>
       )}
 

@@ -110,13 +110,14 @@ export interface Goal {
   deadline?: string;
   type?: string;
   assignee_type?: string;
-  assignee_id?: string;
+  assignee_id?: string | null;
   points?: number;
   measure_type?: string;
   status?: 'active' | 'achieved' | 'failed';
   closed_at?: string;
   property_id?: string;
   objective_type?: 'sales' | 'approved_clients';
+  directorate_id?: string | null;
 }
 
 export interface Portal {
@@ -152,6 +153,9 @@ export interface Announcement {
   start_date?: string;
   end_date?: string;
   created_at?: string;
+  directorate_id?: string | null;
+  assignee_type?: string;
+  assignee_id?: string | null;
 }
 
 interface AppContextValue {
@@ -1650,11 +1654,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [user, refreshGoals]);
 
 
-  const addGoal = useCallback(async (data: Omit<Goal, 'id'>) => {
+  const addGoal = useCallback(async (data: Omit<Goal, 'id'> & { directorate_id?: string | null }) => {
     try {
       const basePayload = {
         ...data,
-        directorate_id: profile?.directorate_id || null
+        directorate_id: data.directorate_id !== undefined ? data.directorate_id : (profile?.directorate_id || null)
       };
 
       let { error } = await supabase.from('goals').insert([{
@@ -1723,7 +1727,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const basePayload = {
         ...data,
         author_id: user?.id,
-        directorate_id: profile?.directorate_id || null
+        assignee_type: data.assignee_type || 'All',
+        assignee_id: data.assignee_type && data.assignee_type !== 'All' ? data.assignee_id || null : null,
+        directorate_id: data.directorate_id !== undefined ? data.directorate_id : (profile?.directorate_id || null)
       };
 
       let { error } = await supabase.from('announcements').insert([{
