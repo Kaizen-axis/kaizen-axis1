@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { PremiumCard, RoundedButton, SectionHeader } from '@/components/ui/PremiumComponents';
 import { ChevronLeft, Save, UploadCloud, FileText, X, Loader2, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
-import { CLIENT_STAGES, ClientStage, isStageRestrictedForRole, missingFieldsForConcluido } from '@/data/clients';
+import { CLIENT_STAGES, Client, ClientStage, isStageRestrictedForRole, missingFieldsForConcluido } from '@/data/clients';
 import { RJ_CITIES, getNeighborhoods } from '@/data/cities';
 import { BUILDERS } from '@/data/builders';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
@@ -40,6 +40,7 @@ const defaultFormData = {
 };
 
 type DraftProponent = {
+  id?: string;
   name: string;
   cpf: string;
   email: string;
@@ -51,6 +52,47 @@ type DraftProponent = {
   cotista: string;
   socialFactor: string;
 };
+
+function formFromClient(client: Client) {
+  return {
+    ...defaultFormData,
+    name: client.name || '',
+    cpf: client.cpf || '',
+    email: client.email || '',
+    phone: client.phone || '',
+    address: client.address || '',
+    profession: client.profession || '',
+    grossIncome: client.grossIncome || '',
+    incomeType: (client.incomeType || 'Formal') as 'Formal' | 'Informal' | 'Mista',
+    cotista: client.cotista || 'Não',
+    socialFactor: client.socialFactor || 'Não',
+    regionOfInterest: client.regionOfInterest || '',
+    neighborhood: client.neighborhood || '',
+    development: client.development || '',
+    builder: client.builder || '',
+    intendedValue: client.intendedValue || '',
+    stage: client.stage,
+    observations: client.observations || '',
+  };
+}
+
+function proponentsFromClient(client: Client): DraftProponent[] {
+  return (client.proponents || [])
+    .filter((p) => !p.isPrimary)
+    .map((p) => ({
+      id: p.id,
+      name: p.name || '',
+      cpf: p.cpf || '',
+      email: p.email || '',
+      phone: p.phone || '',
+      address: p.address || '',
+      profession: p.profession || '',
+      grossIncome: p.grossIncome || '',
+      incomeType: p.incomeType === 'Informal' ? 'Informal' as const : 'Formal' as const,
+      cotista: p.cotista || 'Não',
+      socialFactor: p.socialFactor || 'Não',
+    }));
+}
 
 const emptyProponent: DraftProponent = {
   name: '',
@@ -70,18 +112,24 @@ export function NewClientForm({
   onSuccess,
   onCancel,
   embedded = false,
+  mode = 'create',
+  client,
 }: {
   prefill?: NewClientPrefill;
   onSuccess: () => void;
   onCancel?: () => void;
   embedded?: boolean;
+  mode?: 'create' | 'edit';
+  client?: Client;
 }) {
-  const { addClient, uploadFile, addDocumentToClient, addClientProponent } = useApp();
+  const { addClient, updateClient, uploadFile, addDocumentToClient, addClientProponent, updateClientProponent, deleteClientProponent } = useApp();
   const { role } = useAuthorization();
+  const isEdit = mode === 'edit' && !!client;
   // Etapas que o papel atual pode escolher ao criar o cliente (mesma regra do mover)
   const selectableStages = CLIENT_STAGES.filter(s => !isStageRestrictedForRole(s, role));
 
   const [formData, setFormData] = useState(() => {
+    if (client) return formFromClient(client);
     if (prefill) return defaultFormData;
     try {
       const saved = localStorage.getItem(DRAFT_KEY);
@@ -97,6 +145,7 @@ export function NewClientForm({
   });
 
   const [proponents, setProponents] = useState<DraftProponent[]>(() => {
+    if (client) return proponentsFromClient(client);
     if (prefill) return [];
     try {
       const saved = localStorage.getItem(DRAFT_KEY);
@@ -108,12 +157,20 @@ export function NewClientForm({
     }
   });
   const [openProponentIndex, setOpenProponentIndex] = useState<number | null>(null);
+  const [documents, setDocuments] = useState<File[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!prefill) {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ formData, proponents }));
-    }
-  }, [formData, proponents, prefill]);
+    if (isEdit || prefill) return;
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ formData, proponents }));
+  }, [formData, proponents, prefill, isEdit]);
+
+  useEffect(() => {
+    if (!isEdit || !client) return;
+    setFormData(formFromClient(client));
+    setProponents(proponentsFromClient(client));
+    setDocuments([]);
+  }, [isEdit, client?.id]);
 
   useEffect(() => {
     if (prefill) {
@@ -127,9 +184,6 @@ export function NewClientForm({
       }));
     }
   }, [prefill]);
-
-  const [documents, setDocuments] = useState<File[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     let { name, value } = e.target;
@@ -147,7 +201,7 @@ export function NewClientForm({
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const newFiles = Array.from(e.target.files).filter(file => file.type === 'application/pdf');
+      const newFiles = Array.from(e.target.files);
       setDocuments(prev => [...prev, ...newFiles]);
     }
   };
@@ -178,6 +232,62 @@ export function NewClientForm({
     });
   };
 
+  const clientPayload = {
+    name: formData.name,
+    cpf: formData.cpf,
+    email: formData.email,
+    phone: formData.phone,
+    address: formData.address,
+    profession: formData.profession,
+    grossIncome: formData.grossIncome,
+    incomeType: formData.incomeType as 'Formal' | 'Informal' | 'Mista',
+    cotista: formData.cotista,
+    socialFactor: formData.socialFactor,
+    regionOfInterest: formData.regionOfInterest,
+    neighborhood: formData.neighborhood,
+    development: formData.development,
+    builder: formData.builder,
+    intendedValue: formData.intendedValue,
+    observations: formData.observations,
+  };
+
+  const extras = proponents
+    .map((p) => ({
+      ...p,
+      name: p.name.trim(),
+      cpf: p.cpf.trim(),
+      email: p.email.trim(),
+      phone: p.phone.trim(),
+      address: p.address.trim(),
+      profession: p.profession.trim(),
+      grossIncome: p.grossIncome.trim(),
+    }))
+    .filter((p) => p.name.length > 0);
+
+  const uploadDocumentsFor = async (clientId: string) => {
+    let hasDocumentError = false;
+    for (const file of documents) {
+      try {
+        const prepared = await prepareClientUploadFile(file);
+        const filePath = `${clientId}/${Date.now()}-${prepared.name}`;
+        const uploadedPath = await uploadFile(prepared, filePath, 'client-documents');
+        if (!uploadedPath) {
+          hasDocumentError = true;
+          continue;
+        }
+        const dbResult = await addDocumentToClient(clientId, prepared.name, uploadedPath);
+        if (!dbResult.success) {
+          hasDocumentError = true;
+          console.error(dbResult.error);
+        }
+      } catch (err: any) {
+        hasDocumentError = true;
+        console.error(err?.message || err);
+      }
+    }
+    return hasDocumentError;
+  };
+
   const submitClient = async () => {
     if (isSubmitting) return;
 
@@ -186,69 +296,76 @@ export function NewClientForm({
       return;
     }
 
-    // Regra de negócio: papéis sem permissão não podem criar cliente já em etapa avançada
-    if (isStageRestrictedForRole(formData.stage, role)) {
-      alert('⚠️ Você não tem permissão para criar um cliente diretamente na etapa "' + formData.stage + '". Selecione uma etapa inicial.');
-      return;
-    }
-
-    // Para criar já como "Concluído", os campos da venda precisam estar preenchidos
-    if (formData.stage === 'Concluído') {
-      const missing = missingFieldsForConcluido(formData);
-      if (missing.length > 0) {
-        alert(`⚠️ Para criar o cliente já como "Concluído", preencha: ${missing.join(', ')}.`);
+    if (!isEdit) {
+      if (isStageRestrictedForRole(formData.stage, role)) {
+        alert('⚠️ Você não tem permissão para criar um cliente diretamente na etapa "' + formData.stage + '". Selecione uma etapa inicial.');
         return;
+      }
+      if (formData.stage === 'Concluído') {
+        const missing = missingFieldsForConcluido(formData);
+        if (missing.length > 0) {
+          alert(`⚠️ Para criar o cliente já como "Concluído", preencha: ${missing.join(', ')}.`);
+          return;
+        }
       }
     }
 
     setIsSubmitting(true);
 
     try {
-      let newClient;
-      newClient = await addClient({
-        name: formData.name,
-        cpf: formData.cpf,
-        email: formData.email,
-        phone: formData.phone,
-        address: formData.address,
-        profession: formData.profession,
-        grossIncome: formData.grossIncome,
-        incomeType: formData.incomeType as 'Formal' | 'Informal',
-        cotista: formData.cotista,
-        socialFactor: formData.socialFactor,
-        regionOfInterest: formData.regionOfInterest,
-        neighborhood: formData.neighborhood,
-        development: formData.development,
-        builder: formData.builder,
-        intendedValue: formData.intendedValue,
-        observations: formData.observations,
-        stage: formData.stage,
-      });
-      if (newClient === null || newClient === undefined) {
-        alert('Erro ao salvar cliente. Tente novamente.');
-        return;
-      }
-
-      const filledProponents = proponents
-        .map(p => ({
-          ...p,
-          name: p.name.trim(),
-          cpf: p.cpf.trim(),
-          email: p.email.trim(),
-          phone: p.phone.trim(),
-          address: p.address.trim(),
-          profession: p.profession.trim(),
-          grossIncome: p.grossIncome.trim(),
-          cotista: p.cotista,
-          socialFactor: p.socialFactor,
-        }))
-        .filter(p => p.name.length > 0);
-
       let hasDocumentError = false;
       let hasProponentError = false;
 
-      if (filledProponents.length > 0) {
-        for (const prop of filledProponents) {
+      if (isEdit && client) {
+        await updateClient(client.id, clientPayload);
+
+        const originalIds = (client.proponents || []).filter((p) => !p.isPrimary).map((p) => p.id);
+        const currentIds = extras.map((p) => p.id).filter((id): id is string => Boolean(id));
+        for (const id of originalIds) {
+          if (!currentIds.includes(id)) {
+            const result = await deleteClientProponent(id);
+            if (!result.success) hasProponentError = true;
+          }
+        }
+
+        for (const prop of extras) {
+          const payload = {
+            name: prop.name,
+            cpf: prop.cpf || undefined,
+            email: prop.email || undefined,
+            phone: prop.phone || undefined,
+            address: prop.address || undefined,
+            profession: prop.profession || undefined,
+            grossIncome: prop.grossIncome || undefined,
+            incomeType: prop.incomeType,
+            cotista: prop.cotista,
+            socialFactor: prop.socialFactor,
+            isPrimary: false,
+          };
+          const result = prop.id
+            ? await updateClientProponent(prop.id, payload)
+            : await addClientProponent(client.id, payload);
+          if (!result.success) {
+            hasProponentError = true;
+            console.error('Erro ao salvar proponente:', result.error);
+          }
+        }
+
+        if (documents.length > 0) {
+          hasDocumentError = await uploadDocumentsFor(client.id);
+        }
+      } else {
+        const newClient = await addClient({
+          ...clientPayload,
+          incomeType: formData.incomeType as 'Formal' | 'Informal',
+          stage: formData.stage,
+        });
+        if (newClient === null || newClient === undefined) {
+          alert('Erro ao salvar cliente. Tente novamente.');
+          return;
+        }
+
+        for (const prop of extras) {
           const result = await addClientProponent(newClient.id, {
             name: prop.name,
             cpf: prop.cpf || undefined,
@@ -262,40 +379,18 @@ export function NewClientForm({
             socialFactor: prop.socialFactor,
             isPrimary: false,
           });
-
           if (!result.success) {
             hasProponentError = true;
             console.error('Erro ao salvar proponente:', result.error);
           }
         }
-      }
 
-      if (documents.length > 0) {
-
-        for (const file of documents) {
-          try {
-            const prepared = await prepareClientUploadFile(file);
-            const filePath = `${newClient.id}/${Date.now()}-${prepared.name}`;
-            const uploadedPath = await uploadFile(prepared, filePath, 'client-documents');
-
-            if (!uploadedPath) {
-              hasDocumentError = true;
-              continue;
-            }
-
-            const dbResult = await addDocumentToClient(newClient.id, prepared.name, uploadedPath);
-            if (!dbResult.success) {
-              hasDocumentError = true;
-              console.error(dbResult.error);
-            }
-          } catch (err: any) {
-            hasDocumentError = true;
-            console.error(err?.message || err);
-          }
+        if (documents.length > 0) {
+          hasDocumentError = await uploadDocumentsFor(newClient.id);
         }
-      }
 
-      localStorage.removeItem(DRAFT_KEY);
+        localStorage.removeItem(DRAFT_KEY);
+      }
 
       if (hasDocumentError && hasProponentError) {
         alert('Cliente salvo, mas houve erros ao vincular alguns documentos e proponentes.');
@@ -303,14 +398,14 @@ export function NewClientForm({
         alert('Cliente salvo, mas houve erros ao vincular alguns documentos no banco de dados.');
       } else if (hasProponentError) {
         alert('Cliente salvo, mas houve erros ao cadastrar alguns proponentes adicionais.');
-      } else if (documents.length > 0 && filledProponents.length > 0) {
-        alert('Cliente, proponentes e documentos cadastrados com sucesso!');
+      } else if (documents.length > 0 && extras.length > 0) {
+        alert(`Cliente, proponentes e documentos ${isEdit ? 'atualizados' : 'cadastrados'} com sucesso!`);
       } else if (documents.length > 0) {
-        alert('Cliente e documentos cadastrados com sucesso!');
-      } else if (filledProponents.length > 0) {
-        alert('Cliente e proponentes cadastrados com sucesso!');
+        alert(`Cliente e documentos ${isEdit ? 'atualizados' : 'cadastrados'} com sucesso!`);
+      } else if (extras.length > 0) {
+        alert(`Cliente e proponentes ${isEdit ? 'atualizados' : 'cadastrados'} com sucesso!`);
       } else {
-        alert('Cliente cadastrado com sucesso!');
+        alert(`Cliente ${isEdit ? 'atualizado' : 'cadastrado'} com sucesso!`);
       }
 
       onSuccess();
@@ -698,6 +793,7 @@ export function NewClientForm({
           </PremiumCard>
         </section>
 
+        {!isEdit && (
         <section>
           <SectionHeader title="Estágio Inicial" />
           <PremiumCard>
@@ -714,9 +810,10 @@ export function NewClientForm({
             </select>
           </PremiumCard>
         </section>
+        )}
 
         <RoundedButton type="submit" fullWidth className="mt-4" disabled={isSubmitting}>
-          {isSubmitting ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />} {isSubmitting ? 'Salvando...' : 'Salvar Cliente'}
+          {isSubmitting ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />} {isSubmitting ? 'Salvando...' : isEdit ? 'Salvar' : 'Salvar Cliente'}
         </RoundedButton>
       </form>
     </div>

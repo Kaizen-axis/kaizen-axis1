@@ -63,6 +63,7 @@ export interface Task {
   description?: string;
   subtasks: { id: string; title: string; completed: boolean }[];
   completed_at?: string | null;
+  archived_at?: string | null;
   created_at?: string;
 }
 
@@ -1443,8 +1444,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ...(normalizedSubtasks ? {
           subtasks: normalizedSubtasks,
         } : {}),
-        completed_at: data.status === 'Concluída' ? new Date().toISOString() : (data.status ? null : data.completed_at)
       };
+      delete (payload as any).id;
+      if (data.status === 'Concluída') {
+        payload.completed_at = new Date().toISOString();
+      } else if (data.status) {
+        payload.completed_at = null;
+      } else {
+        delete payload.completed_at;
+      }
       const { error } = await supabase.from('tasks').update(payload).eq('id', id);
       if (error) throw error;
       await refreshTasks();

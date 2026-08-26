@@ -1313,7 +1313,7 @@ export default function AdminPanel() {
               <div className="grid gap-3">
                 {loading ? <Loader2 size={24} className="animate-spin mx-auto text-gold-400 py-4" /> :
                   activeUsers.map(u => (
-                    <PremiumCard key={u.id} className="w-full p-4 overflow-hidden">
+                    <PremiumCard key={u.id} className="w-full p-4">
                       {/* Linha superior: avatar + nome + botão excluir */}
                       <div className="flex items-center gap-3 mb-4">
                         <div className="w-10 h-10 rounded-full bg-surface-200 flex items-center justify-center text-text-primary font-bold text-sm flex-shrink-0 overflow-hidden">
@@ -1396,7 +1396,7 @@ export default function AdminPanel() {
                   <p className="text-xs text-text-secondary">Nenhum usuário inativo encontrado.</p>
                 ) : (
                   inactiveUsers.map(u => (
-                    <PremiumCard key={u.id} className="w-full p-4 overflow-hidden opacity-80">
+                    <PremiumCard key={u.id} className="w-full p-4 opacity-80">
                       <div className="flex items-center gap-3 mb-4">
                         <div className="w-10 h-10 rounded-full bg-surface-200 flex items-center justify-center text-text-primary font-bold text-sm flex-shrink-0 overflow-hidden">
                           {(u as any).avatar_url ? (
