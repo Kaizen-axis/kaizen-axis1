@@ -13,7 +13,7 @@ const COMMISSION_CONFIG: Record<string, { ownRate: number; teamRate: number }> =
 };
 
 const TAX_DEDUCTION = 0.86;
-const SLOGAN = 'Melhoria contínua, conquistas duradouras.';
+const GOAL_MET_COPY = 'Parabéns — você bateu a meta do mês. Continue nesse ritmo.';
 
 function parseCurrency(value: any): number {
   if (value == null) return 0;
@@ -263,7 +263,7 @@ export function SalesProgressCard() {
 
         {goalMet && (
           <p className="text-sm font-medium text-green-400 pt-0.5">
-            {SLOGAN}
+            {GOAL_MET_COPY}
           </p>
         )}
       </div>

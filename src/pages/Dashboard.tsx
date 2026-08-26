@@ -6,8 +6,9 @@ import { FunnelChart } from '@/components/ui/FunnelChart';
 import { useNavigate } from 'react-router-dom';
 
 import { AnnouncementCard } from '@/components/admin/AnnouncementCard';
-import { useApp, Goal } from '@/context/AppContext';
+import { useApp } from '@/context/AppContext';
 import { isGoalVisibleToUser } from '@/lib/admin/scopeTarget';
+import { formatGoalProgressLine, goalObjectiveBadge } from '@/lib/goals/objectiveLabel';
 import { useAuthorization } from '@/hooks/useAuthorization';
 import { NotificationBell } from '@/components/ui/NotificationBell';
 import { GamificationProfile } from '@/components/gamification/GamificationProfile';
@@ -419,17 +420,16 @@ export default function Dashboard() {
                         const pct = Math.min(100, Math.round(progress));
                         const progressColor = pct >= 67 ? 'bg-emerald-500' : pct >= 34 ? 'bg-orange-400' : 'bg-blue-500';
                         const tierText = pct >= 100 ? 'Batida' : pct >= 67 ? 'Prata' : pct >= 34 ? 'Bronze' : 'Em andamento';
-                        const formatGoalVal = (g: Goal, val: number) =>
-                          g.measure_type === 'quantity'
-                            ? val.toString()
-                            : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
                         return (
                           <PremiumCard key={goal.id}>
                             <div className="flex justify-between items-start mb-2">
                               <div className="flex-1 min-w-0">
-                                <span className="font-semibold text-text-primary text-sm flex items-center gap-2">
+                                <span className="font-semibold text-text-primary text-sm flex items-center gap-2 flex-wrap">
                                   {goal.title}
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-surface-100 text-text-secondary">
+                                    {goalObjectiveBadge(goal.objective_type)}
+                                  </span>
                                   {goal.status === 'achieved' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">Atingida</span>}
                                 </span>
                               </div>
@@ -442,7 +442,15 @@ export default function Dashboard() {
                             </div>
                             <div className="flex justify-between items-end mt-1">
                               <div className="flex flex-col text-[10px] text-text-secondary">
-                                <span>{tierText}: {formatGoalVal(goal, goal.current_progress || 0)} de {formatGoalVal(goal, goal.target || 0)}</span>
+                                <span>
+                                  {formatGoalProgressLine({
+                                    measureType: goal.measure_type,
+                                    objectiveType: goal.objective_type,
+                                    current: goal.current_progress || 0,
+                                    target: goal.target || 0,
+                                    prefix: tierText,
+                                  })}
+                                </span>
                               </div>
                               {goal.deadline && <span className="text-[10px] text-text-secondary">Até {new Date(goal.deadline).toLocaleDateString('pt-BR')}</span>}
                             </div>
@@ -518,10 +526,6 @@ export default function Dashboard() {
               teamIds: myTeamIds,
               coordinatorId: profile?.coordinator_id,
             }));
-            const formatGoalVal = (g: Goal, val: number) =>
-              g.measure_type === 'quantity'
-                ? val.toString()
-                : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
             if (teamGoals.length === 0) {
               return (
@@ -550,8 +554,11 @@ export default function Dashboard() {
                         <PremiumCard key={goal.id}>
                           <div className="flex justify-between items-start mb-2">
                             <div className="flex-1 min-w-0">
-                              <span className="font-semibold text-text-primary text-sm flex items-center gap-2">
+                              <span className="font-semibold text-text-primary text-sm flex items-center gap-2 flex-wrap">
                                 {goal.title}
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-surface-100 text-text-secondary">
+                                  {goalObjectiveBadge(goal.objective_type)}
+                                </span>
                                 {goal.status === 'achieved' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">Atingida</span>}
                               </span>
                               {goal.description && <p className="text-[11px] text-text-secondary mt-0.5 line-clamp-1">{goal.description}</p>}
@@ -565,7 +572,15 @@ export default function Dashboard() {
                           </div>
                           <div className="flex justify-between items-end mt-1">
                             <div className="flex flex-col text-[10px] text-text-secondary">
-                              <span>{tierText}: {formatGoalVal(goal, goal.current_progress || 0)} de {formatGoalVal(goal, goal.target || 0)}</span>
+                              <span>
+                                {formatGoalProgressLine({
+                                  measureType: goal.measure_type,
+                                  objectiveType: goal.objective_type,
+                                  current: goal.current_progress || 0,
+                                  target: goal.target || 0,
+                                  prefix: tierText,
+                                })}
+                              </span>
                             </div>
                             {goal.deadline && <span className="text-[10px] text-text-secondary">Até {new Date(goal.deadline).toLocaleDateString('pt-BR')}</span>}
                           </div>

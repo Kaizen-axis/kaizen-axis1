@@ -29,6 +29,7 @@ import { DiretoriaCardGrid } from '@/pages/reports/DiretoriaCardGrid';
 import { FilterMenu } from '@/pages/reports/FilterMenu';
 import { buildReportHref } from '@/lib/reports/reportNav';
 import { logAuditEvent } from '@/services/auditLogger';
+import { formatGoalProgressLine, goalObjectiveBadge } from '@/lib/goals/objectiveLabel';
 
 import { CardActionsMenu, type CardActionItem } from '@/components/ui/CardActionsMenu';
 
@@ -1512,10 +1513,6 @@ export default function AdminPanel() {
                 ? <p className="text-center text-text-secondary py-8">{activeGoalTab === 'active' ? 'Nenhuma meta em andamento.' : 'Nenhuma meta encerrada ainda.'}</p>
                 : displayedGoals.map(goal => {
                   const progress = goal.target ? ((goal.current_progress || 0) / goal.target) * 100 : 0;
-                  const formatGoalVal = (val: number) =>
-                    goal.measure_type === 'quantity'
-                      ? val.toString()
-                      : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
                   let progressColor = 'bg-blue-500';
                   let tierText = '';
@@ -1543,6 +1540,9 @@ export default function AdminPanel() {
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-surface-100 text-text-secondary">
                               {resolveAssigneeLabel(goal, assigneeCatalogs)}
                             </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-surface-100 text-text-secondary">
+                              {goalObjectiveBadge(goal.objective_type)}
+                            </span>
                             {goal.status === 'achieved' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400">Atingida</span>}
                             {goal.status === 'failed' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-400">Falhou</span>}
                           </div>
@@ -1553,9 +1553,16 @@ export default function AdminPanel() {
                             </p>
                           )}
                           <div className="mt-3">
-                            <div className="flex justify-between text-xs text-text-secondary mb-1">
+                            <div className="flex justify-between text-xs text-text-secondary mb-1 gap-2">
                               <span>Progresso: {tierText}</span>
-                              <span>{formatGoalVal(goal.current_progress || 0)} / {formatGoalVal(goal.target || 0)}</span>
+                              <span className="text-right">
+                                {formatGoalProgressLine({
+                                  measureType: goal.measure_type,
+                                  objectiveType: goal.objective_type,
+                                  current: goal.current_progress || 0,
+                                  target: goal.target || 0,
+                                })}
+                              </span>
                             </div>
                             <div className="h-2 bg-surface-100 rounded-full overflow-hidden">
                               <div className={`h-full ${progressColor} rounded-full transition-all`} style={{ width: `${Math.min(progress, 100)}%` }} />

@@ -3,7 +3,7 @@ import { motion, AnimatePresence, useAnimation } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import {
     Bell, CheckCheck, Trash2,
-    UserPlus, MessageCircle, AlertTriangle, Target, Briefcase, Megaphone, Info
+    UserPlus, MessageCircle, AlertTriangle, Target, Briefcase, Megaphone, Info, ListTodo
 } from 'lucide-react';
 import { useNotifications, Notification } from '@/context/NotificationContext';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -26,6 +26,7 @@ const getTypeConfig = (type: string) => {
         case 'chat':    return { icon: <MessageCircle size={16} />, color: 'text-green-500',        bg: 'bg-green-50 dark:bg-green-900/30' };
         case 'aviso':   return { icon: <AlertTriangle size={16} />, color: 'text-red-500',          bg: 'bg-red-50 dark:bg-red-900/30' };
         case 'meta':    return { icon: <Target size={16} />,        color: 'text-purple-500',       bg: 'bg-purple-50 dark:bg-purple-900/30' };
+        case 'tarefa':  return { icon: <ListTodo size={16} />,      color: 'text-amber-500',        bg: 'bg-amber-50 dark:bg-amber-900/30' };
         case 'missao':  return { icon: <Briefcase size={16} />,     color: 'text-indigo-500',       bg: 'bg-indigo-50 dark:bg-indigo-900/30' };
         case 'anuncio': return { icon: <Megaphone size={16} />,     color: 'text-orange-500',       bg: 'bg-orange-50 dark:bg-orange-900/30' };
         default:        return { icon: <Info size={16} />,          color: 'text-text-secondary',   bg: 'bg-subtle-bg' };

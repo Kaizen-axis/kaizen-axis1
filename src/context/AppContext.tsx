@@ -1760,7 +1760,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const addAnnouncement = useCallback(async (data: Omit<Announcement, 'id' | 'created_at'>) => {
     try {
-      const basePayload = {
+      const basePayload: Record<string, unknown> = {
         ...data,
         author_id: user?.id,
         assignee_type: data.assignee_type || 'All',
@@ -1768,14 +1768,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         directorate_id: data.directorate_id !== undefined ? data.directorate_id : (profile?.directorate_id || null)
       };
 
-      let { error } = await supabase.from('announcements').insert([{
-        ...basePayload,
-        owner_id: user?.id
-      }]);
+      let payload: Record<string, unknown> = { ...basePayload, owner_id: user?.id };
+      let { error } = await supabase.from('announcements').insert([payload]);
 
       if (error?.message?.toLowerCase().includes('owner_id')) {
-        const retryNoOwner = await supabase.from('announcements').insert([basePayload]);
+        const { owner_id: _ownerId, ...withoutOwner } = payload;
+        payload = withoutOwner;
+        const retryNoOwner = await supabase.from('announcements').insert([payload]);
         error = retryNoOwner.error;
+      }
+
+      if (error?.message && /assignee_id|assignee_type/i.test(error.message)) {
+        const { assignee_id: _assigneeId, assignee_type: _assigneeType, ...withoutAssignee } = payload;
+        const retryNoAssignee = await supabase.from('announcements').insert([withoutAssignee]);
+        error = retryNoAssignee.error;
       }
 
       if (error) throw error;
@@ -1793,7 +1799,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const updateAnnouncement = useCallback(async (id: string, data: Partial<Announcement>) => {
     try {
-      const { error } = await supabase.from('announcements').update(data).eq('id', id);
+      let { error } = await supabase.from('announcements').update(data).eq('id', id);
+
+      if (error?.message && /assignee_id|assignee_type/i.test(error.message)) {
+        const { assignee_id: _assigneeId, assignee_type: _assigneeType, ...withoutAssignee } = data;
+        const retryNoAssignee = await supabase.from('announcements').update(withoutAssignee).eq('id', id);
+        error = retryNoAssignee.error;
+      }
+
       if (error) throw error;
       await refreshAnnouncements();
       logAuditEvent({ action: 'announcement_updated', entity: 'announcement', entityId: id });
