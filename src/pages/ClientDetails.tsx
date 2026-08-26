@@ -71,8 +71,17 @@ const formatDateInput = (raw: string) => {
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
 };
 
-export default function ClientDetails() {
-  const { id } = useParams();
+export default function ClientDetails({
+  clientId,
+  embedded = false,
+  onClose,
+}: {
+  clientId?: string;
+  embedded?: boolean;
+  onClose?: () => void;
+} = {}) {
+  const params = useParams();
+  const id = clientId || params.id;
   const navigate = useNavigate();
   const location = useLocation();
   const {
@@ -148,11 +157,12 @@ export default function ClientDetails() {
   }, [id, getClient, clients]);
 
   useEffect(() => {
+    if (embedded) return;
     if ((location.state as { editInfo?: boolean } | null)?.editInfo) {
       setIsEditingInfo(true);
       navigate(location.pathname, { replace: true, state: {} });
     }
-  }, [location.pathname, location.state, navigate]);
+  }, [embedded, location.pathname, location.state, navigate]);
 
   useEffect(() => {
     if (id && client) {
@@ -205,7 +215,8 @@ export default function ClientDetails() {
     try {
       await deleteClient(id);
       setIsDeleteClientModalOpen(false);
-      navigate('/clients');
+      if (embedded) onClose?.();
+      else navigate('/clients');
     } catch (e) {
       alert('Erro ao excluir cliente.');
     }
@@ -700,17 +711,20 @@ export default function ClientDetails() {
   };
 
   if (!client) return (
-    <div className="p-6 flex flex-col items-center justify-center min-h-[50vh] text-text-secondary">
+    <div className={`${embedded ? 'py-8' : 'p-6 min-h-[50vh]'} flex flex-col items-center justify-center text-text-secondary`}>
       <p>Cliente não encontrado.</p>
-      <button onClick={() => navigate('/clients')} className="mt-4 text-gold-600 font-medium hover:underline">
-        Voltar para clientes
+      <button
+        onClick={() => (embedded ? onClose?.() : navigate('/clients'))}
+        className="mt-4 text-gold-600 font-medium hover:underline"
+      >
+        {embedded ? 'Fechar' : 'Voltar para clientes'}
       </button>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-surface-50 pb-24">
-      {/* Header / Nav */}
+    <div className={embedded ? '' : 'min-h-screen bg-surface-50 pb-24'}>
+      {!embedded && (
       <div className="bg-card-bg shadow-sm px-4 py-4 sticky top-0 z-20 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-surface-100 text-text-secondary">
@@ -726,8 +740,20 @@ export default function ClientDetails() {
           <Trash2 size={20} />
         </button>
       </div>
+      )}
 
-      <div className="p-6 space-y-6">
+      <div className={embedded ? 'space-y-6' : 'p-6 space-y-6'}>
+        {embedded && (
+          <div className="flex justify-end">
+            <button
+              onClick={() => setIsDeleteClientModalOpen(true)}
+              className="p-2 text-red-500 hover:bg-danger-subtle rounded-full transition-colors"
+              title="Excluir Cliente"
+            >
+              <Trash2 size={20} />
+            </button>
+          </div>
+        )}
         {/* Main Info Card */}
         <PremiumCard highlight className="space-y-4">
           <div className="flex justify-between items-start">

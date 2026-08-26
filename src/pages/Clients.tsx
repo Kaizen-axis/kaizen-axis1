@@ -20,6 +20,7 @@ import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { CardActionsMenu, type CardActionItem } from '@/components/ui/CardActionsMenu';
 import { CreateAppointmentModal } from '@/components/schedule/CreateAppointmentModal';
 import { EditClientModal } from '@/components/clients/EditClientModal';
+import { ClientFichaModal } from '@/components/clients/ClientFichaModal';
 import { supabase } from '@/lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -339,6 +340,7 @@ export default function Clients() {
   const [newClientPrefill, setNewClientPrefill] = useState<NewClientPrefill | undefined>(undefined);
   const [appointmentClient, setAppointmentClient] = useState<{ id: string; name: string } | null>(null);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [viewingClient, setViewingClient] = useState<Client | null>(null);
   const { requestConfirm, confirmDialogProps } = useConfirmDialog();
 
   const closeNewClientModal = () => {
@@ -360,7 +362,7 @@ export default function Clients() {
     {
       label: 'Ver ficha',
       icon: <FileText size={13} />,
-      onClick: () => navigate(`/clients/${client.id}`),
+      onClick: () => setViewingClient(client),
     },
     {
       label: 'Agendar',
@@ -599,7 +601,7 @@ export default function Clients() {
           clients={kanbanClients}
           stages={CLIENT_STAGES}
           renderActions={(client) => <CardActionsMenu items={clientCardActions(client)} />}
-          onCardOpen={(client) => navigate(`/clients/${client.id}`)}
+          onCardOpen={(client) => setViewingClient(client)}
           onMove={(id, stage) => {
             if (isStageRestrictedForRole(stage, role)) {
               alert('⚠️ Você não tem permissão para mover clientes para a etapa "' + stage + '".');
@@ -800,7 +802,7 @@ export default function Clients() {
                 key={client.id}
                 interactive
                 className={`relative group ${canViewUrgencyState && urgency.level === 'critical' ? 'border-red-300 dark:border-red-700' : canViewUrgencyState && urgency.level === 'urgent' ? 'border-orange-300 dark:border-orange-700' : ''}`}
-                onClick={() => navigate(`/clients/${client.id}`)}
+                onClick={() => setViewingClient(client)}
               >
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex-1 min-w-0 pr-2">
@@ -958,6 +960,12 @@ export default function Clients() {
           onSuccess={closeNewClientModal}
         />
       </Modal>
+
+      <ClientFichaModal
+        isOpen={!!viewingClient}
+        client={viewingClient}
+        onClose={() => setViewingClient(null)}
+      />
 
       <EditClientModal
         isOpen={!!editingClient}
