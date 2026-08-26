@@ -44,7 +44,7 @@ export function CardActionsMenu({
         <MoreHorizontal size={14} />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1.5 z-20 w-44 bg-card-bg border border-surface-200 rounded-xl shadow-xl overflow-hidden p-1.5">
+        <div className="absolute right-0 top-full mt-1.5 z-20 w-48 bg-card-bg border border-surface-200 rounded-xl shadow-xl overflow-hidden p-1.5">
           {items.map((item) => (
             <button
               key={item.label}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PageHeader, PremiumCard, RoundedButton } from '@/components/ui/PremiumComponents';
-import { Users, Shield, ShieldCheck, Target, Megaphone, BarChart3, Plus, Search, Trophy, Download, FileSpreadsheet, FileText, Trash2, Edit2, ChevronDown, ChevronLeft, Calendar, Loader2, Building2, TrendingUp, Printer, Star, Award, Zap, Flame, MoreHorizontal, FileDown, MapPin } from 'lucide-react';
+import { Users, Shield, ShieldCheck, Target, Megaphone, BarChart3, Plus, Search, Trophy, Download, FileSpreadsheet, FileText, Trash2, Edit2, ChevronDown, ChevronLeft, Calendar, Loader2, Building2, TrendingUp, Printer, Star, Award, Zap, Flame, MoreHorizontal, FileDown, MapPin, Ban } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
@@ -30,7 +30,7 @@ import { FilterMenu } from '@/pages/reports/FilterMenu';
 import { buildReportHref } from '@/lib/reports/reportNav';
 import { logAuditEvent } from '@/services/auditLogger';
 
-import { CardActionsMenu } from '@/components/ui/CardActionsMenu';
+import { CardActionsMenu, type CardActionItem } from '@/components/ui/CardActionsMenu';
 
 export default function AdminPanel() {
   // ── Hard role guard: only ADMIN and DIRETOR can access this page ────────────
@@ -1327,17 +1327,24 @@ export default function AdminPanel() {
                           <p className="font-semibold text-text-primary truncate">{u.name}</p>
                           <p className="text-xs text-text-secondary">{u.role}</p>
                         </div>
-                        <RoundedButton
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDeactivateUser(u.id, u.name || 'Usuário')}
-                          className="md:hidden border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300 whitespace-nowrap flex-shrink-0"
-                        >
-                          Desativar acesso
-                        </RoundedButton>
+                        <CardActionsMenu
+                          items={[
+                            {
+                              label: 'Desativar acesso',
+                              icon: <Ban size={13} />,
+                              onClick: () => handleDeactivateUser(u.id, u.name || 'Usuário'),
+                            },
+                            ...(isAdmin ? [{
+                              label: 'Excluir',
+                              icon: <Trash2 size={13} />,
+                              danger: true as const,
+                              onClick: () => handlePermanentDeleteUser(u.id, u.name || 'Usuário'),
+                            } satisfies CardActionItem] : []),
+                          ]}
+                        />
                       </div>
 
-                      {/* Dropdowns + botão desativar desktop */}
+                      {/* Dropdowns */}
                       <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:justify-between">
                         <div className="flex flex-col gap-1.5 md:flex-row md:gap-2 md:items-center">
                           <select value={u.role} onChange={e => handleRoleChange(u.id, e.target.value)}
@@ -1374,14 +1381,6 @@ export default function AdminPanel() {
                               .map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                           </select>
                         </div>
-                        <RoundedButton
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDeactivateUser(u.id, u.name || 'Usuário')}
-                          className="hidden md:flex border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300 whitespace-nowrap flex-shrink-0"
-                        >
-                          Desativar acesso
-                        </RoundedButton>
                       </div>
                     </PremiumCard>
                   ))}

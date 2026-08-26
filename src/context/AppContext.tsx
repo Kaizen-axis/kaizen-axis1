@@ -1233,13 +1233,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const sanitizedPath = path.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9.\-_/]/g, '_');
       const { data, error } = await supabase.storage.from(targetBucket).upload(sanitizedPath, file, {
         upsert: targetBucket === 'client-documents' ? false : true,
-        contentType: file.type
+        contentType: file.type || undefined,
       });
       if (error) throw error;
       return data.path;
     } catch (e: any) {
       console.error('Erro no upload Storage:', e.message || e);
-      return null;
+      throw new Error(e?.message || 'Erro ao enviar arquivo');
     }
   };
 

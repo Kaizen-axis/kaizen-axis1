@@ -3,14 +3,12 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { PremiumCard, StatusBadge, SectionHeader, RoundedButton } from '@/components/ui/PremiumComponents';
 import { ChevronLeft, Phone, Mail, Calendar, Edit2, Check, Building2, Wallet, History, Trash2, FileText, Save, X, UploadCloud, Plus, ChevronDown, ChevronUp, FileDown } from 'lucide-react';
 import { Client, ClientDocument, CLIENT_STAGES, ClientStage, isStageRestrictedForRole, missingFieldsForConcluido } from '@/data/clients';
-import { RJ_CITIES, getNeighborhoods } from '@/data/cities';
-import { BUILDERS } from '@/data/builders';
-import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { motion, AnimatePresence } from 'motion/react';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { CardActionsMenu } from '@/components/ui/CardActionsMenu';
+import { ClientInfoForm } from '@/components/clients/ClientInfoForm';
 import { useApp } from '@/context/AppContext';
 import { useAuthorization } from '@/hooks/useAuthorization';
 import { supabase } from '@/lib/supabase';
@@ -19,6 +17,7 @@ import { ClientHierarchyTags } from '@/components/ui/ClientHierarchyTags';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { loadKaizenLogo, drawReportHeader, addStandardFooters } from '@/lib/pdf/reportKit';
 import { imageToPdf } from '@/lib/pdf-tools/imageToPdf';
+import { CLIENT_DOCUMENT_ACCEPT, prepareClientUploadFile } from '@/lib/client-document-upload';
 
 const IMAGE_DOC_RE = /\.(jpe?g|png|webp)$/i;
 
@@ -260,24 +259,23 @@ export default function ClientDetails() {
 
     setIsUploading(true);
     try {
-      const filePath = `${id}/${Date.now()}-${file.name}`;
-      const uploadedPath = await uploadFile(file, filePath, 'client-documents');
+      const prepared = await prepareClientUploadFile(file);
+      const filePath = `${id}/${Date.now()}-${prepared.name}`;
+      const uploadedPath = await uploadFile(prepared, filePath, 'client-documents');
 
       if (uploadedPath) {
-        const dbResult = await addDocumentToClient(id, file.name, uploadedPath);
+        const dbResult = await addDocumentToClient(id, prepared.name, uploadedPath);
         if (dbResult.success) {
           alert('Documento anexado com sucesso!');
         } else {
           alert(`Erro do Banco de Dados: ${dbResult.error}`);
         }
-      } else {
-        alert('Erro ao fazer upload do documento.');
       }
-    } catch (e) {
-      alert('Erro inesperado durante o upload.');
+    } catch (e: any) {
+      alert(e?.message || 'Erro inesperado durante o upload.');
     } finally {
       setIsUploading(false);
-      event.target.value = ''; // reset input
+      event.target.value = '';
     }
   };
 
@@ -856,125 +854,7 @@ export default function ClientDetails() {
           />
           <PremiumCard className="space-y-4">
             {isEditingInfo ? (
-              <div className="grid grid-cols-1 gap-4">
-                {[
-                  { label: 'Nome', key: 'name' },
-                  { label: 'CPF', key: 'cpf' },
-                  { label: 'Email', key: 'email' },
-                  { label: 'Telefone', key: 'phone' },
-                  { label: 'Endereço', key: 'address' },
-                  { label: 'Profissão', key: 'profession' },
-                  { label: 'Renda Bruta', key: 'grossIncome' },
-                  { label: 'Empreendimento', key: 'development' },
-                  { label: 'Construtora', key: 'builder' },
-                  { label: 'Valor', key: 'intendedValue' },
-                  { label: 'Cidade de Interesse', key: 'regionOfInterest' },
-                  { label: 'Bairro', key: 'neighborhood' },
-                ].map(({ label, key }) => (
-                  <div key={key}>
-                    <label className="text-xs text-text-secondary uppercase tracking-wider mb-1 block">{label}</label>
-                    {key === 'regionOfInterest' ? (
-                      <SearchableSelect
-                        value={(editForm as Record<string, string>)[key] || ''}
-                        onChange={(v) => setEditForm({ ...editForm, regionOfInterest: v, neighborhood: '' })}
-                        options={RJ_CITIES}
-                        placeholder="Selecione a cidade"
-                        searchPlaceholder="Buscar cidade do RJ..."
-                      />
-                    ) : key === 'neighborhood' ? (
-                      getNeighborhoods(editForm.regionOfInterest).length > 0 ? (
-                        <SearchableSelect
-                          value={editForm.neighborhood || ''}
-                          onChange={(v) => setEditForm({ ...editForm, neighborhood: v })}
-                          options={getNeighborhoods(editForm.regionOfInterest)}
-                          placeholder="Selecione o bairro"
-                          searchPlaceholder={`Buscar bairro em ${editForm.regionOfInterest}...`}
-                        />
-                      ) : (
-                        <input
-                          value={editForm.neighborhood || ''}
-                          onChange={e => setEditForm({ ...editForm, neighborhood: e.target.value })}
-                          className="w-full p-2 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary"
-                          placeholder="Digite o bairro (opcional)"
-                        />
-                      )
-                    ) : key === 'builder' ? (
-                      <SearchableSelect
-                        value={editForm.builder || ''}
-                        onChange={(v) => setEditForm({ ...editForm, builder: v })}
-                        options={BUILDERS}
-                        placeholder="Selecione a construtora"
-                        searchPlaceholder="Buscar construtora..."
-                      />
-                    ) : (
-                      <input
-                        value={(editForm as Record<string, string>)[key] || ''}
-                        onChange={e => {
-                          let val = e.target.value;
-                          if (key === 'intendedValue') {
-                            let v = val.replace(/\D/g, '');
-                            if (v) {
-                              v = (parseInt(v, 10) / 100).toFixed(2);
-                              val = v.replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-                            } else {
-                              val = '';
-                            }
-                          }
-                          setEditForm({ ...editForm, [key]: val });
-                        }}
-                        className="w-full p-2 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary"
-                      />
-                    )}
-                  </div>
-                ))}
-                <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                  <div>
-                    <label className="text-[10px] sm:text-xs text-text-secondary uppercase tracking-wider mb-1 block leading-tight min-h-[2.25rem] sm:min-h-0">Tipo de Renda</label>
-                    <select
-                      value={editForm.incomeType || ''}
-                      onChange={e => setEditForm({ ...editForm, incomeType: e.target.value as 'Formal' | 'Informal' | 'Mista' })}
-                      className="w-full p-2 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary"
-                    >
-                      <option value="">Selecione</option>
-                      <option value="Formal">Formal</option>
-                      <option value="Informal">Informal</option>
-                      <option value="Mista">Mista</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] sm:text-xs text-text-secondary uppercase tracking-wider mb-1 block leading-tight min-h-[2.25rem] sm:min-h-0">Cotista</label>
-                    <select
-                      value={editForm.cotista || ''}
-                      onChange={e => setEditForm({ ...editForm, cotista: e.target.value })}
-                      className="w-full p-2 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary"
-                    >
-                      <option value="">Selecione</option>
-                      <option value="Sim">Sim</option>
-                      <option value="Não">Não</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] sm:text-xs text-text-secondary uppercase tracking-wider mb-1 block leading-tight min-h-[2.25rem] sm:min-h-0">Fator Social</label>
-                    <select
-                      value={editForm.socialFactor || ''}
-                      onChange={e => setEditForm({ ...editForm, socialFactor: e.target.value })}
-                      className="w-full p-2 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary"
-                    >
-                      <option value="">Selecione</option>
-                      <option value="Sim">Sim</option>
-                      <option value="Não">Não</option>
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs text-text-secondary uppercase tracking-wider mb-1 block">Observações</label>
-                  <textarea
-                    value={editForm.observations || ''}
-                    onChange={e => setEditForm({ ...editForm, observations: e.target.value })}
-                    className="w-full p-2 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary min-h-[80px]"
-                  />
-                </div>
-              </div>
+              <ClientInfoForm value={editForm} onChange={setEditForm} />
             ) : (
               <div className="grid grid-cols-1 gap-4">
                 {[
@@ -1160,7 +1040,7 @@ export default function ClientDetails() {
                   type="file"
                   id="document-upload"
                   className="hidden"
-                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                  accept={CLIENT_DOCUMENT_ACCEPT}
                   onChange={handleFileUpload}
                   disabled={isUploading}
                 />

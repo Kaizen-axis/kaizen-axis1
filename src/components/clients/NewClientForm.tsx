@@ -7,6 +7,7 @@ import { BUILDERS } from '@/data/builders';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { useApp } from '@/context/AppContext';
 import { useAuthorization } from '@/hooks/useAuthorization';
+import { CLIENT_DOCUMENT_ACCEPT, prepareClientUploadFile } from '@/lib/client-document-upload';
 
 const DRAFT_KEY = 'new-client-draft';
 
@@ -272,18 +273,24 @@ export function NewClientForm({
       if (documents.length > 0) {
 
         for (const file of documents) {
-          const filePath = `${newClient.id}/${Date.now()}-${file.name}`;
-          const uploadedPath = await uploadFile(file, filePath, 'client-documents');
+          try {
+            const prepared = await prepareClientUploadFile(file);
+            const filePath = `${newClient.id}/${Date.now()}-${prepared.name}`;
+            const uploadedPath = await uploadFile(prepared, filePath, 'client-documents');
 
-          if (!uploadedPath) {
-            hasDocumentError = true;
-            continue;
-          }
+            if (!uploadedPath) {
+              hasDocumentError = true;
+              continue;
+            }
 
-          const dbResult = await addDocumentToClient(newClient.id, file.name, uploadedPath);
-          if (!dbResult.success) {
+            const dbResult = await addDocumentToClient(newClient.id, prepared.name, uploadedPath);
+            if (!dbResult.success) {
+              hasDocumentError = true;
+              console.error(dbResult.error);
+            }
+          } catch (err: any) {
             hasDocumentError = true;
-            console.error(dbResult.error);
+            console.error(err?.message || err);
           }
         }
       }
@@ -642,7 +649,7 @@ export function NewClientForm({
             <div className="border-2 border-dashed border-surface-200 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-surface-50 transition-colors cursor-pointer relative">
               <input
                 type="file"
-                accept="application/pdf"
+                accept={CLIENT_DOCUMENT_ACCEPT}
                 multiple
                 onChange={handleFileChange}
                 className="absolute inset-0 opacity-0 cursor-pointer"
@@ -650,8 +657,8 @@ export function NewClientForm({
               <div className="w-12 h-12 bg-accent-subtle rounded-full flex items-center justify-center text-gold-600 dark:text-gold-400 mb-2">
                 <UploadCloud size={24} />
               </div>
-              <p className="text-sm font-medium text-text-primary">Toque para adicionar PDFs</p>
-              <p className="text-xs text-text-secondary mt-1">RG, CPF, Comprovante de Renda</p>
+              <p className="text-sm font-medium text-text-primary">Toque para adicionar arquivos</p>
+              <p className="text-xs text-text-secondary mt-1">PDF, imagens, RG, CPF, comprovante de renda</p>
             </div>
 
             {documents.length > 0 && (

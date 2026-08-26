@@ -59,8 +59,10 @@ export function CreateAppointmentModal({
     try {
       if (editing) {
         await updateAppointment(editing.id, formData);
+        alert('Agendamento atualizado.');
       } else {
         await addAppointment(formData as Omit<Appointment, 'id' | 'created_at'>);
+        alert('Agendamento criado.');
       }
       onClose();
     } catch (e: any) {

@@ -17,11 +17,13 @@ export function ClientsKanban({
   stages,
   onMove,
   renderActions,
+  onCardOpen,
 }: {
   clients: Client[];
   stages: ClientStage[];
   onMove: (clientId: string, stage: ClientStage) => void;
   renderActions?: (client: Client) => ReactNode;
+  onCardOpen?: (client: Client) => void;
 }) {
   const navigate = useNavigate();
   const boardRef = useRef<HTMLDivElement>(null);
@@ -170,8 +172,9 @@ export function ClientsKanban({
       const target = overStageRef.current;
       if (target && target !== info.stage) onMove(info.id, target as ClientStage);
     } else {
-      // toque/clique curto sem arrasto → abre a ficha
-      navigate(`/clients/${info.id}`);
+      const opened = clients.find((c) => c.id === info.id);
+      if (opened && onCardOpen) onCardOpen(opened);
+      else navigate(`/clients/${info.id}`);
     }
     cleanup();
   };
