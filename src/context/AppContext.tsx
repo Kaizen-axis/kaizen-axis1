@@ -193,6 +193,7 @@ interface AppContextValue {
   uploadFile: (file: File, path: string, bucket?: string) => Promise<string | null>;
   addDocumentToClient: (clientId: string, name: string, path: string) => Promise<{ success: boolean; error?: string }>;
   deleteDocumentFromClient: (docId: string, filePath?: string) => Promise<{ success: boolean; error?: string }>;
+  renameClientDocument: (docId: string, name: string) => Promise<{ success: boolean; error?: string }>;
   getDownloadUrl: (path: string, bucket?: string) => Promise<string | null>;
 
   // Appointments
@@ -1297,6 +1298,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const renameClientDocument = async (docId: string, name: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const { data, error } = await supabase
+        .from('client_documents')
+        .update({ name })
+        .eq('id', docId)
+        .select('id');
+      if (error) return { success: false, error: error.message };
+      if (!data || data.length === 0) {
+        return { success: false, error: 'Sem permissão para renomear este documento.' };
+      }
+
+      await refreshClients();
+      logAuditEvent({
+        action: 'document_renamed',
+        entity: 'client_document',
+        entityId: docId,
+        userId: userRef.current?.id || null,
+        metadata: { name },
+      });
+      return { success: true };
+    } catch (e: any) {
+      console.error('Erro ao renomear documento:', e);
+      return { success: false, error: e.message || 'Erro desconhecido' };
+    }
+  };
+
   const getDownloadUrl = async (path: string, bucket = 'documents'): Promise<string | null> => {
     // C-07: client-documents must go through get-doc-url-v2 Edge Function (RLS + audit).
     if (bucket === 'client-documents') {
@@ -2052,6 +2080,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       uploadFile,
       addDocumentToClient,
       deleteDocumentFromClient,
+      renameClientDocument,
       getDownloadUrl,
       appointments, refreshAppointments, addAppointment, updateAppointment, deleteAppointment,
       tasks, refreshTasks, addTask, updateTask, deleteTask,

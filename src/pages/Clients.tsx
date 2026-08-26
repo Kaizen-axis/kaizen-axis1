@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { PremiumCard, StatusBadge, RoundedButton } from '@/components/ui/PremiumComponents';
 import {
-  Search, Filter, Phone, Mail, MessageCircle, UserPlus,
+  Search, Filter, Mail, MessageCircle, UserPlus,
   Clock, Plus, Loader2, Zap, Brain, AlertTriangle, CheckCircle2,
   Sparkles, X, BadgeCheck, ChevronDown, LayoutGrid, List, Edit2, Trash2, Calendar, Video, FileText
 } from 'lucide-react';
@@ -843,17 +843,8 @@ export default function Clients() {
                     {client.intendedValue || '—'}
                   </span>
                 </div>
-                <div className="flex gap-2" onClick={e => e.stopPropagation()}>
-                  <RoundedButton variant="secondary" size="sm" className="flex-1 h-9 text-xs" href={`tel:+55${client.phone?.replace(/\D/g, '')}`}>
-                    <Phone size={14} /> Ligar
-                  </RoundedButton>
-                  <RoundedButton
-                    variant="secondary" size="sm" className="flex-1 h-9 text-xs"
-                    onClick={e => { e.stopPropagation(); setEmailingClient(client); }}
-                  >
-                    <Mail size={14} /> Email
-                  </RoundedButton>
-                  {canViewUrgencyState && urgency.level && (
+                {canViewUrgencyState && urgency.level && (
+                  <div className="flex gap-2" onClick={e => e.stopPropagation()}>
                     <RoundedButton
                       variant="secondary" size="sm"
                       className={`h-9 px-3 text-xs ${
@@ -869,8 +860,8 @@ export default function Clients() {
                     >
                       <AlertTriangle size={14} />
                     </RoundedButton>
-                  )}
-                </div>
+                  </div>
+                )}
               </PremiumCard>
               );
             })}

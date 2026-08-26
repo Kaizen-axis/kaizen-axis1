@@ -297,3 +297,27 @@ h1, h2, h3, .v3-serif {
 button, input, select, textarea, optgroup, [role="tab"], .font-ui {
   font-family: var(--font-sans);
 }
+
+@keyframes doc-wave-fill {
+  0% { height: 12%; }
+  100% { height: 90%; }
+}
+
+@keyframes doc-wave-x {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.doc-wave-fill {
+  height: 90%;
+  animation: doc-wave-fill 2.4s ease-out forwards;
+}
+
+.doc-wave-x {
+  animation: doc-wave-x 1.8s linear infinite;
+}
+
+.doc-wave-x-delayed {
+  animation: doc-wave-x 2.4s linear infinite;
+  animation-delay: -0.8s;
+}

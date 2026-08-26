@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { PremiumCard, StatusBadge, SectionHeader, RoundedButton } from '@/components/ui/PremiumComponents';
-import { ChevronLeft, Mail, Calendar, Edit2, Building2, Wallet, History, Trash2, FileText, Save, X, UploadCloud, Plus, ChevronDown, ChevronUp, FileDown, MessageCircle, Video, Loader2 } from 'lucide-react';
+import { ChevronLeft, Mail, Calendar, Edit2, Building2, Wallet, History, Trash2, FileText, Save, X, UploadCloud, Plus, ChevronDown, ChevronUp, FileDown, MessageCircle, Video } from 'lucide-react';
 import { Client, ClientDocument } from '@/data/clients';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -26,6 +26,16 @@ function whatsappDigits(phone?: string) {
   const digits = (phone || '').replace(/\D/g, '');
   if (!digits) return '';
   return digits.startsWith('55') ? digits : `55${digits}`;
+}
+
+function withOriginalExtension(nextName: string, originalName: string) {
+  const trimmed = nextName.trim();
+  if (!trimmed) return originalName;
+  const dot = originalName.lastIndexOf('.');
+  const origExt = dot >= 0 ? originalName.slice(dot) : '';
+  if (!origExt) return trimmed;
+  if (trimmed.toLowerCase().endsWith(origExt.toLowerCase())) return trimmed;
+  return `${trimmed}${origExt}`;
 }
 
 function isImageDocument(doc: ClientDocument) {
@@ -99,6 +109,7 @@ export default function ClientDetails({
     uploadFile,
     addDocumentToClient,
     deleteDocumentFromClient,
+    renameClientDocument,
     addClientProponent,
     updateClientProponent,
     deleteClientProponent,
@@ -116,6 +127,9 @@ export default function ClientDetails({
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [convertingDocId, setConvertingDocId] = useState<string | null>(null);
+  const [documentToRename, setDocumentToRename] = useState<ClientDocument | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [isRenaming, setIsRenaming] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAppointmentOpen, setIsAppointmentOpen] = useState(false);
   const [newProponent, setNewProponent] = useState({
@@ -255,6 +269,39 @@ export default function ClientDetails({
 
   const handleDeleteDocument = (docId: string) => {
     setDocumentToDelete(docId);
+  };
+
+  const closeRenameModal = () => {
+    if (isRenaming) return;
+    setDocumentToRename(null);
+    setRenameValue('');
+  };
+
+  const handleRenameDocument = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!documentToRename) return;
+    const nextName = withOriginalExtension(renameValue, documentToRename.name);
+    if (!nextName.trim()) {
+      alert('Informe um nome para o documento.');
+      return;
+    }
+    if (nextName === documentToRename.name) {
+      closeRenameModal();
+      return;
+    }
+
+    setIsRenaming(true);
+    try {
+      const result = await renameClientDocument(documentToRename.id, nextName);
+      if (!result.success) {
+        alert(result.error || 'Erro ao renomear documento.');
+        return;
+      }
+      setDocumentToRename(null);
+      setRenameValue('');
+    } finally {
+      setIsRenaming(false);
+    }
   };
 
   const handleConvertDocumentToPdf = async (doc: ClientDocument) => {
@@ -1001,9 +1048,29 @@ export default function ClientDetails({
                   onClick={() => { if (!converting) handleOpenDocument((doc as any).file_path, (doc as any).id); }}
                 >
                   {converting && (
-                    <div className="absolute inset-0 z-10 bg-card-bg/85 backdrop-blur-[1px] flex items-center justify-center gap-2">
-                      <Loader2 size={18} className="animate-spin text-primary-400" />
-                      <span className="text-sm font-medium text-text-secondary">Convertendo para PDF…</span>
+                    <div className="absolute inset-0 z-10 overflow-hidden pointer-events-none">
+                      <div className="absolute inset-x-0 bottom-0 doc-wave-fill overflow-visible">
+                        <div className="absolute inset-0 bg-primary-600/80" />
+                        <svg
+                          className="doc-wave-x absolute -top-4 left-0 h-5 w-[200%] text-primary-600"
+                          viewBox="0 0 1200 40"
+                          preserveAspectRatio="none"
+                          aria-hidden
+                        >
+                          <path fill="currentColor" d="M0,20 C150,38 350,2 600,20 C850,38 1050,2 1200,20 V40 H0 Z" />
+                        </svg>
+                        <svg
+                          className="doc-wave-x-delayed absolute -top-6 left-0 h-6 w-[200%] text-primary-500/70"
+                          viewBox="0 0 1200 40"
+                          preserveAspectRatio="none"
+                          aria-hidden
+                        >
+                          <path fill="currentColor" d="M0,18 C200,36 400,0 600,18 C800,36 1000,0 1200,18 V40 H0 Z" />
+                        </svg>
+                      </div>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-sm font-medium text-white drop-shadow-sm">Convertendo para PDF…</span>
+                      </div>
                     </div>
                   )}
                   <div className="flex items-center gap-3 min-w-0">
@@ -1018,6 +1085,15 @@ export default function ClientDetails({
                   <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                     <CardActionsMenu
                       items={[
+                        {
+                          label: 'Renomear',
+                          icon: <Edit2 size={13} />,
+                          disabled: !!convertingDocId,
+                          onClick: () => {
+                            setDocumentToRename(doc);
+                            setRenameValue(doc.name || '');
+                          },
+                        },
                         ...(isImageDocument(doc) ? [{
                           label: converting ? 'Convertendo…' : 'Converter para PDF',
                           icon: <FileDown size={13} />,
@@ -1173,6 +1249,25 @@ export default function ClientDetails({
         client={client}
         onClose={() => setIsEmailModalOpen(false)}
       />
+
+      <Modal
+        isOpen={!!documentToRename}
+        onClose={closeRenameModal}
+        title="Renomear documento"
+        overlayClassName="z-[60]"
+      >
+        <form onSubmit={handleRenameDocument} className="space-y-4">
+          <input
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            autoFocus
+            className="w-full p-3 bg-surface-50 rounded-xl border border-surface-200 focus:ring-2 focus:ring-gold-400/70 focus:border-gold-300 text-text-primary"
+          />
+          <RoundedButton type="submit" className="w-full" disabled={isRenaming || !renameValue.trim()}>
+            {isRenaming ? 'Salvando...' : 'Salvar'}
+          </RoundedButton>
+        </form>
+      </Modal>
 
       <CreateAppointmentModal
         isOpen={isAppointmentOpen}
