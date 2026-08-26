@@ -1049,23 +1049,23 @@ export default function ClientDetails({
                 >
                   {converting && (
                     <div className="absolute inset-0 z-10 overflow-hidden pointer-events-none">
-                      <div className="absolute inset-x-0 bottom-0 doc-wave-fill overflow-visible">
+                      <div className="absolute inset-y-0 left-0 doc-wave-fill overflow-visible">
                         <div className="absolute inset-0 bg-primary-600/80" />
                         <svg
-                          className="doc-wave-x absolute -top-4 left-0 h-5 w-[200%] text-primary-600"
-                          viewBox="0 0 1200 40"
+                          className="doc-wave-y absolute top-0 -right-4 h-[200%] w-5 text-primary-600"
+                          viewBox="0 0 40 1200"
                           preserveAspectRatio="none"
                           aria-hidden
                         >
-                          <path fill="currentColor" d="M0,20 C150,38 350,2 600,20 C850,38 1050,2 1200,20 V40 H0 Z" />
+                          <path fill="currentColor" d="M0,0 H20 C38,150 2,350 20,600 C38,850 2,1050 20,1200 H0 Z" />
                         </svg>
                         <svg
-                          className="doc-wave-x-delayed absolute -top-6 left-0 h-6 w-[200%] text-primary-500/70"
-                          viewBox="0 0 1200 40"
+                          className="doc-wave-y-delayed absolute top-0 -right-6 h-[200%] w-6 text-primary-500/70"
+                          viewBox="0 0 40 1200"
                           preserveAspectRatio="none"
                           aria-hidden
                         >
-                          <path fill="currentColor" d="M0,18 C200,36 400,0 600,18 C800,36 1000,0 1200,18 V40 H0 Z" />
+                          <path fill="currentColor" d="M0,0 H18 C36,200 0,400 18,600 C36,800 0,1000 18,1200 H0 Z" />
                         </svg>
                       </div>
                       <div className="absolute inset-0 flex items-center justify-center">
