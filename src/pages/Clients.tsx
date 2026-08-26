@@ -43,6 +43,12 @@ function formatPhone(phone: string) {
   return phone;
 }
 
+function whatsappDigits(phone?: string) {
+  const digits = (phone || '').replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.startsWith('55') ? digits : `55${digits}`;
+}
+
 // ─── Urgency indicator ────────────────────────────────────────────────────────
 
 function getClientUrgency(client: Client): { days: number; level: 'critical' | 'urgent' | 'warning' | null } {
@@ -362,6 +368,21 @@ export default function Clients() {
       onClick: () => setAppointmentClient({ id: client.id, name: client.name }),
     },
     {
+      label: 'Enviar email',
+      icon: <Mail size={13} />,
+      onClick: () => navigate(`/clients/${client.id}/email`),
+    },
+    {
+      label: 'WhatsApp',
+      icon: <MessageCircle size={13} />,
+      disabled: !whatsappDigits(client.phone),
+      onClick: () => {
+        const digits = whatsappDigits(client.phone);
+        if (!digits) return;
+        window.open(`https://wa.me/${digits}`, '_blank');
+      },
+    },
+    {
       label: 'Videochamada',
       icon: <Video size={13} />,
       disabled: true,
@@ -578,7 +599,7 @@ export default function Clients() {
           clients={kanbanClients}
           stages={CLIENT_STAGES}
           renderActions={(client) => <CardActionsMenu items={clientCardActions(client)} />}
-          onCardOpen={(client) => setEditingClient(client)}
+          onCardOpen={(client) => navigate(`/clients/${client.id}`)}
           onMove={(id, stage) => {
             if (isStageRestrictedForRole(stage, role)) {
               alert('⚠️ Você não tem permissão para mover clientes para a etapa "' + stage + '".');
@@ -779,7 +800,7 @@ export default function Clients() {
                 key={client.id}
                 interactive
                 className={`relative group ${canViewUrgencyState && urgency.level === 'critical' ? 'border-red-300 dark:border-red-700' : canViewUrgencyState && urgency.level === 'urgent' ? 'border-orange-300 dark:border-orange-700' : ''}`}
-                onClick={() => setEditingClient(client)}
+                onClick={() => navigate(`/clients/${client.id}`)}
               >
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex-1 min-w-0 pr-2">
