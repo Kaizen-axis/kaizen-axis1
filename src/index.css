@@ -299,28 +299,28 @@ button, input, select, textarea, optgroup, [role="tab"], .font-ui {
 }
 
 @keyframes doc-wave-fill {
-  0% { width: 6%; }
-  35% { width: 42%; }
-  62% { width: 68%; }
-  82% { width: 84%; }
-  100% { width: 92%; }
+  0% { height: 10%; }
+  35% { height: 42%; }
+  62% { height: 68%; }
+  82% { height: 84%; }
+  100% { height: 92%; }
 }
 
-@keyframes doc-wave-y {
-  from { transform: translateY(0); }
-  to { transform: translateY(-50%); }
+@keyframes doc-wave-x {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
 }
 
 .doc-wave-fill {
-  width: 92%;
+  height: 92%;
   animation: doc-wave-fill 9.5s cubic-bezier(0.22, 0.45, 0.28, 1) forwards;
 }
 
-.doc-wave-y {
-  animation: doc-wave-y 3.6s linear infinite;
+.doc-wave-x {
+  animation: doc-wave-x 3.6s linear infinite;
 }
 
-.doc-wave-y-delayed {
-  animation: doc-wave-y 5.4s linear infinite;
+.doc-wave-x-delayed {
+  animation: doc-wave-x 5.4s linear infinite;
   animation-delay: -1.8s;
 }
