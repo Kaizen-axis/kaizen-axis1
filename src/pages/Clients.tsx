@@ -21,6 +21,7 @@ import { CardActionsMenu, type CardActionItem } from '@/components/ui/CardAction
 import { CreateAppointmentModal } from '@/components/schedule/CreateAppointmentModal';
 import { EditClientModal } from '@/components/clients/EditClientModal';
 import { ClientFichaModal } from '@/components/clients/ClientFichaModal';
+import { SendEmailModal } from '@/components/clients/SendEmailModal';
 import { supabase } from '@/lib/supabase';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -341,6 +342,7 @@ export default function Clients() {
   const [appointmentClient, setAppointmentClient] = useState<{ id: string; name: string } | null>(null);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [viewingClient, setViewingClient] = useState<Client | null>(null);
+  const [emailingClient, setEmailingClient] = useState<Client | null>(null);
   const { requestConfirm, confirmDialogProps } = useConfirmDialog();
 
   const closeNewClientModal = () => {
@@ -372,7 +374,7 @@ export default function Clients() {
     {
       label: 'Enviar email',
       icon: <Mail size={13} />,
-      onClick: () => navigate(`/clients/${client.id}/email`),
+      onClick: () => setEmailingClient(client),
     },
     {
       label: 'WhatsApp',
@@ -847,7 +849,7 @@ export default function Clients() {
                   </RoundedButton>
                   <RoundedButton
                     variant="secondary" size="sm" className="flex-1 h-9 text-xs"
-                    onClick={e => { e.stopPropagation(); navigate(`/clients/${client.id}/email`); }}
+                    onClick={e => { e.stopPropagation(); setEmailingClient(client); }}
                   >
                     <Mail size={14} /> Email
                   </RoundedButton>
@@ -971,6 +973,12 @@ export default function Clients() {
         isOpen={!!editingClient}
         client={editingClient}
         onClose={() => setEditingClient(null)}
+      />
+
+      <SendEmailModal
+        isOpen={!!emailingClient}
+        client={emailingClient}
+        onClose={() => setEmailingClient(null)}
       />
 
       <CreateAppointmentModal

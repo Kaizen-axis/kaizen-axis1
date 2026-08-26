@@ -1,8 +1,8 @@
 import { Modal } from '@/components/ui/Modal';
-import { NewClientForm } from '@/components/clients/NewClientForm';
+import SendEmail from '@/pages/SendEmail';
 import { Client } from '@/data/clients';
 
-export function EditClientModal({
+export function SendEmailModal({
   isOpen,
   client,
   onClose,
@@ -15,17 +15,16 @@ export function EditClientModal({
     <Modal
       isOpen={isOpen && !!client}
       onClose={onClose}
-      title={client ? `Editar · ${client.name}` : 'Editar cliente'}
+      title={client ? `Novo Email · ${client.name}` : 'Novo Email'}
       panelClassName="max-w-2xl"
       overlayClassName="z-[60]"
     >
       {client && (
-        <NewClientForm
+        <SendEmail
           key={client.id}
+          clientId={client.id}
           embedded
-          mode="edit"
-          client={client}
-          onSuccess={onClose}
+          onClose={onClose}
         />
       )}
     </Modal>

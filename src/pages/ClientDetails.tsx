@@ -1,16 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { PremiumCard, StatusBadge, SectionHeader, RoundedButton } from '@/components/ui/PremiumComponents';
-import { ChevronLeft, Mail, Calendar, Edit2, Check, Building2, Wallet, History, Trash2, FileText, Save, X, UploadCloud, Plus, ChevronDown, ChevronUp, FileDown, MessageCircle, Video, Loader2 } from 'lucide-react';
-import { Client, ClientDocument, CLIENT_STAGES, ClientStage, isStageRestrictedForRole, missingFieldsForConcluido } from '@/data/clients';
-import { motion, AnimatePresence } from 'motion/react';
+import { ChevronLeft, Mail, Calendar, Edit2, Building2, Wallet, History, Trash2, FileText, Save, X, UploadCloud, Plus, ChevronDown, ChevronUp, FileDown, MessageCircle, Video, Loader2 } from 'lucide-react';
+import { Client, ClientDocument } from '@/data/clients';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { CardActionsMenu, type CardActionItem } from '@/components/ui/CardActionsMenu';
-import { ClientInfoForm } from '@/components/clients/ClientInfoForm';
 import { EditClientModal } from '@/components/clients/EditClientModal';
 import { CreateAppointmentModal } from '@/components/schedule/CreateAppointmentModal';
+import { SendEmailModal } from '@/components/clients/SendEmailModal';
 import { useApp } from '@/context/AppContext';
 import { useAuthorization } from '@/hooks/useAuthorization';
 import { supabase } from '@/lib/supabase';
@@ -94,7 +93,6 @@ export default function ClientDetails({
   const location = useLocation();
   const {
     getClient,
-    updateClient,
     deleteClient,
     userName,
     getDownloadUrl,
@@ -112,14 +110,10 @@ export default function ClientDetails({
   const { role, canViewAllClients } = useAuthorization();
   const { requestConfirm, confirmDialogProps } = useConfirmDialog();
 
-  // Regra de etapas avançadas centralizada em @/data/clients (isStageRestrictedForRole)
-
   const [client, setClient] = useState<Client | null>(null);
-  const [isEditingStage, setIsEditingStage] = useState(false);
-  const [isEditingInfo, setIsEditingInfo] = useState(false);
   const [isDeleteClientModalOpen, setIsDeleteClientModalOpen] = useState(false);
   const [documentToDelete, setDocumentToDelete] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<Partial<Client>>({});
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [convertingDocId, setConvertingDocId] = useState<string | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -162,14 +156,13 @@ export default function ClientDetails({
     const found = getClient(id);
     if (found) {
       setClient(found);
-      setEditForm(found);
     }
   }, [id, getClient, clients]);
 
   useEffect(() => {
     if (embedded) return;
     if ((location.state as { editInfo?: boolean } | null)?.editInfo) {
-      setIsEditingInfo(true);
+      setIsEditModalOpen(true);
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [embedded, location.pathname, location.state, navigate]);
@@ -179,46 +172,6 @@ export default function ClientDetails({
       logAuditEvent({ action: 'client_view', entity: 'client', entityId: id });
     }
   }, [id, client?.id]);
-
-  const handleStageChange = async (newStage: ClientStage) => {
-    if (!client || !id) return;
-
-    // Bloqueia CORRETOR de avançar para etapas avançadas
-    if (isStageRestrictedForRole(newStage, role)) {
-      alert(`⛔ Apenas Coordenador, Gerente, Diretor ou ADMIN podem mover o cliente para "${newStage}".`);
-      setIsEditingStage(false);
-      return;
-    }
-
-    if (newStage === 'Concluído') {
-      const missing = missingFieldsForConcluido(client);
-      if (missing.length > 0) {
-        alert(`⚠️ Para concluir a venda, preencha: ${missing.join(', ')}.`);
-        setIsEditingStage(false);
-        setIsEditingInfo(true);
-        return;
-      }
-    }
-
-    try {
-      await updateClient(id, { stage: newStage });
-      setIsEditingStage(false);
-    } catch (e: any) {
-      const msg = e?.message || 'Erro desconhecido';
-      alert(`Erro ao atualizar estágio:\n${msg}`);
-    }
-  };
-
-  const handleSaveInfo = async () => {
-    if (!client || !id) return;
-
-    try {
-      await updateClient(id, editForm);
-      setIsEditingInfo(false);
-    } catch (e) {
-      alert('Erro ao salvar informações.');
-    }
-  };
 
   const confirmDeleteClient = async () => {
     if (!id) return;
@@ -750,7 +703,7 @@ export default function ClientDetails({
     {
       label: 'Enviar email',
       icon: <Mail size={13} />,
-      onClick: () => navigate(`/clients/${id}/email`),
+      onClick: () => setIsEmailModalOpen(true),
     },
     {
       label: 'WhatsApp',
@@ -830,103 +783,41 @@ export default function ClientDetails({
 
         {/* Stage Management */}
         <section>
-          <SectionHeader
-            title="Estágio Atual"
-            action={
-              <button
-                onClick={() => setIsEditingStage(!isEditingStage)}
-                className="text-gold-600 dark:text-gold-400 text-sm font-medium flex items-center gap-1"
-              >
-                {isEditingStage ? 'Cancelar' : <><Edit2 size={14} /> Alterar</>}
-              </button>
-            }
-          />
-
-          <AnimatePresence>
-            {isEditingStage ? (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="grid grid-cols-2 gap-2 overflow-hidden"
-              >
-                {CLIENT_STAGES.map((stage) => {
-                  const isRestricted = isStageRestrictedForRole(stage, role);
-                  return (
-                    <button
-                      key={stage}
-                      onClick={() => !isRestricted && handleStageChange(stage)}
-                      disabled={isRestricted}
-                      title={isRestricted ? 'Apenas Coordenador, Gerente, Diretor ou ADMIN podem usar esta etapa' : undefined}
-                      className={`p-3 rounded-xl text-sm font-medium border transition-all text-left flex items-center justify-between ${client.stage === stage
-                        ? 'bg-accent-subtle border-gold-400 text-gold-700 dark:text-gold-400'
-                        : isRestricted
-                          ? 'bg-surface-50 border-surface-200 text-text-secondary opacity-50 cursor-not-allowed'
-                          : 'bg-card-bg border-surface-200 text-text-secondary hover:border-gold-300'
-                        }`}
-                    >
-                      {stage}
-                      {client.stage === stage ? <Check size={16} /> : isRestricted ? <span className="text-[10px]">🔒</span> : null}
-                    </button>
-                  );
-                })}
-              </motion.div>
-            ) : (
-              <PremiumCard className="flex items-center justify-between py-4 cursor-pointer" onClick={() => setIsEditingStage(true)}>
-                <span className="font-medium text-text-primary">{client.stage}</span>
-                <ChevronLeft size={20} className="rotate-180 text-text-secondary" />
-              </PremiumCard>
-            )}
-          </AnimatePresence>
+          <SectionHeader title="Estágio Atual" />
+          <PremiumCard className="flex items-center justify-between py-4">
+            <span className="font-medium text-text-primary">{client.stage}</span>
+          </PremiumCard>
         </section>
 
         {/* Details */}
         <section className="space-y-4">
-          <SectionHeader
-            title="Dados Pessoais"
-            action={
-              isEditingInfo ? (
-                <div className="flex gap-2">
-                  <button onClick={() => setIsEditingInfo(false)} className="text-text-secondary p-1"><X size={18} /></button>
-                  <button onClick={handleSaveInfo} className="text-green-600 p-1"><Save size={18} /></button>
-                </div>
-              ) : (
-                <button onClick={() => setIsEditingInfo(true)} className="text-gold-600 dark:text-gold-400 text-sm font-medium flex items-center gap-1">
-                  <Edit2 size={14} /> Editar
-                </button>
-              )
-            }
-          />
+          <SectionHeader title="Dados Pessoais" />
           <PremiumCard className="space-y-4">
-            {isEditingInfo ? (
-              <ClientInfoForm value={editForm} onChange={setEditForm} />
-            ) : (
-              <div className="grid grid-cols-1 gap-4">
-                {[
-                  { label: 'Nome', value: client.name },
-                  { label: 'CPF', value: client.cpf },
-                  { label: 'Email', value: client.email },
-                  { label: 'Telefone', value: client.phone },
-                  { label: 'Endereço', value: client.address },
-                  { label: 'Profissão', value: client.profession },
-                  { label: 'Renda Bruta', value: client.grossIncome },
-                  { label: 'Tipo de Renda', value: client.incomeType },
-                  { label: 'Cotista', value: client.cotista },
-                  { label: 'Fator Social', value: client.socialFactor },
-                  { label: 'Cidade de Interesse', value: client.regionOfInterest },
-                  { label: 'Bairro', value: client.neighborhood },
-                  { label: 'Empreendimento', value: client.development },
-                  { label: 'Construtora', value: client.builder },
-                  { label: 'Valor', value: client.intendedValue },
-                  { label: 'Observações', value: client.observations },
-                ].filter(item => item.value).map(({ label, value }) => (
-                  <div key={label}>
-                    <label className="text-xs text-text-secondary uppercase tracking-wider">{label}</label>
-                    <p className="text-text-primary font-medium">{value}</p>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="grid grid-cols-1 gap-4">
+              {[
+                { label: 'Nome', value: client.name },
+                { label: 'CPF', value: client.cpf },
+                { label: 'Email', value: client.email },
+                { label: 'Telefone', value: client.phone },
+                { label: 'Endereço', value: client.address },
+                { label: 'Profissão', value: client.profession },
+                { label: 'Renda Bruta', value: client.grossIncome },
+                { label: 'Tipo de Renda', value: client.incomeType },
+                { label: 'Cotista', value: client.cotista },
+                { label: 'Fator Social', value: client.socialFactor },
+                { label: 'Cidade de Interesse', value: client.regionOfInterest },
+                { label: 'Bairro', value: client.neighborhood },
+                { label: 'Empreendimento', value: client.development },
+                { label: 'Construtora', value: client.builder },
+                { label: 'Valor', value: client.intendedValue },
+                { label: 'Observações', value: client.observations },
+              ].filter(item => item.value).map(({ label, value }) => (
+                <div key={label}>
+                  <label className="text-xs text-text-secondary uppercase tracking-wider">{label}</label>
+                  <p className="text-text-primary font-medium">{value}</p>
+                </div>
+              ))}
+            </div>
           </PremiumCard>
         </section>
 
@@ -1275,6 +1166,12 @@ export default function ClientDetails({
         isOpen={isEditModalOpen}
         client={client}
         onClose={() => setIsEditModalOpen(false)}
+      />
+
+      <SendEmailModal
+        isOpen={isEmailModalOpen}
+        client={client}
+        onClose={() => setIsEmailModalOpen(false)}
       />
 
       <CreateAppointmentModal

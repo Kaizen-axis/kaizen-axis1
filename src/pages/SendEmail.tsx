@@ -16,8 +16,17 @@ interface Attachment {
   file?: File;       // manually added file
 }
 
-export default function SendEmail() {
-  const { id } = useParams();
+export default function SendEmail({
+  clientId,
+  embedded = false,
+  onClose,
+}: {
+  clientId?: string;
+  embedded?: boolean;
+  onClose?: () => void;
+} = {}) {
+  const params = useParams();
+  const id = clientId || params.id;
   const navigate = useNavigate();
   const { getClient, userName, profile, allProfiles, getDownloadUrl } = useApp();
   const [client, setClient] = useState<Client | null>(null);
@@ -36,6 +45,9 @@ export default function SendEmail() {
     const found = getClient(id);
     if (found) {
       setClient(found);
+      if (found.email) {
+        setTo(prev => (prev.length ? prev : [found.email]));
+      }
       const empreendimento = (found.development || 'NÃO INFORMADO').toUpperCase();
 
       // ── Resolve hierarchy from the CLIENT OWNER, not the logged-in user ──
@@ -297,7 +309,8 @@ ${proponentsBlock}`;
       }
 
       alert(`Email enviado com sucesso! ✅\n${resendAttachments.length} anexo(s) incluído(s).`);
-      navigate(-1);
+      if (embedded) onClose?.();
+      else navigate(-1);
     } catch (error: any) {
       console.error('Erro ao enviar e-mail:', error);
       alert(`Erro ao enviar e-mail:\n\n${error.message || 'Tente novamente.'}`);
@@ -320,8 +333,8 @@ ${proponentsBlock}`;
   if (!client) return <div className="p-6">Carregando...</div>;
 
   return (
-    <div className="min-h-screen bg-surface-50 pb-24">
-      {/* Header */}
+    <div className={embedded ? '' : 'min-h-screen bg-surface-50 pb-24'}>
+      {!embedded && (
       <div className="bg-card-bg shadow-sm px-4 py-4 sticky top-0 z-20 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-surface-100 text-text-secondary">
@@ -342,8 +355,9 @@ ${proponentsBlock}`;
           {isSending ? 'Enviando...' : 'Enviar'}
         </button>
       </div>
+      )}
 
-      <div className="p-6 space-y-6">
+      <div className={embedded ? 'space-y-6' : 'p-6 space-y-6'}>
         <PremiumCard className="space-y-4">
           <EmailInput
             label="Para"
@@ -378,11 +392,11 @@ ${proponentsBlock}`;
           </div>
         </PremiumCard>
 
-        <PremiumCard className="flex-1 min-h-[500px] flex flex-col">
+        <PremiumCard className={`flex-1 flex flex-col ${embedded ? 'min-h-[280px]' : 'min-h-[500px]'}`}>
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            className="w-full flex-1 min-h-[400px] bg-transparent border-none resize-y focus:outline-none text-text-primary leading-relaxed whitespace-pre-wrap"
+            className={`w-full flex-1 bg-transparent border-none resize-y focus:outline-none text-text-primary leading-relaxed whitespace-pre-wrap ${embedded ? 'min-h-[220px]' : 'min-h-[400px]'}`}
             placeholder="Escreva sua mensagem..."
           />
 
@@ -432,6 +446,21 @@ ${proponentsBlock}`;
             </div>
           </div>
         </PremiumCard>
+
+        {embedded && (
+          <button
+            onClick={handleSend}
+            disabled={isSending}
+            className="w-full bg-gold-400 text-white px-4 py-3 rounded-xl font-medium text-sm flex items-center justify-center gap-2 shadow-md hover:bg-gold-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSending ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <Send size={16} />
+            )}
+            {isSending ? 'Enviando...' : 'Enviar'}
+          </button>
+        )}
       </div>
     </div>
   );

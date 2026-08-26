@@ -10,9 +10,10 @@ interface ModalProps {
   children: ReactNode;
   panelClassName?: string;
   contentClassName?: string;
+  overlayClassName?: string;
 }
 
-export const Modal = ({ isOpen, onClose, title, children, panelClassName, contentClassName }: ModalProps) => {
+export const Modal = ({ isOpen, onClose, title, children, panelClassName, contentClassName, overlayClassName }: ModalProps) => {
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -34,7 +35,7 @@ export const Modal = ({ isOpen, onClose, title, children, panelClassName, conten
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className={cn("fixed inset-0 z-50 flex items-center justify-center p-4", overlayClassName)}>
       <div 
         className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
         onClick={onClose}
