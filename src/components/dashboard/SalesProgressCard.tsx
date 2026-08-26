@@ -3,7 +3,7 @@ import { useApp } from '@/context/AppContext';
 import { useAuthorization } from '@/hooks/useAuthorization';
 import { getDashboardSaleDate, isSaleInCurrentMonth } from '@/lib/sales/salePeriod';
 import { supabase } from '@/lib/supabase';
-import { AlertTriangle, TrendingUp, DollarSign, Users, User, Pencil, Check } from 'lucide-react';
+import { AlertTriangle, TrendingUp, DollarSign, Users, User, Pencil } from 'lucide-react';
 
 const COMMISSION_CONFIG: Record<string, { ownRate: number; teamRate: number }> = {
   CORRETOR:    { ownRate: 0.018, teamRate: 0     },
@@ -96,6 +96,22 @@ export function SalesProgressCard() {
     return () => { cancelled = true; };
   }, [user?.id, year, month]);
 
+  const startEditing = () => {
+    if (goalAmount && goalAmount > 0) {
+      setGoalInput(formatCurrencyInput(String(Math.round(goalAmount * 100))));
+    }
+    setEditingGoal(true);
+  };
+
+  const cancelEditing = () => {
+    setEditingGoal(false);
+    if (goalAmount && goalAmount > 0) {
+      setGoalInput(formatCurrencyInput(String(Math.round(goalAmount * 100))));
+    } else {
+      setGoalInput('');
+    }
+  };
+
   const saveGoal = async () => {
     if (!user?.id) return;
     const amount = parseCurrency(goalInput);
@@ -161,45 +177,79 @@ export function SalesProgressCard() {
         </div>
       </div>
 
-      <div className="mb-4 rounded-xl border border-surface-200/80 bg-black/10 p-3 space-y-2">
-        <div className="flex items-center justify-between gap-2">
+      <div className="mb-4 space-y-2">
+        <div className="flex items-center justify-between gap-3">
           <p className="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Meta de comissão</p>
-          {hasGoal && !editingGoal && (
+          {!editingGoal && hasGoal && (
             <button
               type="button"
-              onClick={() => setEditingGoal(true)}
-              className="text-xs text-primary-400 font-medium flex items-center gap-1 min-h-11 px-2"
+              onClick={startEditing}
+              className="text-[11px] text-primary-400 hover:text-primary-300 font-medium inline-flex items-center gap-1"
+              aria-label="Editar meta"
             >
-              <Pencil size={12} /> Editar
+              <Pencil size={11} /> Editar
             </button>
           )}
         </div>
 
-        {editingGoal || !hasGoal ? (
-          <div className="flex flex-col sm:flex-row gap-2">
-            <input
-              value={goalInput}
-              onChange={(e) => setGoalInput(formatCurrencyInput(e.target.value))}
-              placeholder="0,00"
-              inputMode="numeric"
-              className="flex-1 min-h-11 px-3 rounded-xl bg-surface-50 border border-surface-200 text-text-primary text-sm"
-            />
+        {!editingGoal && !hasGoal && (
+          <button
+            type="button"
+            onClick={startEditing}
+            className="text-xs text-primary-400 hover:text-primary-300 font-medium"
+          >
+            Definir meta
+          </button>
+        )}
+
+        {!editingGoal && hasGoal && (
+          <p className="text-sm font-semibold text-text-primary">{formatBRL(goalAmount)}</p>
+        )}
+
+        {editingGoal && (
+          <div className="flex items-center gap-2">
+            <label className="flex items-center h-8 max-w-[9.5rem] rounded-lg border border-surface-200 bg-surface-50 px-2">
+              <span className="text-[11px] text-text-secondary mr-1">R$</span>
+              <input
+                value={goalInput}
+                onChange={(e) => setGoalInput(formatCurrencyInput(e.target.value))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void saveGoal();
+                  }
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    cancelEditing();
+                  }
+                }}
+                placeholder="0,00"
+                inputMode="numeric"
+                autoFocus
+                className="w-full bg-transparent text-sm text-text-primary outline-none"
+              />
+            </label>
             <button
               type="button"
               onClick={() => void saveGoal()}
               disabled={savingGoal || !goalInput}
-              className="min-h-11 px-4 rounded-xl bg-primary-600 text-white text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-1"
+              className="text-xs text-primary-400 hover:text-primary-300 font-medium disabled:opacity-40"
             >
-              <Check size={14} /> {savingGoal ? 'Salvando…' : 'Salvar meta'}
+              {savingGoal ? 'Salvando…' : 'Salvar'}
+            </button>
+            <button
+              type="button"
+              onClick={cancelEditing}
+              className="text-xs text-text-secondary hover:text-text-primary"
+            >
+              Cancelar
             </button>
           </div>
-        ) : (
-          <p className="text-sm font-bold text-text-primary">{formatBRL(goalAmount)}</p>
         )}
 
         {hasGoal && (
           <>
-            <div className="h-2 rounded-full bg-black/30 overflow-hidden">
+            <div className="h-1 rounded-full bg-black/30 overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all ${goalMet ? 'bg-green-500' : 'bg-red-500'}`}
                 style={{ width: `${progressPct}%` }}
@@ -212,7 +262,7 @@ export function SalesProgressCard() {
         )}
 
         {goalMet && (
-          <p className="text-sm font-semibold text-green-400 text-center pt-1">
+          <p className="text-sm font-medium text-green-400 pt-0.5">
             {SLOGAN}
           </p>
         )}

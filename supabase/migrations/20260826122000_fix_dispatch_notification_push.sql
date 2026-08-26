@@ -1,24 +1,26 @@
--- Disparo de Web Push no INSERT de notifications (pg_net) + log de deduplicação.
---
--- URL e chave: tabela push_dispatch_config (ver migration 20260826122000), Vault,
--- ou GUC. Sem isso o trigger é no-op e o send-notification chama send-push.
+-- Corrige o trigger (undefined_schema não existe no Postgres) e passa a ler
+-- URL/chave de push_dispatch_config — o SQL Editor consegue INSERT nela.
+-- ALTER DATABASE SET app.settings.* é bloqueado no Supabase hosted.
 
-CREATE TABLE IF NOT EXISTS public.push_dispatch_log (
-  notification_id UUID PRIMARY KEY REFERENCES public.notifications(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS public.push_dispatch_config (
+  id integer PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  supabase_url text NOT NULL,
+  service_role_key text NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-ALTER TABLE public.push_dispatch_log ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.push_dispatch_log FORCE ROW LEVEL SECURITY;
+ALTER TABLE public.push_dispatch_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.push_dispatch_config FORCE ROW LEVEL SECURITY;
 
-GRANT ALL ON public.push_dispatch_log TO service_role;
+GRANT ALL ON public.push_dispatch_config TO service_role;
 
-DO $$
-BEGIN
-  CREATE EXTENSION IF NOT EXISTS pg_net;
-EXCEPTION WHEN OTHERS THEN
-  RAISE NOTICE 'pg_net unavailable: %', SQLERRM;
-END $$;
+DROP POLICY IF EXISTS push_dispatch_config_owner ON public.push_dispatch_config;
+CREATE POLICY push_dispatch_config_owner
+ON public.push_dispatch_config
+FOR ALL
+TO postgres
+USING (true)
+WITH CHECK (true);
 
 CREATE OR REPLACE FUNCTION public.tg_notifications_dispatch_push()
 RETURNS trigger
@@ -31,8 +33,21 @@ DECLARE
   service_key text;
   endpoint text;
 BEGIN
-  base_url := NULLIF(btrim(current_setting('app.settings.supabase_url', true)), '');
-  service_key := NULLIF(btrim(current_setting('app.settings.service_role_key', true)), '');
+  BEGIN
+    SELECT NULLIF(btrim(c.supabase_url), ''), NULLIF(btrim(c.service_role_key), '')
+    INTO base_url, service_key
+    FROM public.push_dispatch_config c
+    WHERE c.id = 1;
+  EXCEPTION WHEN undefined_table OR insufficient_privilege THEN
+    NULL;
+  END;
+
+  IF base_url IS NULL THEN
+    base_url := NULLIF(btrim(current_setting('app.settings.supabase_url', true)), '');
+  END IF;
+  IF service_key IS NULL THEN
+    service_key := NULLIF(btrim(current_setting('app.settings.service_role_key', true)), '');
+  END IF;
 
   BEGIN
     IF base_url IS NULL THEN
@@ -41,7 +56,7 @@ BEGIN
       WHERE name IN ('supabase_url', 'SUPABASE_URL')
       LIMIT 1;
     END IF;
-  EXCEPTION WHEN undefined_table OR insufficient_privilege THEN
+  EXCEPTION WHEN undefined_table OR insufficient_privilege OR invalid_schema_name THEN
     NULL;
   END;
 
@@ -52,7 +67,7 @@ BEGIN
       WHERE name IN ('service_role_key', 'SUPABASE_SERVICE_ROLE_KEY')
       LIMIT 1;
     END IF;
-  EXCEPTION WHEN undefined_table OR insufficient_privilege THEN
+  EXCEPTION WHEN undefined_table OR insufficient_privilege OR invalid_schema_name THEN
     NULL;
   END;
 
