@@ -1050,22 +1050,25 @@ export default function ClientDetails({
                   {converting && (
                     <div className="absolute inset-0 z-10 overflow-hidden pointer-events-none">
                       <div className="absolute inset-y-0 left-0 doc-wave-fill overflow-visible">
-                        <div className="absolute inset-0 bg-primary-600/80" />
+                        <div
+                          className="absolute inset-0"
+                          style={{ background: 'linear-gradient(90deg, rgb(37 99 235 / 0.58) 0%, rgb(37 99 235 / 0.82) 72%, rgb(59 130 246 / 0.92) 100%)' }}
+                        />
                         <svg
-                          className="doc-wave-y absolute top-0 -right-4 h-[200%] w-5 text-primary-600"
-                          viewBox="0 0 40 1200"
+                          className="doc-wave-y absolute top-0 -right-8 h-[300%] w-10 text-primary-600"
+                          viewBox="0 0 80 1200"
                           preserveAspectRatio="none"
                           aria-hidden
                         >
-                          <path fill="currentColor" d="M0,0 H20 C38,150 2,350 20,600 C38,850 2,1050 20,1200 H0 Z" />
+                          <path fill="currentColor" d="M0,0 H22 C72,60 -18,120 22,180 C72,240 -18,300 22,360 C72,420 -18,480 22,540 C72,600 -18,660 22,720 C72,780 -18,840 22,900 C72,960 -18,1020 22,1080 C72,1140 -18,1180 22,1200 H0 Z" />
                         </svg>
                         <svg
-                          className="doc-wave-y-delayed absolute top-0 -right-6 h-[200%] w-6 text-primary-500/70"
-                          viewBox="0 0 40 1200"
+                          className="doc-wave-y-delayed absolute top-0 -right-10 h-[300%] w-12 text-primary-500/55"
+                          viewBox="0 0 80 1200"
                           preserveAspectRatio="none"
                           aria-hidden
                         >
-                          <path fill="currentColor" d="M0,0 H18 C36,200 0,400 18,600 C36,800 0,1000 18,1200 H0 Z" />
+                          <path fill="currentColor" d="M0,0 H18 C68,80 -22,160 18,240 C68,320 -22,400 18,480 C68,560 -22,640 18,720 C68,800 -22,880 18,960 C68,1040 -22,1120 18,1200 H0 Z" />
                         </svg>
                       </div>
                       <div className="absolute inset-0 flex items-center justify-center">

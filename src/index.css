@@ -299,8 +299,11 @@ button, input, select, textarea, optgroup, [role="tab"], .font-ui {
 }
 
 @keyframes doc-wave-fill {
-  0% { width: 8%; }
-  100% { width: 100%; }
+  0% { width: 6%; }
+  35% { width: 42%; }
+  62% { width: 68%; }
+  82% { width: 84%; }
+  100% { width: 92%; }
 }
 
 @keyframes doc-wave-y {
@@ -309,15 +312,15 @@ button, input, select, textarea, optgroup, [role="tab"], .font-ui {
 }
 
 .doc-wave-fill {
-  width: 100%;
-  animation: doc-wave-fill 2.4s ease-out forwards;
+  width: 92%;
+  animation: doc-wave-fill 9.5s cubic-bezier(0.22, 0.45, 0.28, 1) forwards;
 }
 
 .doc-wave-y {
-  animation: doc-wave-y 1.8s linear infinite;
+  animation: doc-wave-y 3.6s linear infinite;
 }
 
 .doc-wave-y-delayed {
-  animation: doc-wave-y 2.4s linear infinite;
-  animation-delay: -0.8s;
+  animation: doc-wave-y 5.4s linear infinite;
+  animation-delay: -1.8s;
 }
