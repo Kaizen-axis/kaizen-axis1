@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { PremiumCard, StatusBadge, SectionHeader, RoundedButton } from '@/components/ui/PremiumComponents';
-import { ChevronLeft, Phone, Mail, Calendar, Edit2, Check, Building2, Wallet, History, Trash2, FileText, Save, X, UploadCloud, Plus, ChevronDown, ChevronUp, FileDown } from 'lucide-react';
+import { ChevronLeft, Mail, Calendar, Edit2, Check, Building2, Wallet, History, Trash2, FileText, Save, X, UploadCloud, Plus, ChevronDown, ChevronUp, FileDown, MessageCircle, Video, Loader2 } from 'lucide-react';
 import { Client, ClientDocument, CLIENT_STAGES, ClientStage, isStageRestrictedForRole, missingFieldsForConcluido } from '@/data/clients';
 import { motion, AnimatePresence } from 'motion/react';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
-import { CardActionsMenu } from '@/components/ui/CardActionsMenu';
+import { CardActionsMenu, type CardActionItem } from '@/components/ui/CardActionsMenu';
 import { ClientInfoForm } from '@/components/clients/ClientInfoForm';
+import { EditClientModal } from '@/components/clients/EditClientModal';
+import { CreateAppointmentModal } from '@/components/schedule/CreateAppointmentModal';
 import { useApp } from '@/context/AppContext';
 import { useAuthorization } from '@/hooks/useAuthorization';
 import { supabase } from '@/lib/supabase';
@@ -20,6 +22,12 @@ import { imageToPdf } from '@/lib/pdf-tools/imageToPdf';
 import { CLIENT_DOCUMENT_ACCEPT, prepareClientUploadFile } from '@/lib/client-document-upload';
 
 const IMAGE_DOC_RE = /\.(jpe?g|png|webp)$/i;
+
+function whatsappDigits(phone?: string) {
+  const digits = (phone || '').replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.startsWith('55') ? digits : `55${digits}`;
+}
 
 function isImageDocument(doc: ClientDocument) {
   const type = (doc.type || '').toLowerCase();
@@ -113,7 +121,9 @@ export default function ClientDetails({
   const [documentToDelete, setDocumentToDelete] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<Client>>({});
   const [isUploading, setIsUploading] = useState(false);
-  const [isConvertingPdf, setIsConvertingPdf] = useState(false);
+  const [convertingDocId, setConvertingDocId] = useState<string | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isAppointmentOpen, setIsAppointmentOpen] = useState(false);
   const [newProponent, setNewProponent] = useState({
     name: '',
     cpf: '',
@@ -295,14 +305,14 @@ export default function ClientDetails({
   };
 
   const handleConvertDocumentToPdf = async (doc: ClientDocument) => {
-    if (!id || isConvertingPdf) return;
+    if (!id || convertingDocId) return;
     const rawPath = (doc as any).file_path || doc.url;
     if (!rawPath) {
       alert('Caminho do arquivo não encontrado.');
       return;
     }
 
-    setIsConvertingPdf(true);
+    setConvertingDocId(doc.id);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
@@ -343,11 +353,15 @@ export default function ClientDetails({
         alert(`Erro do Banco de Dados: ${dbResult.error}`);
         return;
       }
-      alert('PDF criado. A imagem original permanece na ficha.');
+
+      const removed = await deleteDocumentFromClient(doc.id, doc.file_path || doc.url);
+      if (!removed.success) {
+        alert('PDF criado, mas não foi possível remover a imagem original.');
+      }
     } catch (e: any) {
       alert(e?.message || 'Erro ao converter para PDF.');
     } finally {
-      setIsConvertingPdf(false);
+      setConvertingDocId(null);
     }
   };
 
@@ -722,6 +736,45 @@ export default function ClientDetails({
     </div>
   );
 
+  const fichaCardActions: CardActionItem[] = [
+    {
+      label: 'Editar',
+      icon: <Edit2 size={13} />,
+      onClick: () => setIsEditModalOpen(true),
+    },
+    {
+      label: 'Agendar',
+      icon: <Calendar size={13} />,
+      onClick: () => setIsAppointmentOpen(true),
+    },
+    {
+      label: 'Enviar email',
+      icon: <Mail size={13} />,
+      onClick: () => navigate(`/clients/${id}/email`),
+    },
+    {
+      label: 'WhatsApp',
+      icon: <MessageCircle size={13} />,
+      disabled: !whatsappDigits(client.phone),
+      onClick: () => {
+        const digits = whatsappDigits(client.phone);
+        if (!digits) return;
+        window.open(`https://wa.me/${digits}`, '_blank');
+      },
+    },
+    {
+      label: 'Videochamada',
+      icon: <Video size={13} />,
+      disabled: true,
+    },
+    {
+      label: 'Excluir',
+      icon: <Trash2 size={13} />,
+      danger: true,
+      onClick: () => setIsDeleteClientModalOpen(true),
+    },
+  ];
+
   return (
     <div className={embedded ? '' : 'min-h-screen bg-surface-50 pb-24'}>
       {!embedded && (
@@ -732,38 +785,23 @@ export default function ClientDetails({
           </button>
           <h1 className="text-lg font-bold text-text-primary">Ficha do Cliente</h1>
         </div>
-        <button
-          onClick={() => setIsDeleteClientModalOpen(true)}
-          className="p-2 text-red-500 hover:bg-danger-subtle rounded-full transition-colors"
-          title="Excluir Cliente"
-        >
-          <Trash2 size={20} />
-        </button>
       </div>
       )}
 
       <div className={embedded ? 'space-y-6' : 'p-6 space-y-6'}>
-        {embedded && (
-          <div className="flex justify-end">
-            <button
-              onClick={() => setIsDeleteClientModalOpen(true)}
-              className="p-2 text-red-500 hover:bg-danger-subtle rounded-full transition-colors"
-              title="Excluir Cliente"
-            >
-              <Trash2 size={20} />
-            </button>
-          </div>
-        )}
         {/* Main Info Card */}
         <PremiumCard highlight className="space-y-4">
-          <div className="flex justify-between items-start">
-            <div>
+          <div className="flex justify-between items-start gap-3">
+            <div className="min-w-0">
               <h2 className="text-2xl font-bold text-text-primary">{client.name}</h2>
               <p className="text-text-secondary flex items-center gap-1 mt-1">
                 <Building2 size={14} /> {client.development || 'Sem empreendimento'}
               </p>
             </div>
-            <StatusBadge status={client.stage} className="text-sm px-3 py-1.5" />
+            <div className="flex items-start gap-2 flex-shrink-0">
+              <StatusBadge status={client.stage} className="text-sm px-3 py-1.5" />
+              <CardActionsMenu items={fichaCardActions} />
+            </div>
           </div>
 
           {/* Tags hierárquicas — visíveis para liderança */}
@@ -788,25 +826,6 @@ export default function ClientDetails({
               </RoundedButton>
             </div>
           )}
-
-          <div className="grid grid-cols-2 gap-3 pt-2">
-            <RoundedButton
-              variant="secondary"
-              size="sm"
-              className="w-full"
-              href={`tel:+55${client.phone?.replace(/\D/g, '')}`}
-            >
-              <Phone size={16} /> Ligar
-            </RoundedButton>
-            <RoundedButton
-              variant="secondary"
-              size="sm"
-              className="w-full"
-              onClick={() => navigate(`/clients/${id}/email`)}
-            >
-              <Mail size={16} /> Email
-            </RoundedButton>
-          </div>
         </PremiumCard>
 
         {/* Stage Management */}
@@ -1081,19 +1100,27 @@ export default function ClientDetails({
           />
           <div className="space-y-3">
             {client.documents && client.documents.length > 0 ? (
-              client.documents.map(doc => (
+              client.documents.map(doc => {
+                const converting = convertingDocId === doc.id;
+                return (
                 <PremiumCard
                   key={doc.id}
-                  interactive
-                  className="flex items-center justify-between p-3"
-                  onClick={() => handleOpenDocument((doc as any).file_path, (doc as any).id)}
+                  interactive={!converting}
+                  className="relative flex items-center justify-between p-3 overflow-hidden"
+                  onClick={() => { if (!converting) handleOpenDocument((doc as any).file_path, (doc as any).id); }}
                 >
-                  <div className="flex items-center gap-3">
+                  {converting && (
+                    <div className="absolute inset-0 z-10 bg-card-bg/85 backdrop-blur-[1px] flex items-center justify-center gap-2">
+                      <Loader2 size={18} className="animate-spin text-primary-400" />
+                      <span className="text-sm font-medium text-text-secondary">Convertendo para PDF…</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-3 min-w-0">
                     <div className="p-2 bg-red-50 dark:bg-red-900/20 text-red-500 rounded-lg">
                       <FileText size={20} />
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-text-primary">{doc.name}</p>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-text-primary truncate">{doc.name}</p>
                       <p className="text-xs text-text-secondary">{doc.uploadDate}</p>
                     </div>
                   </div>
@@ -1101,22 +1128,24 @@ export default function ClientDetails({
                     <CardActionsMenu
                       items={[
                         ...(isImageDocument(doc) ? [{
-                          label: isConvertingPdf ? 'Convertendo…' : 'Converter para PDF',
+                          label: converting ? 'Convertendo…' : 'Converter para PDF',
                           icon: <FileDown size={13} />,
-                          disabled: isConvertingPdf,
+                          disabled: !!convertingDocId,
                           onClick: () => { void handleConvertDocumentToPdf(doc); },
                         }] : []),
                         {
                           label: 'Excluir',
                           icon: <Trash2 size={13} />,
                           danger: true,
+                          disabled: !!convertingDocId,
                           onClick: () => handleDeleteDocument(doc.id),
                         },
                       ]}
                     />
                   </div>
                 </PremiumCard>
-              ))
+                );
+              })
             ) : (
               <p className="text-sm text-text-secondary text-center py-4">Nenhum documento anexado.</p>
             )}
@@ -1241,6 +1270,23 @@ export default function ClientDetails({
           </div>
         </div>
       </Modal>
+
+      <EditClientModal
+        isOpen={isEditModalOpen}
+        client={client}
+        onClose={() => setIsEditModalOpen(false)}
+      />
+
+      <CreateAppointmentModal
+        isOpen={isAppointmentOpen}
+        onClose={() => setIsAppointmentOpen(false)}
+        initialValues={{
+          title: `Visita — ${client.name}`,
+          client_name: client.name,
+          client_id: client.id,
+          type: 'Visita',
+        }}
+      />
 
       <ConfirmDialog
         isOpen={isDeleteClientModalOpen}
