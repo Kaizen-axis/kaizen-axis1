@@ -35,7 +35,10 @@ const CORS_HEADERS = {
 };
 
 type PushNotificationPayload = {
-  target_user_id: string;
+  id?: string;
+  target_user_id?: string | null;
+  target_role?: string | null;
+  directorate_id?: string | null;
   title?: string;
   message?: string;
   reference_route?: string;
@@ -92,29 +95,40 @@ function validateClaims(claims: Claims): { valid: boolean; reason?: string } {
   return { valid: true };
 }
 
-function normalizeNotification(body: unknown): PushNotificationPayload | null {
+function pickStr(obj: Record<string, unknown>, key: string): string | null {
+  const v = obj[key];
+  if (v == null) return null;
+  const s = String(v).trim();
+  return s || null;
+}
+
+function extractDispatchNotification(body: unknown): PushNotificationPayload | null {
   const root = (body && typeof body === 'object') ? (body as Record<string, unknown>) : null;
-  const candidate = root?.record ?? root?.notification ?? root;
+  if (!root) return null;
+  const candidate = root.record ?? root.notification ?? root;
   if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return null;
 
   const notification = candidate as Record<string, unknown>;
-  const allowedKeys = new Set(['target_user_id', 'title', 'message', 'reference_route']);
-  const hasUnexpectedKey = Object.keys(notification).some((k) => !allowedKeys.has(k));
-  if (hasUnexpectedKey) return null;
-
-  const target = String(notification.target_user_id || '').trim();
-  if (!target || !UUID_REGEX.test(target)) return null;
-
-  const title = notification.title == null ? undefined : String(notification.title);
-  const message = notification.message == null ? undefined : String(notification.message);
-  const route = notification.reference_route == null ? undefined : String(notification.reference_route);
+  const target_user_id = pickStr(notification, 'target_user_id');
+  const target_role = pickStr(notification, 'target_role');
+  const directorate_id = pickStr(notification, 'directorate_id');
+  if (!target_user_id && !target_role && !directorate_id) return null;
 
   return {
-    target_user_id: target,
-    title,
-    message,
-    reference_route: route,
+    id: pickStr(notification, 'id') ?? undefined,
+    target_user_id,
+    target_role,
+    directorate_id,
+    title: pickStr(notification, 'title') ?? undefined,
+    message: pickStr(notification, 'message') ?? undefined,
+    reference_route: pickStr(notification, 'reference_route') ?? undefined,
   };
+}
+
+function normalizeNotification(body: unknown): PushNotificationPayload | null {
+  const extracted = extractDispatchNotification(body);
+  if (!extracted?.target_user_id || !UUID_REGEX.test(extracted.target_user_id)) return null;
+  return extracted;
 }
 
 // ── Helpers base64url ─────────────────────────────────────────────────────────
@@ -274,6 +288,112 @@ async function encryptPayload(
   return concat(header, encrypted);
 }
 
+type AdminClient = ReturnType<typeof createClient>;
+
+async function claimDispatch(supabase: AdminClient, notificationId?: string): Promise<boolean> {
+  if (!notificationId || !UUID_REGEX.test(notificationId)) return true;
+  const { error } = await supabase
+    .from('push_dispatch_log')
+    .insert({ notification_id: notificationId });
+  if (!error) return true;
+  if (error.code === '23505') return false;
+  console.warn('push_dispatch_log insert:', error.message);
+  return true;
+}
+
+async function resolveRecipientIds(supabase: AdminClient, n: PushNotificationPayload): Promise<string[]> {
+  if (n.target_user_id && UUID_REGEX.test(n.target_user_id)) return [n.target_user_id];
+
+  if (n.target_role) {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('role', n.target_role.toUpperCase());
+    return (data ?? []).map((p: { id: string }) => p.id);
+  }
+
+  if (n.directorate_id && UUID_REGEX.test(n.directorate_id)) {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('directorate_id', n.directorate_id);
+    return (data ?? []).map((p: { id: string }) => p.id);
+  }
+
+  return [];
+}
+
+async function filterPushEnabled(supabase: AdminClient, userIds: string[]): Promise<string[]> {
+  if (userIds.length === 0) return [];
+  const { data } = await supabase
+    .from('profiles')
+    .select('id, push_notifications_enabled')
+    .in('id', userIds);
+  return (data ?? [])
+    .filter((p: { push_notifications_enabled?: boolean | null }) => p.push_notifications_enabled !== false)
+    .map((p: { id: string }) => p.id);
+}
+
+async function sendToUsers(
+  supabase: AdminClient,
+  userIds: string[],
+  notification: PushNotificationPayload,
+): Promise<{ sent: number; failed: number }> {
+  if (userIds.length === 0) return { sent: 0, failed: 0 };
+
+  const payload = JSON.stringify({
+    id: notification.id,
+    title: notification.title ?? 'Kaizen Axis',
+    body: notification.message ?? 'Nova notificação',
+    url: notification.reference_route ?? '/',
+  });
+
+  let sent = 0;
+  let failed = 0;
+
+  for (const targetUserId of userIds) {
+    const { data: subs } = await supabase
+      .from('push_subscriptions')
+      .select('id, endpoint, subscription')
+      .eq('user_id', targetUserId);
+
+    if (!subs?.length) continue;
+
+    const results = await Promise.all(
+      subs.map(({ endpoint, subscription }) => sendWebPush({
+        endpoint,
+        keys: subscription.keys,
+      }, payload).catch((err) => ({
+        ok: false,
+        endpoint,
+        status: 500,
+        error: err?.message || 'unknown_error',
+      } as PushSendResult)))
+    );
+
+    sent += results.filter((r) => r.ok).length;
+    const failures = results.filter((r) => !r.ok);
+    failed += failures.length;
+
+    const invalidEndpoints = failures
+      .filter((r) => r.status === 404 || r.status === 410)
+      .map((r) => r.endpoint);
+
+    if (invalidEndpoints.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('push_subscriptions')
+        .delete()
+        .eq('user_id', targetUserId)
+        .in('endpoint', invalidEndpoints);
+      if (deleteError) {
+        console.error('send-push cleanup subscriptions error:', deleteError.message);
+      }
+    }
+  }
+
+  return { sent, failed };
+}
+
 // ─── Handler principal ────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -286,7 +406,8 @@ Deno.serve(async (req) => {
 
   try {
     const correlationId = crypto.randomUUID();
-    const supabase = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(SUPABASE_URL, serviceKey);
     const anonKey = req.headers.get('apikey') || Deno.env.get('SUPABASE_ANON_KEY') || '';
 
     const authHeader = req.headers.get('authorization') || req.headers.get('Authorization') || '';
@@ -299,6 +420,54 @@ Deno.serve(async (req) => {
         deny_reason: 'missing_token',
       });
       return badRequest('Unauthorized', 401);
+    }
+
+    const isInternal = token === serviceKey;
+
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return badRequest('Invalid JSON body', 400);
+    }
+
+    if (isInternal) {
+      const notification = extractDispatchNotification(body);
+      if (!notification) {
+        logStructured('send_push_denied', {
+          correlation_id: correlationId,
+          result: 'denied',
+          deny_reason: 'invalid_payload',
+          actor: 'service_role',
+        });
+        return badRequest('Invalid payload.', 422);
+      }
+
+      const claimed = await claimDispatch(supabase, notification.id);
+      if (!claimed) {
+        return new Response(JSON.stringify({ sent: 0, failed: 0, note: 'already_dispatched' }), {
+          status: 200,
+          headers: JSON_HEADERS,
+        });
+      }
+
+      const recipients = await filterPushEnabled(
+        supabase,
+        await resolveRecipientIds(supabase, notification),
+      );
+      const result = await sendToUsers(supabase, recipients, notification);
+
+      logStructured('send_push_result', {
+        correlation_id: correlationId,
+        actor: 'service_role',
+        notification_id: notification.id ?? null,
+        recipients: recipients.length,
+        result: 'sent',
+        sent: result.sent,
+        failed: result.failed,
+      });
+
+      return new Response(JSON.stringify(result), { headers: JSON_HEADERS });
     }
 
     let actorClaims: Claims | undefined;
@@ -344,15 +513,8 @@ Deno.serve(async (req) => {
       return badRequest('Forbidden', 403);
     }
 
-    let body: unknown;
-    try {
-      body = await req.json();
-    } catch {
-      return badRequest('Invalid JSON body', 400);
-    }
-
     const notification = normalizeNotification(body);
-    if (!notification) {
+    if (!notification?.target_user_id) {
       logStructured('send_push_denied', {
         correlation_id: correlationId,
         actor_user_id: userId,
@@ -360,7 +522,7 @@ Deno.serve(async (req) => {
         result: 'denied',
         deny_reason: 'invalid_payload',
       });
-      return badRequest('Invalid payload. Expected notification.target_user_id (UUID) and supported fields only.', 422);
+      return badRequest('Invalid payload. Expected notification.target_user_id (UUID).', 422);
     }
 
     if (!anonKey) {
@@ -421,84 +583,28 @@ Deno.serve(async (req) => {
       return badRequest('Too many requests', 429);
     }
 
-    const targetUserId = notification.target_user_id;
-
-    const { data: subs } = await supabase
-      .from('push_subscriptions')
-      .select('id, endpoint, subscription')
-      .eq('user_id', targetUserId);
-
-    const subscriptionsCount = subs?.length || 0;
-
-    if (!subs?.length) {
-      logStructured('send_push_result', {
-        correlation_id: correlationId,
-        actor_user_id: userId,
-        target_user_id: targetUserId,
-        role: userRole,
-        result: 'sent',
-        subscriptions_count: 0,
-        failed_count: 0,
-        reason: 'no_subscriptions',
-      });
-      return new Response(JSON.stringify({ sent: 0, failed: 0, note: 'no subscriptions' }), {
+    const claimed = await claimDispatch(supabase, notification.id);
+    if (!claimed) {
+      return new Response(JSON.stringify({ sent: 0, failed: 0, note: 'already_dispatched' }), {
         status: 200,
         headers: JSON_HEADERS,
       });
     }
 
-    const payload = JSON.stringify({
-      title: notification.title   ?? 'Kaizen Axis',
-      body:  notification.message ?? 'Nova notificação',
-      url:   notification.reference_route ?? '/',
-    });
-
-    const results = await Promise.all(
-      subs.map(({ endpoint, subscription }) => sendWebPush({
-        endpoint,
-        keys: subscription.keys,
-      }, payload).catch((err) => ({
-        ok: false,
-        endpoint,
-        status: 500,
-        error: err?.message || 'unknown_error',
-      } as PushSendResult)))
-    );
-
-    const failed = results.filter((r) => !r.ok);
-    const invalidEndpoints = failed
-      .filter((r) => r.status === 404 || r.status === 410)
-      .map((r) => r.endpoint);
-
-    if (invalidEndpoints.length > 0) {
-      const { error: deleteError } = await supabase
-        .from('push_subscriptions')
-        .delete()
-        .eq('user_id', targetUserId)
-        .in('endpoint', invalidEndpoints);
-      if (deleteError) {
-        console.error('send-push cleanup subscriptions error:', deleteError.message);
-      }
-    }
-
-    if (failed.length) {
-      console.error('Push failures:', failed.map((f) => f.error));
-    }
+    const recipients = await filterPushEnabled(supabase, [notification.target_user_id]);
+    const result = await sendToUsers(supabase, recipients, notification);
 
     logStructured('send_push_result', {
       correlation_id: correlationId,
       actor_user_id: userId,
-      target_user_id: targetUserId,
+      target_user_id: notification.target_user_id,
       role: userRole,
       result: 'sent',
-      subscriptions_count: subscriptionsCount,
-      failed_count: failed.length,
-      invalid_subscriptions_removed: invalidEndpoints.length,
+      sent: result.sent,
+      failed: result.failed,
     });
 
-    return new Response(JSON.stringify({ sent: subscriptionsCount, failed: failed.length }), {
-      headers: JSON_HEADERS,
-    });
+    return new Response(JSON.stringify(result), { headers: JSON_HEADERS });
   } catch (err) {
     console.error('send-push error:', err);
     return badRequest('Internal error', 500);

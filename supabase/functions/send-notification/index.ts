@@ -195,10 +195,26 @@ Deno.serve(async (req: Request) => {
     reference_route,
   }));
 
-  const { error: insertErr } = await adminClient.from('notifications').insert(rows);
+  const { data: inserted, error: insertErr } = await adminClient
+    .from('notifications')
+    .insert(rows)
+    .select('id, target_user_id, title, message, reference_route, target_role, directorate_id');
   if (insertErr) {
     console.error('[send-notification] insert error:', insertErr.message);
     return jsonResponse({ error: 'Falha ao enviar notificação' }, 500);
+  }
+
+  // Disparo Web Push (deduplicado com o trigger via push_dispatch_log).
+  const pushUrl = `${supabaseUrl}/functions/v1/send-push`;
+  for (const rec of inserted ?? []) {
+    fetch(pushUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify({ record: rec }),
+    }).catch((err) => console.warn('[send-notification] push dispatch:', err));
   }
 
   return jsonResponse({ ok: true, sent: rows.length });

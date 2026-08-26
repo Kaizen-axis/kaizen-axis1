@@ -87,7 +87,7 @@ export function CardActionsMenu({
         aria-label="Ações"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="w-7 h-7 flex items-center justify-center rounded-lg border border-surface-200 bg-card-bg text-text-secondary hover:text-gold-700 hover:border-gold-300 shadow-sm transition-all"
+        className="min-h-11 min-w-11 flex items-center justify-center rounded-lg border border-surface-200 bg-card-bg text-text-secondary hover:text-gold-700 hover:border-gold-300 shadow-sm transition-all"
       >
         <MoreHorizontal size={14} />
       </button>
@@ -101,7 +101,7 @@ export function CardActionsMenu({
             left: coords?.left ?? -9999,
             width: MENU_WIDTH,
           }}
-          className="z-50 bg-card-bg border border-surface-200 rounded-xl shadow-xl overflow-hidden p-1.5"
+          className="z-[80] bg-card-bg border border-surface-200 rounded-xl shadow-xl overflow-hidden p-1.5"
           onClick={(e) => e.stopPropagation()}
           onPointerDown={(e) => e.stopPropagation()}
         >
@@ -116,7 +116,7 @@ export function CardActionsMenu({
                 setOpen(false);
                 item.onClick?.();
               }}
-              className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[11px] font-semibold transition-colors ${
+              className={`w-full min-h-11 flex items-center gap-2 px-2.5 py-2 rounded-lg text-[11px] font-semibold transition-colors ${
                 item.disabled
                   ? 'text-text-secondary/40 cursor-not-allowed'
                   : item.danger

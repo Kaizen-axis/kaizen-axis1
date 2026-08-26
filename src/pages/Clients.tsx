@@ -586,11 +586,11 @@ export default function Clients() {
             <div className="flex flex-shrink-0 rounded-xl border border-surface-200 bg-surface-100/40 p-0.5">
               <button
                 onClick={() => setPipelineView('list')}
-                className={`flex items-center gap-1.5 px-3 rounded-lg text-xs font-semibold transition-colors ${pipelineView === 'list' ? 'bg-card-bg text-text-primary border border-surface-200' : 'text-text-secondary'}`}
+                className={`flex items-center gap-1.5 min-h-11 px-3 rounded-lg text-xs font-semibold transition-colors ${pipelineView === 'list' ? 'bg-card-bg text-text-primary border border-surface-200' : 'text-text-secondary'}`}
               ><List size={14} /> Lista</button>
               <button
                 onClick={() => setPipelineView('kanban')}
-                className={`flex items-center gap-1.5 px-3 rounded-lg text-xs font-semibold transition-colors ${pipelineView === 'kanban' ? 'bg-card-bg text-text-primary border border-surface-200' : 'text-text-secondary'}`}
+                className={`flex items-center gap-1.5 min-h-11 px-3 rounded-lg text-xs font-semibold transition-colors ${pipelineView === 'kanban' ? 'bg-card-bg text-text-primary border border-surface-200' : 'text-text-secondary'}`}
               ><LayoutGrid size={14} /> Kanban</button>
             </div>
           )}
@@ -632,7 +632,7 @@ export default function Clients() {
             {/* Todos */}
             <button
               onClick={() => { setActiveStage('Todos'); setMoreDropdownOpen(false); }}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              className={`flex-shrink-0 min-h-11 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 activeStage === 'Todos'
                   ? 'bg-primary-600 text-white shadow-sm'
                   : 'bg-card-bg text-text-secondary border border-surface-200'
@@ -644,7 +644,7 @@ export default function Clients() {
             {/* Documentação — always visible on mobile */}
             <button
               onClick={() => { setActiveStage('Documentação'); setMoreDropdownOpen(false); }}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              className={`flex-shrink-0 min-h-11 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 activeStage === 'Documentação'
                   ? 'bg-primary-600 text-white shadow-sm'
                   : 'bg-card-bg text-text-secondary border border-surface-200'
@@ -657,7 +657,7 @@ export default function Clients() {
             <div className="relative flex-shrink-0">
               <button
                 onClick={() => setMoreDropdownOpen(o => !o)}
-                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                className={`flex items-center gap-1 min-h-11 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                   activeStage !== 'Todos' && activeStage !== 'Documentação'
                     ? 'bg-primary-600 text-white shadow-sm'
                     : 'bg-card-bg text-text-secondary border border-surface-200'

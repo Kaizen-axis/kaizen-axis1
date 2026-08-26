@@ -16,7 +16,8 @@ export function ClientFichaModal({
       isOpen={isOpen && !!client}
       onClose={onClose}
       title="Ficha do Cliente"
-      panelClassName="max-w-3xl"
+      panelClassName="max-w-3xl max-h-[92vh]"
+      contentClassName="p-3 sm:p-4"
     >
       {client && (
         <ClientDetails

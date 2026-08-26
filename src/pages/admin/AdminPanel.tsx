@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PageHeader, PremiumCard, RoundedButton } from '@/components/ui/PremiumComponents';
-import { Users, Shield, ShieldCheck, Target, Megaphone, BarChart3, Plus, Search, Trophy, Download, FileSpreadsheet, FileText, Trash2, Edit2, ChevronDown, ChevronLeft, Calendar, Loader2, Building2, TrendingUp, Printer, Star, Award, Zap, Flame, MoreHorizontal, FileDown, MapPin, Ban } from 'lucide-react';
+import { Users, Shield, Target, Megaphone, BarChart3, Plus, Search, Trophy, Download, FileSpreadsheet, FileText, Trash2, Edit2, ChevronDown, ChevronLeft, Calendar, Loader2, Building2, TrendingUp, Printer, Star, Award, Zap, Flame, MoreHorizontal, FileDown, MapPin, Ban, Lock } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
@@ -1348,18 +1348,18 @@ export default function AdminPanel() {
                       <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:justify-between">
                         <div className="flex flex-col gap-1.5 md:flex-row md:gap-2 md:items-center">
                           <select value={u.role} onChange={e => handleRoleChange(u.id, e.target.value)}
-                            className="w-full md:w-40 text-xs bg-surface-50 border border-surface-200 rounded-lg p-1.5 focus:outline-none focus:border-gold-400">
+                            className="w-full md:w-40 min-h-11 text-xs bg-surface-50 border border-surface-200 rounded-lg px-2 py-2 focus:outline-none focus:border-gold-400">
                             {['CORRETOR', 'COORDENADOR', 'GERENTE', 'DIRETOR', 'ADMIN', 'RECEPCAO', 'ANALISTA'].map(r => <option key={r} value={r}>{r}</option>)}
                           </select>
                           <select value={(u as any).directorate_id ?? ''} onChange={e => handleDirectorateChange(u.id, e.target.value || null)}
-                            className="w-full md:w-40 text-xs bg-surface-50 border border-surface-200 rounded-lg p-1.5 focus:outline-none focus:border-gold-400">
+                            className="w-full md:w-40 min-h-11 text-xs bg-surface-50 border border-surface-200 rounded-lg px-2 py-2 focus:outline-none focus:border-gold-400">
                             <option value="">Sem Diretoria</option>
                             {directorates.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                           </select>
                           <select
                             value={(u as any).team_id || (u as any).team || ''}
                             onChange={e => handleTeamChange(u.id, e.target.value || null)}
-                            className="w-full md:w-40 text-xs bg-surface-50 border border-surface-200 rounded-lg p-1.5 focus:outline-none focus:border-gold-400"
+                            className="w-full md:w-40 min-h-11 text-xs bg-surface-50 border border-surface-200 rounded-lg px-2 py-2 focus:outline-none focus:border-gold-400"
                           >
                             <option value="">Sem Equipe</option>
                             {teams
@@ -1367,14 +1367,14 @@ export default function AdminPanel() {
                               .map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                           </select>
                           <select value={(u as any).manager_id ?? ''} onChange={e => handleManagerChange(u.id, e.target.value || null)}
-                            className="w-full md:w-40 text-xs bg-surface-50 border border-surface-200 rounded-lg p-1.5 focus:outline-none focus:border-gold-400">
+                            className="w-full md:w-40 min-h-11 text-xs bg-surface-50 border border-surface-200 rounded-lg px-2 py-2 focus:outline-none focus:border-gold-400">
                             <option value="">Sem Gestor</option>
                             {allProfiles
                               .filter(p => p.id !== u.id && p.role?.toUpperCase() === 'GERENTE' && isProfileActive((p as any).status))
                               .map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                           </select>
                           <select value={(u as any).coordinator_id ?? ''} onChange={e => handleCoordinatorChange(u.id, e.target.value || null)}
-                            className="w-full md:w-40 text-xs bg-surface-50 border border-surface-200 rounded-lg p-1.5 focus:outline-none focus:border-gold-400">
+                            className="w-full md:w-40 min-h-11 text-xs bg-surface-50 border border-surface-200 rounded-lg px-2 py-2 focus:outline-none focus:border-gold-400">
                             <option value="">Sem Coordenador</option>
                             {allProfiles
                               .filter(p => p.id !== u.id && p.role?.toUpperCase() === 'COORDENADOR' && isProfileActive((p as any).status))
@@ -1409,7 +1409,7 @@ export default function AdminPanel() {
                           <p className="font-semibold text-text-primary truncate">{u.name}</p>
                           <p className="text-xs text-text-secondary">{u.role}</p>
                         </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-shrink-0">
                           <RoundedButton
                             size="sm"
                             onClick={() => handleReactivateUser(u.id, u.name || 'Usuário')}
@@ -2344,15 +2344,18 @@ export default function AdminPanel() {
           { id: 'gamification', label: 'Gamificação', icon: Zap },
         ].filter(tab => !tab.adminOnly || isAdmin).map((tab) => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id as Tab)}
-            className={`${tab.wide ? 'flex-[1.7]' : 'flex-1'} min-w-0 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all ${activeTab === tab.id ? 'bg-gold-500 text-white shadow-md shadow-gold-500/20' : 'bg-card-bg dark:bg-surface-100 text-text-secondary border border-surface-200'}`}>
+            className={`${tab.wide ? 'flex-[1.7]' : 'flex-1'} min-w-[44px] min-h-11 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all ${activeTab === tab.id ? 'bg-gold-500 text-white shadow-md shadow-gold-500/20' : 'bg-card-bg dark:bg-surface-100 text-text-secondary border border-surface-200'}`}>
             <tab.icon size={13} className="shrink-0" /> {tab.label}
           </button>
         ))}
         <button
-          onClick={() => navigate('/admin/security')}
-          className="flex-1 min-w-0 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all bg-card-bg dark:bg-surface-100 text-text-secondary border border-surface-200 hover:border-gold-400 hover:text-gold-500"
+          type="button"
+          disabled
+          title="Em breve"
+          aria-label="Segurança — em breve"
+          className="flex-1 min-w-[44px] min-h-11 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all bg-card-bg dark:bg-surface-100 text-text-secondary border border-surface-200 opacity-50 cursor-not-allowed"
         >
-          <ShieldCheck size={13} className="shrink-0" /> Segurança
+          <Lock size={13} className="shrink-0" /> Segurança
         </button>
       </div>
 
@@ -2503,7 +2506,7 @@ export default function AdminPanel() {
                     <div><p className="text-sm font-medium">{u.name}</p><p className="text-xs text-text-secondary">{u.role}</p></div>
                   </div>
                   <button onClick={() => selectedTeamId && handleToggleMember(selectedTeamId, u.id, u.name)}
-                    className={`text-xs font-medium hover:underline ${isMember ? 'text-red-500' : 'text-green-600'}`}>
+                    className={`min-h-11 px-3 text-xs font-medium hover:underline ${isMember ? 'text-red-500' : 'text-green-600'}`}>
                     {isMember ? 'Remover' : 'Adicionar'}
                   </button>
                 </div>

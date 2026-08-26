@@ -1044,7 +1044,7 @@ export default function ClientDetails({
                 <PremiumCard
                   key={doc.id}
                   interactive={!converting}
-                  className="relative flex items-center justify-between p-3 overflow-hidden"
+                  className="relative flex items-center justify-between gap-2 p-3 overflow-hidden"
                   onClick={() => { if (!converting) handleOpenDocument((doc as any).file_path, (doc as any).id); }}
                 >
                   {converting && (
@@ -1072,7 +1072,7 @@ export default function ClientDetails({
                         </svg>
                       </div>
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-sm font-medium text-white drop-shadow-sm">Convertendo para PDF…</span>
+                        <span className="text-xs sm:text-sm font-medium text-white drop-shadow-sm px-3 text-center">Convertendo para PDF…</span>
                       </div>
                     </div>
                   )}

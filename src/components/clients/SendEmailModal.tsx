@@ -16,7 +16,7 @@ export function SendEmailModal({
       isOpen={isOpen && !!client}
       onClose={onClose}
       title={client ? `Novo Email · ${client.name}` : 'Novo Email'}
-      panelClassName="max-w-2xl"
+      panelClassName="max-w-2xl max-h-[92vh]"
       overlayClassName="z-[60]"
     >
       {client && (

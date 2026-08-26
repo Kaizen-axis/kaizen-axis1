@@ -35,7 +35,7 @@ export const Modal = ({ isOpen, onClose, title, children, panelClassName, conten
   if (!isOpen) return null;
 
   return createPortal(
-    <div className={cn("fixed inset-0 z-50 flex items-center justify-center p-4", overlayClassName)}>
+    <div className={cn("fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4", overlayClassName)}>
       <div 
         className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
         onClick={onClose}
@@ -43,7 +43,7 @@ export const Modal = ({ isOpen, onClose, title, children, panelClassName, conten
       <div 
         ref={modalRef}
         className={cn(
-          "bg-card-bg w-full max-w-md rounded-2xl shadow-2xl pointer-events-auto flex flex-col max-h-[90vh] relative z-10 animate-in fade-in zoom-in-95 duration-200",
+          "bg-card-bg w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl pointer-events-auto flex flex-col max-h-[92vh] relative z-10 animate-in fade-in zoom-in-95 duration-200",
           panelClassName
         )}
       >
@@ -51,7 +51,7 @@ export const Modal = ({ isOpen, onClose, title, children, panelClassName, conten
           <h3 className="text-lg font-bold text-text-primary">{title}</h3>
           <button 
             onClick={onClose}
-            className="p-2 rounded-full hover:bg-surface-100 text-text-secondary transition-colors"
+            className="min-h-11 min-w-11 flex items-center justify-center rounded-full hover:bg-surface-100 text-text-secondary transition-colors"
           >
             <X size={20} />
           </button>

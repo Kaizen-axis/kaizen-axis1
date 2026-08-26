@@ -36,7 +36,7 @@ export function BrokerSearch({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Buscar corretor…"
-        className="w-full h-9 pl-10 pr-3 rounded-lg bg-card-bg border border-surface-200 text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-gold-200 shadow-sm"
+        className="w-full min-h-11 pl-10 pr-3 rounded-lg bg-card-bg border border-surface-200 text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-gold-200 shadow-sm"
       />
       {trimmed && (
         <div className="absolute left-0 right-0 top-full mt-2 z-20 bg-card-bg border border-surface-200 rounded-xl shadow-xl overflow-hidden p-2 space-y-1 max-h-72 overflow-y-auto">

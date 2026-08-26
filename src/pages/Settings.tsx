@@ -11,6 +11,7 @@ import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { supabase } from '@/lib/supabase';
 import { GamificationProfile } from '@/components/gamification/GamificationProfile';
 import { useApp } from '@/context/AppContext';
+import { setupPushSubscription } from '@/context/NotificationContext';
 
 // ─── tipos ──────────────────────────────────────────────────────────────────
 interface Profile {
@@ -46,12 +47,20 @@ function Toast({ message, type, onClose }: { message: string; type: ToastType; o
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
+      type="button"
       onClick={() => onChange(!value)}
-      className={`w-12 h-6 rounded-full transition-colors relative flex-shrink-0 ${value ? 'bg-gold-500' : 'bg-surface-300'}`}
+      className={`w-12 min-h-11 rounded-full transition-colors relative flex-shrink-0 ${value ? 'bg-gold-500' : 'bg-surface-300'}`}
+      aria-pressed={value}
     >
-      <div className={`w-4 h-4 rounded-full bg-card-bg absolute top-1 transition-transform ${value ? 'left-7' : 'left-1'}`} />
+      <div className={`w-4 h-4 rounded-full bg-card-bg absolute top-1/2 -translate-y-1/2 transition-transform ${value ? 'left-7' : 'left-1'}`} />
     </button>
   );
+}
+
+function isIosDevice() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -131,12 +140,17 @@ export default function Settings() {
     if (!profile) return;
     const next = !profile.push_notifications_enabled;
 
-    if (next && 'Notification' in window) {
+    if (next) {
+      if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+        showToast('Este navegador não suporta notificações push.', 'error');
+        return;
+      }
       const perm = await Notification.requestPermission();
-      if (perm === 'denied') {
+      if (perm !== 'granted') {
         showToast('Permissão de notificação negada pelo navegador.', 'error');
         return;
       }
+      await setupPushSubscription(profile.id);
     }
 
     const { error } = await supabase
@@ -457,7 +471,12 @@ export default function Settings() {
               <div className={cls.icon}><Bell size={20} /></div>
               <div>
                 <p className="font-medium text-text-primary">Notificações Push</p>
-                <p className="text-xs text-text-secondary">Receba alertas importantes</p>
+                <p className="text-xs text-text-secondary">Receba alertas no dispositivo mesmo com o app fechado.</p>
+                {isIosDevice() && (
+                  <p className="text-[11px] text-amber-500 mt-1">
+                    No iPhone, o push só funciona com o app instalado na Tela de Início.
+                  </p>
+                )}
               </div>
             </div>
             <Toggle value={profile?.push_notifications_enabled ?? true} onChange={toggleNotifications} />

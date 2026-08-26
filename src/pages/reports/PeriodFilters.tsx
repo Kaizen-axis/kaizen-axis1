@@ -11,7 +11,7 @@ export function PeriodFilters({
         <button
           key={p}
           onClick={() => onPeriodChange(p)}
-          className={`px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${period === p || (p === 'Personalizado' && period.includes('/'))
+          className={`min-h-11 px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${period === p || (p === 'Personalizado' && period.includes('/'))
             ? 'bg-primary-600 text-white shadow-md'
             : 'bg-card-bg text-text-secondary border border-surface-200'
             }`}

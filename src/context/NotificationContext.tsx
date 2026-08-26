@@ -83,29 +83,6 @@ async function playNotificationSound() {
     }
 }
 
-// ─── Notificação nativa do browser ───────────────────────────────────────────
-function showBrowserNotification(title: string, body: string, route?: string | null) {
-    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
-    try {
-        const notif = new Notification(title, {
-            body,
-            icon:  '/pwa-192x192.png?v=4',
-            badge: '/pwa-192x192.png?v=4',
-            tag:   'kaizen-axis-notif',
-            ...(({ renotify: true }) as any),
-        } as NotificationOptions);
-        if (route) {
-            notif.onclick = () => {
-                window.focus();
-                window.location.href = route;
-                notif.close();
-            };
-        }
-    } catch {
-        // Sem suporte — ignora
-    }
-}
-
 // ─── Converte base64url para Uint8Array (necessário para VAPID) ───────────────
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
     const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -115,11 +92,17 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 // ─── Registra/atualiza push subscription no banco ────────────────────────────
-async function setupPushSubscription(userId: string) {
+export async function setupPushSubscription(userId: string) {
     if (!VAPID_PUBLIC_KEY) return;
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
 
     try {
+        const existing = await navigator.serviceWorker.getRegistration();
+        if (!existing) {
+            console.warn('[Push] Service worker não registrado. Instale o PWA ou use o app em produção.');
+            return;
+        }
+
         const reg = await navigator.serviceWorker.ready;
         let sub   = await reg.pushManager.getSubscription();
 
@@ -267,14 +250,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                                 return [newNotif, ...prev];
                             });
 
-                            // ── Alerta sonoro + notificação nativa ──────────
-                            playNotificationSound();
-                            // Mostra notificação nativa do SO sempre
-                            showBrowserNotification(
-                                newNotif.title,
-                                newNotif.message,
-                                newNotif.reference_route
-                            );
+                            // App em primeiro plano: só o som. Banner do SO vem do SW
+                            // quando nenhuma janela está focada.
+                            if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+                                playNotificationSound();
+                            }
                         }
                     } else if (payload.eventType === 'UPDATE') {
                         const updatedNotif = payload.new as Notification;

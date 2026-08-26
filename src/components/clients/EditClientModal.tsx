@@ -16,7 +16,7 @@ export function EditClientModal({
       isOpen={isOpen && !!client}
       onClose={onClose}
       title={client ? `Editar · ${client.name}` : 'Editar cliente'}
-      panelClassName="max-w-2xl"
+      panelClassName="max-w-2xl max-h-[92vh]"
       overlayClassName="z-[60]"
     >
       {client && (

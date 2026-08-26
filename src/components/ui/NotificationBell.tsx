@@ -147,7 +147,7 @@ export const NotificationBell = () => {
             {/* Bell Button */}
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-10 h-10 rounded-full flex items-center justify-center bg-card-bg border border-surface-200 text-text-secondary hover:text-gold-500 hover:border-gold-300 transition-all relative"
+                className="w-10 min-h-11 min-w-11 rounded-full flex items-center justify-center bg-card-bg border border-surface-200 text-text-secondary hover:text-gold-500 hover:border-gold-300 transition-all relative"
             >
                 <Bell size={20} />
                 <AnimatePresence>
@@ -172,7 +172,7 @@ export const NotificationBell = () => {
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 10, scale: 0.95 }}
                         transition={{ duration: 0.15 }}
-                        className="absolute right-0 mt-3 w-80 sm:w-96 bg-card-bg border border-surface-200 shadow-2xl rounded-2xl overflow-hidden z-50 flex flex-col"
+                        className="absolute right-0 mt-3 w-[min(20rem,calc(100vw-1.5rem))] sm:w-96 bg-card-bg border border-surface-200 shadow-2xl rounded-2xl overflow-hidden z-50 flex flex-col"
                     >
                         {/* Header */}
                         <div className="px-4 py-3 border-b border-surface-100 flex items-center justify-between bg-surface-50/50">

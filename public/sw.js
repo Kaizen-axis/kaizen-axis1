@@ -7,7 +7,7 @@
 //   • Limpa caches de versões antigas         →  sem conflito entre deploys
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const CACHE_NAME = `kaizen-axis-${CACHE_VERSION}`;
 const MAX_CACHE_ENTRIES = 60;
 
@@ -159,21 +159,26 @@ self.addEventListener('fetch', (event) => {
 
 // ─── PUSH — recebe push do servidor e exibe notificação nativa ───────────────
 self.addEventListener('push', (event) => {
-  let data = { title: 'Kaizen Axis', body: 'Você tem uma nova notificação.', url: '/' };
+  let data = { id: '', title: 'Kaizen Axis', body: 'Você tem uma nova notificação.', url: '/' };
   try { Object.assign(data, event.data?.json()); } catch {}
 
-  event.waitUntil(
-    self.registration.showNotification(data.title, {
+  event.waitUntil((async () => {
+    const windowClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const hasFocused = windowClients.some((c) => c.focused);
+    if (hasFocused) return;
+
+    const tag = data.id ? `kaizen-${data.id}` : `kaizen-${Date.now()}`;
+    await self.registration.showNotification(data.title, {
       body: data.body,
       icon: '/pwa-192x192.png',
       badge: '/pwa-192x192.png',
       vibrate: [200, 100, 200, 100, 200],
-      tag: 'kaizen-notif',
+      tag,
       renotify: true,
       requireInteraction: false,
       data: { url: data.url },
-    })
-  );
+    });
+  })());
 });
 
 // ─── NOTIFICATION CLICK — abre o app na rota correta ────────────────────────

@@ -26,7 +26,7 @@ export function ReportToolbar({
 }: ReportToolbarProps) {
   const hasSearch = !!(brokers && onSelectBroker);
   return (
-    <div className="mb-6 flex items-center gap-2 print:hidden">
+    <div className="mb-6 flex flex-wrap items-center gap-2 print:hidden">
       {hasSearch ? (
         <div className="flex-1 min-w-0">
           <BrokerSearch brokers={brokers!} onSelect={onSelectBroker!} />
