@@ -1,7 +1,19 @@
 import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-export function ScrollTabBar({ children, className = '' }: { children: ReactNode; className?: string }) {
+export function ScrollTabBar({
+  children,
+  className = '',
+  trackClassName = 'gap-2',
+  prevLabel = 'Abas anteriores',
+  nextLabel = 'Próximas abas',
+}: {
+  children: ReactNode;
+  className?: string;
+  trackClassName?: string;
+  prevLabel?: string;
+  nextLabel?: string;
+}) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -39,7 +51,7 @@ export function ScrollTabBar({ children, className = '' }: { children: ReactNode
     <div className={`relative min-w-0 ${className}`}>
       <button
         type="button"
-        aria-label="Abas anteriores"
+        aria-label={prevLabel}
         disabled={!canScrollLeft}
         onClick={() => scrollByPage(-1)}
         className={`${arrowClass} left-0`}
@@ -49,13 +61,13 @@ export function ScrollTabBar({ children, className = '' }: { children: ReactNode
       <div
         ref={scrollRef}
         onScroll={updateScrollState}
-        className="flex flex-nowrap gap-2 overflow-x-auto no-scrollbar overscroll-x-contain px-11 touch-pan-x"
+        className={`flex flex-nowrap overflow-x-auto no-scrollbar overscroll-x-contain px-11 touch-pan-x ${trackClassName}`}
       >
         {children}
       </div>
       <button
         type="button"
-        aria-label="Próximas abas"
+        aria-label={nextLabel}
         disabled={!canScrollRight}
         onClick={() => scrollByPage(1)}
         className={`${arrowClass} right-0`}
@@ -65,3 +77,4 @@ export function ScrollTabBar({ children, className = '' }: { children: ReactNode
     </div>
   );
 }
+

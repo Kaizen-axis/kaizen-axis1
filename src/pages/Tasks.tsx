@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
+import { ScrollTabBar } from '@/components/ui/ScrollTabBar';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
@@ -516,7 +517,38 @@ export default function Tasks() {
         }
       />
 
-      <div className="flex gap-3 mb-6 overflow-x-auto overscroll-x-contain no-scrollbar pb-1">
+      <ScrollTabBar
+        className="mb-6 md:hidden"
+        trackClassName="gap-3"
+        prevLabel="Cards anteriores"
+        nextLabel="Próximos cards"
+      >
+        {summaryCards.map((card) => {
+          const Icon = card.icon;
+          const selected = cardFilter === card.id;
+          return (
+            <button
+              key={card.id}
+              type="button"
+              onClick={() => selectCard(card.id)}
+              className={`min-w-[148px] shrink-0 text-left bg-card-bg rounded-2xl border p-4 transition-all ${
+                selected
+                  ? 'border-primary-500 ring-2 ring-primary-500/40'
+                  : 'border-surface-200 hover:border-primary-500/40'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">{card.label}</p>
+                <span className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${card.iconClass}`}>
+                  <Icon size={15} />
+                </span>
+              </div>
+              <p className="font-ui text-2xl font-semibold text-text-primary mt-3">{card.value}</p>
+            </button>
+          );
+        })}
+      </ScrollTabBar>
+      <div className="hidden md:flex gap-3 mb-6">
         {summaryCards.map((card) => {
           const Icon = card.icon;
           const selected = cardFilter === card.id;
