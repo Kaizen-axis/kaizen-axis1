@@ -13,6 +13,7 @@ import { ChatWelcome } from './ChatWelcome';
 import { ChatInfoModal, ChatProfileInfo, ChatGroupInfo } from './ChatInfoModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
+import { withInferredMime } from '@/lib/client-document-upload';
 import { getChatAudioExtension } from '@/lib/chat-audio';
 
 interface ChatDetailPanelProps {
@@ -543,11 +544,15 @@ export function ChatDetailPanel({
   };
 
   const handleGalleryFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !myId || !otherId || isKAI) return;
-    // A-04: validate MIME type — reject anything not explicitly allowed
+    const picked = e.target.files?.[0];
+    if (!picked || !myId || !otherId || isKAI) return;
+    const file = withInferredMime(picked);
     const ALLOWED_GALLERY = ['image/jpeg','image/png','image/gif','image/webp','image/heic','video/mp4','video/quicktime','video/webm'];
-    if (!ALLOWED_GALLERY.includes(file.type)) { e.target.value = ''; return; }
+    if (!ALLOWED_GALLERY.includes(file.type)) {
+      e.target.value = '';
+      alert('Este tipo de arquivo não é suportado na galeria.');
+      return;
+    }
     const isVideo = file.type.startsWith('video/');
     const type = isVideo ? 'video' : 'image';
     const isViewOnce = viewOnce;
@@ -558,8 +563,10 @@ export function ChatDetailPanel({
     const path = `${conversationId}/${crypto.randomUUID()}.${ext}`;
     // P1-03: view-once media goes to private bucket
     const bucket = isViewOnce ? 'chat-media-private' : 'chat-media';
-    const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file);
-    if (!uploadError) {
+    const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file, { contentType: file.type });
+    if (uploadError) {
+      alert(`Falha ao enviar arquivo: ${uploadError.message}`);
+    } else {
       // P1-01: use local blob URL for immediate display
       let displayUrl = '';
       if (!isViewOnce) {
@@ -590,11 +597,15 @@ export function ChatDetailPanel({
   };
 
   const handleDocumentFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !myId || !otherId || isKAI) return;
-    // A-04: validate MIME type
+    const picked = e.target.files?.[0];
+    if (!picked || !myId || !otherId || isKAI) return;
+    const file = withInferredMime(picked);
     const ALLOWED_DOCS = ['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','text/plain','text/csv'];
-    if (!ALLOWED_DOCS.includes(file.type)) { e.target.value = ''; return; }
+    if (!ALLOWED_DOCS.includes(file.type)) {
+      e.target.value = '';
+      alert('Este tipo de documento não é suportado.');
+      return;
+    }
     const isViewOnce = viewOnce;
     setViewOnce(false);
     setSending(true);
@@ -604,7 +615,9 @@ export function ChatDetailPanel({
     // P1-03: view-once media goes to private bucket
     const bucket = isViewOnce ? 'chat-media-private' : 'chat-media';
     const { error: uploadError } = await supabase.storage.from(bucket).upload(path, file, { contentType: file.type });
-    if (!uploadError) {
+    if (uploadError) {
+      alert(`Falha ao enviar documento: ${uploadError.message}`);
+    } else {
       // P1-01: use local blob URL for immediate display
       let displayUrl = '';
       if (!isViewOnce) {

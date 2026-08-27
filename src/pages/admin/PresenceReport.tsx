@@ -667,7 +667,7 @@ export default function PresenceReport() {
             <section className="mb-5">
               <SectionHeader title="Ranking de Presença" subtitle={`${data.ranking.length} usuários`} />
               <PremiumCard className="p-0 overflow-hidden">
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto overscroll-x-contain">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-surface-200 bg-surface-50">
@@ -718,7 +718,7 @@ export default function PresenceReport() {
                 subtitle="Presença × 2 + Leads × 1 + Vendas × 5"
               />
               <PremiumCard className="p-0 overflow-hidden">
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto overscroll-x-contain">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-surface-200 bg-surface-50">

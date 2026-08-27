@@ -168,6 +168,10 @@ select:-webkit-autofill {
   scrollbar-width: none;
 }
 
+.overscroll-x-contain {
+  overscroll-behavior-x: contain;
+}
+
 /* ── v3: barras de scroll invisíveis em TODO o app (scroll continua funcional) ── */
 * {
   scrollbar-width: none;        /* Firefox */

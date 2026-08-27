@@ -137,7 +137,7 @@ export default function DevelopmentDetails() {
       </div>
 
       {/* Gallery Thumbs */}
-      <div className="px-6 -mt-4 mb-6 flex gap-2 overflow-x-auto no-scrollbar relative z-10">
+      <div className="px-6 -mt-4 mb-6 flex gap-2 overflow-x-auto overscroll-x-contain no-scrollbar relative z-10">
         {(development.images || []).map((img, idx) => (
           <button
             key={idx}
@@ -306,7 +306,7 @@ export default function DevelopmentDetails() {
             </button>
           </div>
 
-          <div className="mt-6 flex gap-2 overflow-x-auto max-w-full p-2">
+          <div className="mt-6 flex gap-2 overflow-x-auto overscroll-x-contain max-w-full p-2">
             {(development.images || []).map((img, idx) => (
               <button key={idx} onClick={() => { setLightboxIndex(idx); setLightboxType('image'); }}
                 className={`w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 border-2 transition-all ${lightboxIndex === idx && lightboxType === 'image' ? 'border-gold-400 opacity-100' : 'border-transparent opacity-50 hover:opacity-80'

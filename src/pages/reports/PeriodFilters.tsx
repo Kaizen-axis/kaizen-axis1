@@ -6,7 +6,7 @@ export function PeriodFilters({
   onPeriodChange: (period: string) => void;
 }) {
   return (
-    <div className="flex gap-2 mb-3 overflow-x-auto no-scrollbar pb-2 print:hidden">
+    <div className="flex gap-2 mb-3 overflow-x-auto overscroll-x-contain no-scrollbar pb-2 print:hidden">
       {['Mês vigente', '30 dias', '60 dias', '90 dias', 'Personalizado'].map((p) => (
         <button
           key={p}

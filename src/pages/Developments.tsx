@@ -434,7 +434,7 @@ export default function Developments() {
           <div
             ref={scrollRef}
             onScroll={updateScrollState}
-            className="grid grid-flow-col auto-cols-[100%] md:auto-cols-[calc((100%-3rem)/3.5)] gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar"
+            className="grid grid-flow-col auto-cols-[100%] md:auto-cols-[calc((100%-3rem)/3.5)] gap-4 overflow-x-auto overscroll-x-contain snap-x snap-mandatory no-scrollbar"
           >
             {filteredDevelopments.map((dev) => (
               <PremiumCard
@@ -552,7 +552,7 @@ export default function Developments() {
             <h4 className="text-sm font-bold text-text-secondary uppercase">Mídia</h4>
             <div>
               <label className="block text-xs font-medium text-text-secondary mb-2">Fotos</label>
-              <div className="flex items-center gap-4 overflow-x-auto pb-2">
+              <div className="flex items-center gap-4 overflow-x-auto overscroll-x-contain pb-2">
                 <label className={`w-20 h-20 flex flex-col items-center justify-center bg-surface-50 border-2 border-dashed border-surface-200 rounded-xl cursor-pointer hover:bg-surface-100 flex-shrink-0 ${uploadingImages ? 'pointer-events-none opacity-60' : ''}`}>
                   {uploadingImages ? <Loader2 size={20} className="animate-spin text-gold-400" /> : <Upload size={20} className="text-text-secondary" />}
                   <span className="text-[10px] text-text-secondary mt-1">{uploadingImages ? 'Enviando...' : 'Adicionar'}</span>

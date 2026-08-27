@@ -716,7 +716,7 @@ export default function Clients() {
           {/* ── Desktop filter (md and above): all pills + Outros dropdown ── */}
           <div className="hidden md:block pt-2 pb-2 px-6">
             <div className="inline-flex max-w-full items-center gap-1.5 rounded-xl border border-surface-200 bg-surface-100/40 p-1">
-              <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto no-scrollbar">
+              <div className="flex min-w-0 items-center gap-1.5 overflow-x-auto overscroll-x-contain no-scrollbar">
                 {/* Chip: Todos */}
                 <button
                   onClick={() => setActiveStage('Todos')}

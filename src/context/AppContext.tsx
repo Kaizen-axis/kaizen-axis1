@@ -4,6 +4,7 @@ import { AutomationLead } from '@/data/leads';
 import { supabase } from '@/lib/supabase';
 import { logAuditEvent } from '@/services/auditLogger';
 import { rateLimiter } from '@/services/rateLimiter';
+import { inferDocumentContentType, isUnknownMimeType } from '@/lib/client-document-upload';
 import { Session, User } from '@supabase/supabase-js';
 import confetti from 'canvas-confetti';
 
@@ -1231,11 +1232,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
+      const contentType = inferDocumentContentType(file);
+      if (targetBucket === 'client-documents' && isUnknownMimeType(contentType)) {
+        throw new Error('Tipo de arquivo não suportado.');
+      }
+
       // Remove accents and special characters to prevent Supabase Storage "Invalid key" errors
       const sanitizedPath = path.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9.\-_/]/g, '_');
       const { data, error } = await supabase.storage.from(targetBucket).upload(sanitizedPath, file, {
         upsert: targetBucket === 'client-documents' ? false : true,
-        contentType: file.type || undefined,
+        contentType,
       });
       if (error) throw error;
       return data.path;

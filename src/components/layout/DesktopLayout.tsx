@@ -322,7 +322,7 @@ export function DesktopLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 min-w-0 overflow-y-auto print:overflow-visible print:h-auto">
+        <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden overscroll-x-none print:overflow-visible print:h-auto">
           <div
             ref={useGsapPageTransition<HTMLDivElement>(location.pathname)}
             className="mx-auto w-full max-w-7xl px-2 sm:px-4 lg:px-6"

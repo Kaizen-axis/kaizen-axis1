@@ -21,8 +21,8 @@ export function PdfDropzone({ onFilesAccepted, acceptType, maxFiles = 10, maxSiz
     }, [onFilesAccepted]);
 
     const acceptConfig = acceptType === 'image'
-        ? { 'image/jpeg': [], 'image/png': [], 'image/webp': [] }
-        : { 'application/pdf': [] };
+        ? { 'image/jpeg': ['.jpg', '.jpeg'], 'image/png': ['.png'], 'image/webp': ['.webp'] }
+        : { 'application/pdf': ['.pdf'] };
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,

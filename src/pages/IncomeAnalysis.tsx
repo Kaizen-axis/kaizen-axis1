@@ -16,6 +16,7 @@ import { useAuthorization } from '@/hooks/useAuthorization';
 import { logAuditEvent } from '@/services/auditLogger';
 import { supabase } from '@/lib/supabase';
 import { parseApiResponse } from '@/lib/http/parseApiResponse';
+import { inferDocumentContentType } from '@/lib/client-document-upload';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
@@ -538,7 +539,7 @@ export default function IncomeAnalysis() {
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []).filter(f => f.type === 'application/pdf');
+    const files = Array.from(e.target.files ?? []).filter(f => inferDocumentContentType(f) === 'application/pdf');
     if (files.length === 0) { setErro('Apenas arquivos PDF são aceitos.'); }
     else { setArquivos(files); setErro(null); }
   };

@@ -159,7 +159,7 @@ export default function Schedule() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="-mx-2 sm:-mx-4 lg:-mx-6 flex flex-col bg-app-bg"
+    <div className="sm:-mx-4 lg:-mx-6 flex flex-col bg-app-bg"
          style={{ height: 'calc(100vh - 3.5rem)' }}>
 
       {/* ══════════════════════════════════════════════════════════════════

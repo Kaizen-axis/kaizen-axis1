@@ -180,7 +180,7 @@ export function ClientsKanban({
   };
 
   return (
-    <div ref={boardRef} className="kanban-board flex h-[calc(100vh-16rem)] min-w-0 max-w-full gap-4 overflow-x-auto px-6 pb-4">
+    <div ref={boardRef} className="kanban-board flex h-[calc(100vh-16rem)] min-w-0 max-w-full gap-4 overflow-x-auto overscroll-x-contain px-6 pb-4">
       {stages.map((stage) => {
         const items = clients.filter((c) => c.stage === stage);
         const isOver = overStage === stage;

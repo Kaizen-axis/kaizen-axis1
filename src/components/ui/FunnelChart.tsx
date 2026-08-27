@@ -25,14 +25,14 @@ export const FunnelChart = ({ clientsData }: FunnelChartProps) => {
         <h3 className="v3-serif text-lg text-text-primary tracking-tight">Funil de Conversão</h3>
         <p className="text-xs text-text-secondary">Clientes por etapa do pipeline</p>
       </div>
-      <div className="flex-1 w-full -ml-4">
+      <div className="flex-1 w-full min-w-0 overflow-hidden">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart
             data={data}
             margin={{
               top: 10,
-              right: 30,
-              left: 0,
+              right: 16,
+              left: 8,
               bottom: 0,
             }}
           >

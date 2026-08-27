@@ -516,7 +516,7 @@ export default function Tasks() {
         }
       />
 
-      <div className="flex gap-3 mb-6 overflow-x-auto no-scrollbar pb-1">
+      <div className="flex gap-3 mb-6 overflow-x-auto overscroll-x-contain no-scrollbar pb-1">
         {summaryCards.map((card) => {
           const Icon = card.icon;
           const selected = cardFilter === card.id;

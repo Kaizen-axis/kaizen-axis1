@@ -58,7 +58,7 @@ export function TeamCardGrid({ teams, clients, startDate, endDate, from, fromId,
       <div
         ref={scrollRef}
         onScroll={updateScrollState}
-        className="flex gap-3 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-2 -mx-1 px-1"
+        className="flex gap-3 overflow-x-auto overscroll-x-contain snap-x snap-mandatory no-scrollbar pb-2 -mx-1 px-1"
       >
         {teams.map((team) => {
           const memberIds = getTeamMemberIds(team, allProfiles);

@@ -18,6 +18,7 @@ import { ChatDetailHeader } from '@/components/chat/ChatDetailHeader';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { getChatAudioExtension, getSupportedChatAudioMimeType } from '@/lib/chat-audio';
+import { inferDocumentContentType, withInferredMime } from '@/lib/client-document-upload';
 
 interface ChatMessage {
   id: string;
@@ -540,8 +541,9 @@ export default function ChatDetail() {
   const uploadMedia = async (file: File, type: ChatMessage['type']): Promise<{ signedUrl: string; path: string } | null> => {
     const ext = file.name.split('.').pop() || 'bin';
     const path = `${conversationId}/${Date.now()}_${type}.${ext}`;
-    const { error } = await supabase.storage.from('chat-media').upload(path, file, {
-      contentType: file.type,
+    const prepared = withInferredMime(file);
+    const { error } = await supabase.storage.from('chat-media').upload(path, prepared, {
+      contentType: inferDocumentContentType(prepared),
     });
     if (error) {
       console.error('Upload error:', error);
@@ -557,8 +559,9 @@ export default function ChatDetail() {
   const uploadMediaPrivate = async (file: File, type: ChatMessage['type']): Promise<string | null> => {
     const ext = file.name.split('.').pop() || 'bin';
     const path = `${conversationId}/${Date.now()}_${type}.${ext}`;
-    const { error } = await supabase.storage.from('chat-media-private').upload(path, file, {
-      contentType: file.type,
+    const prepared = withInferredMime(file);
+    const { error } = await supabase.storage.from('chat-media-private').upload(path, prepared, {
+      contentType: inferDocumentContentType(prepared),
     });
     if (error) { console.error('Private upload error:', error); return null; }
     return path; // Return the path only – no public URL
@@ -1645,7 +1648,10 @@ export default function ChatDetail() {
           accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,video/mp4,video/quicktime,video/webm"
           onChange={e => {
             const file = e.target.files?.[0];
-            if (file) handleFileUpload(e, file.type.startsWith('video/') ? 'video' : 'image');
+            if (file) {
+              const mime = inferDocumentContentType(file);
+              handleFileUpload(e, mime.startsWith('video/') ? 'video' : 'image');
+            }
           }} />
 
         <button onClick={() => setShowAttachments(!showAttachments)} className="p-3 text-text-secondary hover:text-text-primary">

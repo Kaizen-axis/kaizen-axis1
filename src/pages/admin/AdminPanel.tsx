@@ -32,6 +32,7 @@ import { logAuditEvent } from '@/services/auditLogger';
 import { formatGoalProgressLine, goalObjectiveBadge } from '@/lib/goals/objectiveLabel';
 
 import { CardActionsMenu, type CardActionItem } from '@/components/ui/CardActionsMenu';
+import { ScrollTabBar } from '@/components/ui/ScrollTabBar';
 
 export default function AdminPanel() {
   // ── Hard role guard: only ADMIN and DIRETOR can access this page ────────────
@@ -1949,7 +1950,7 @@ export default function AdminPanel() {
                       <h4 className="text-[11px] uppercase tracking-wider font-bold text-text-secondary flex items-center gap-1.5"><Trophy size={14} className="text-gold-500" /> {ranking.title}</h4>
                       <span className="text-[10px] font-bold text-text-secondary bg-card-bg px-2 py-0.5 border border-surface-200 rounded-md shadow-sm">{ranking.rows.length}/3</span>
                     </div>
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto overscroll-x-contain">
                       <table className="w-full text-left border-collapse min-w-[760px]">
                         <thead>
                           <tr className="bg-card-bg text-text-secondary text-[9px] uppercase tracking-wider border-b border-surface-100">
@@ -2128,7 +2129,7 @@ export default function AdminPanel() {
                   ) : (
                     <div className="flex flex-col">
                       {/* Desktop Table View */}
-                      <div className="hidden md:block overflow-x-auto">
+                      <div className="hidden md:block overflow-x-auto overscroll-x-contain">
                         <table className="w-full text-left border-collapse">
                           <thead>
                             <tr className="bg-surface-50 text-text-secondary text-[10px] uppercase tracking-wider border-b border-surface-100">
@@ -2340,18 +2341,18 @@ export default function AdminPanel() {
         <PageHeader title="Painel Administrativo" subtitle="Governança, equipes e estratégia da operação." />
       </div>
 
-      <div className="w-full flex flex-wrap gap-2 mb-6 print:hidden">
+      <ScrollTabBar className="mb-6 print:hidden">
         {[
           { id: 'users', label: 'Usuários', icon: Users },
           { id: 'teams', label: 'Equipes', icon: Shield },
           { id: 'directorates', label: 'Diretorias', icon: Building2 },
-          { id: 'reports', label: 'Central de relatórios', icon: BarChart3, adminOnly: true, wide: true },
+          { id: 'reports', label: 'Central de relatórios', icon: BarChart3, adminOnly: true },
           { id: 'announcements', label: 'Anúncios', icon: Megaphone },
           { id: 'goals', label: 'Metas', icon: Target },
           { id: 'gamification', label: 'Gamificação', icon: Zap },
         ].filter(tab => !tab.adminOnly || isAdmin).map((tab) => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id as Tab)}
-            className={`${tab.wide ? 'flex-[1.7]' : 'flex-1'} min-w-[44px] min-h-11 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all ${activeTab === tab.id ? 'bg-gold-500 text-white shadow-md shadow-gold-500/20' : 'bg-card-bg dark:bg-surface-100 text-text-secondary border border-surface-200'}`}>
+            className={`shrink-0 min-h-11 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all ${activeTab === tab.id ? 'bg-gold-500 text-white shadow-md shadow-gold-500/20' : 'bg-card-bg dark:bg-surface-100 text-text-secondary border border-surface-200'}`}>
             <tab.icon size={13} className="shrink-0" /> {tab.label}
           </button>
         ))}
@@ -2360,11 +2361,11 @@ export default function AdminPanel() {
           disabled
           title="Em breve"
           aria-label="Segurança — em breve"
-          className="flex-1 min-w-[44px] min-h-11 flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all bg-card-bg dark:bg-surface-100 text-text-secondary border border-surface-200 opacity-50 cursor-not-allowed"
+          className="shrink-0 min-h-11 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-[11px] font-bold whitespace-nowrap bg-card-bg dark:bg-surface-100 text-text-secondary border border-surface-200 opacity-50 cursor-not-allowed"
         >
           <Lock size={13} className="shrink-0" /> Segurança
         </button>
-      </div>
+      </ScrollTabBar>
 
       <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
         {/* GLOBAL PENDING APPROVALS ALERT */}

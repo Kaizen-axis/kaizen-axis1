@@ -1,18 +1,42 @@
 export const CLIENT_DOCUMENT_ACCEPT =
   'image/*,image/heic,image/heif,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif,.pdf,.doc,.docx,application/pdf';
 
-export function inferDocumentContentType(file: File): string {
-  if (file.type) return file.type;
-  const name = file.name.toLowerCase();
-  if (name.endsWith('.png')) return 'image/png';
-  if (name.endsWith('.webp')) return 'image/webp';
-  if (name.endsWith('.gif')) return 'image/gif';
-  if (name.endsWith('.heic') || name.endsWith('.heif')) return 'image/heic';
-  if (name.endsWith('.pdf')) return 'application/pdf';
-  if (name.endsWith('.doc')) return 'application/msword';
-  if (name.endsWith('.docx')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-  if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'image/jpeg';
-  return 'application/octet-stream';
+const GENERIC_MIME = new Set(['', 'application/octet-stream', 'binary/octet-stream']);
+
+const EXT_MIME: Record<string, string> = {
+  png: 'image/png',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  heic: 'image/heic',
+  heif: 'image/heif',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  txt: 'text/plain',
+  csv: 'text/csv',
+  mp4: 'video/mp4',
+  mov: 'video/quicktime',
+  webm: 'video/webm',
+};
+
+export function isUnknownMimeType(type?: string | null): boolean {
+  return GENERIC_MIME.has((type || '').toLowerCase().trim());
+}
+
+export function inferDocumentContentType(file: { name: string; type?: string | null }): string {
+  if (!isUnknownMimeType(file.type)) return file.type as string;
+  const ext = file.name.split('.').pop()?.toLowerCase() || '';
+  return EXT_MIME[ext] || 'application/octet-stream';
+}
+
+export function withInferredMime(file: File): File {
+  const type = inferDocumentContentType(file);
+  if (type === file.type) return file;
+  return new File([file], file.name, { type, lastModified: file.lastModified });
 }
 
 function isHeicLike(file: File): boolean {
@@ -63,15 +87,8 @@ export async function prepareClientUploadFile(file: File): Promise<File> {
     try {
       return await convertImageFileToJpeg(file);
     } catch {
-      const type = inferDocumentContentType(file);
-      return file.type ? file : new File([file], file.name, { type });
+      return withInferredMime(file);
     }
   }
-  if (!file.type) {
-    const type = inferDocumentContentType(file);
-    if (type !== 'application/octet-stream') {
-      return new File([file], file.name, { type });
-    }
-  }
-  return file;
+  return withInferredMime(file);
 }
