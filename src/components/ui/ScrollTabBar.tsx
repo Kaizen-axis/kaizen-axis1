@@ -7,12 +7,14 @@ export function ScrollTabBar({
   trackClassName = 'gap-2',
   prevLabel = 'Abas anteriores',
   nextLabel = 'Próximas abas',
+  scrollStep,
 }: {
   children: ReactNode;
   className?: string;
   trackClassName?: string;
   prevLabel?: string;
   nextLabel?: string;
+  scrollStep?: number;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -21,8 +23,9 @@ export function ScrollTabBar({
   const updateScrollState = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
+    const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
     setCanScrollLeft(el.scrollLeft > 4);
-    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+    setCanScrollRight(el.scrollLeft < maxScroll - 4);
   }, []);
 
   useEffect(() => {
@@ -41,27 +44,30 @@ export function ScrollTabBar({
   const scrollByPage = (direction: 1 | -1) => {
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollBy({ left: direction * Math.max(120, el.clientWidth * 0.7), behavior: 'smooth' });
+    const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth);
+    const step = scrollStep ?? Math.min(el.clientWidth * 0.55, 200);
+    const next = Math.min(maxScroll, Math.max(0, el.scrollLeft + direction * step));
+    el.scrollTo({ left: next, behavior: 'smooth' });
   };
 
   const arrowClass =
-    'absolute top-1/2 -translate-y-1/2 z-10 h-11 w-11 rounded-full bg-card-bg border border-surface-200 shadow-md flex items-center justify-center text-text-secondary disabled:opacity-30';
+    'shrink-0 h-11 w-11 rounded-full bg-card-bg border border-surface-200 shadow-md flex items-center justify-center text-text-secondary disabled:opacity-30';
 
   return (
-    <div className={`relative min-w-0 ${className}`}>
+    <div className={`flex items-center min-w-0 gap-1 ${className}`}>
       <button
         type="button"
         aria-label={prevLabel}
         disabled={!canScrollLeft}
         onClick={() => scrollByPage(-1)}
-        className={`${arrowClass} left-0`}
+        className={arrowClass}
       >
         <ChevronLeft size={18} />
       </button>
       <div
         ref={scrollRef}
         onScroll={updateScrollState}
-        className={`flex flex-nowrap overflow-x-auto no-scrollbar overscroll-x-contain px-11 touch-pan-x ${trackClassName}`}
+        className={`min-w-0 flex-1 flex flex-nowrap overflow-x-auto no-scrollbar overscroll-x-none touch-pan-x ${trackClassName}`}
       >
         {children}
       </div>
@@ -70,11 +76,10 @@ export function ScrollTabBar({
         aria-label={nextLabel}
         disabled={!canScrollRight}
         onClick={() => scrollByPage(1)}
-        className={`${arrowClass} right-0`}
+        className={arrowClass}
       >
         <ChevronRight size={18} />
       </button>
     </div>
   );
 }
-

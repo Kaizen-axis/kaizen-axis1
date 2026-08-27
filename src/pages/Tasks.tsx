@@ -522,6 +522,7 @@ export default function Tasks() {
         trackClassName="gap-3"
         prevLabel="Cards anteriores"
         nextLabel="Próximos cards"
+        scrollStep={160}
       >
         {summaryCards.map((card) => {
           const Icon = card.icon;
