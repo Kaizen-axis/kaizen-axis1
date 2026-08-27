@@ -431,7 +431,7 @@ export default function Tasks() {
                 </RoundedButton>
               </>
             )}
-            <div className="relative" ref={filterRef}>
+            <div className="relative flex items-center gap-2" ref={filterRef}>
               <RoundedButton
                 size="sm"
                 variant="outline"
@@ -446,8 +446,11 @@ export default function Tasks() {
                   </span>
                 )}
               </RoundedButton>
+              <RoundedButton size="sm" onClick={() => handleOpenModal()} className="flex items-center gap-1 rounded-full">
+                <Plus size={16} /> Nova tarefa
+              </RoundedButton>
               {showFilters && (
-                <div className="absolute right-0 top-full mt-2 z-30 w-72 max-w-[calc(100vw-3rem)] bg-card-bg border border-surface-200 rounded-2xl shadow-xl p-4 space-y-3">
+                <div className="absolute right-0 top-full mt-2 z-30 w-[min(18rem,calc(100vw-2rem))] max-w-full bg-card-bg border border-surface-200 rounded-2xl shadow-xl p-3 space-y-3">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-bold text-text-primary">Filtros</span>
                     {activeFiltersCount > 0 && (
@@ -474,7 +477,7 @@ export default function Tasks() {
                         setFilterStatus(value);
                         setCardFilter(value === 'Todas' ? 'Todos' : value as CardFilter);
                       }}
-                      className="w-full p-3 bg-surface-50 rounded-xl border border-surface-200 text-sm text-text-primary appearance-none"
+                      className="w-full py-2 px-3 bg-surface-50 rounded-xl border border-surface-200 text-sm text-text-primary appearance-none"
                     >
                       <option value="Todas">Todas</option>
                       <option value="Pendente">Pendente</option>
@@ -497,7 +500,7 @@ export default function Tasks() {
                     <select
                       value={filterPeriod}
                       onChange={(e) => setFilterPeriod(e.target.value as DeadlinePeriod)}
-                      className="w-full p-3 bg-surface-50 rounded-xl border border-surface-200 text-sm text-text-primary appearance-none"
+                      className="w-full py-2 px-3 bg-surface-50 rounded-xl border border-surface-200 text-sm text-text-primary appearance-none"
                     >
                       <option value="Todos">Todos</option>
                       <option value="Vencidas">Vencidas</option>
@@ -510,19 +513,16 @@ export default function Tasks() {
                 </div>
               )}
             </div>
-            <RoundedButton size="sm" onClick={() => handleOpenModal()} className="flex items-center gap-1 rounded-full">
-              <Plus size={16} /> Nova tarefa
-            </RoundedButton>
           </div>
         }
       />
 
       <ScrollTabBar
         className="mb-6 md:hidden"
-        trackClassName="gap-3"
+        trackClassName="gap-2"
         prevLabel="Cards anteriores"
         nextLabel="Próximos cards"
-        scrollStep={160}
+        scrollStep={120}
       >
         {summaryCards.map((card) => {
           const Icon = card.icon;
@@ -532,7 +532,7 @@ export default function Tasks() {
               key={card.id}
               type="button"
               onClick={() => selectCard(card.id)}
-              className={`min-w-[148px] shrink-0 text-left bg-card-bg rounded-2xl border p-4 transition-all ${
+              className={`w-[calc((100%-0.5rem)/2)] min-w-0 shrink-0 text-left bg-card-bg rounded-2xl border p-3 transition-all ${
                 selected
                   ? 'border-primary-500 ring-2 ring-primary-500/40'
                   : 'border-surface-200 hover:border-primary-500/40'
@@ -540,11 +540,11 @@ export default function Tasks() {
             >
               <div className="flex items-start justify-between gap-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">{card.label}</p>
-                <span className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${card.iconClass}`}>
-                  <Icon size={15} />
+                <span className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${card.iconClass}`}>
+                  <Icon size={13} />
                 </span>
               </div>
-              <p className="font-ui text-2xl font-semibold text-text-primary mt-3">{card.value}</p>
+              <p className="font-ui text-xl font-semibold text-text-primary mt-2">{card.value}</p>
             </button>
           );
         })}
