@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PageHeader, PremiumCard, RoundedButton } from '@/components/ui/PremiumComponents';
-import { Users, Shield, Target, Megaphone, BarChart3, Plus, Search, Trophy, Download, FileSpreadsheet, FileText, Trash2, Edit2, ChevronDown, ChevronLeft, Calendar, Loader2, Building2, TrendingUp, Printer, Star, Award, Zap, Flame, MoreHorizontal, FileDown, MapPin, Ban, Lock, UserCircle, DollarSign } from 'lucide-react';
+import { Users, Shield, Target, Megaphone, BarChart3, Plus, Search, Trophy, Download, FileSpreadsheet, FileText, Trash2, Edit2, ChevronDown, ChevronLeft, Calendar, Loader2, Building2, TrendingUp, Printer, Star, Award, Zap, Flame, MoreHorizontal, FileDown, MapPin, Ban, Lock, UserCircle, DollarSign, Clock } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
@@ -30,13 +30,14 @@ import { DiretoriaCardGrid } from '@/pages/reports/DiretoriaCardGrid';
 import { FilterMenu } from '@/pages/reports/FilterMenu';
 import { buildReportHref } from '@/lib/reports/reportNav';
 import { formatGoalProgressLine, goalObjectiveBadge } from '@/lib/goals/objectiveLabel';
+import { hhmmToMinutes, minutesToHHMM } from '@/lib/checkin/checkinUi';
 
 import { CardActionsMenu, type CardActionItem } from '@/components/ui/CardActionsMenu';
 import { CommissionManagement } from '@/pages/admin/CommissionManagement';
 import { UserProfileModal } from '@/components/admin/UserProfileModal';
 import { ScrollTabBar } from '@/components/ui/ScrollTabBar';
 
-type Tab = 'users' | 'teams' | 'goals' | 'announcements' | 'reports' | 'commissions' | 'directorates' | 'gamification';
+type Tab = 'users' | 'teams' | 'goals' | 'announcements' | 'reports' | 'commissions' | 'directorates' | 'gamification' | 'checkin';
 
 export default function AdminPanel() {
   // ── Hard role guard: only ADMIN and DIRETOR can access this page ────────────
@@ -49,6 +50,7 @@ export default function AdminPanel() {
     goals, addGoal, updateGoal, deleteGoal,
     announcements, addAnnouncement, updateAnnouncement, deleteAnnouncement,
     directorates, addDirectorate, updateDirectorate, deleteDirectorate,
+    checkinUnits, checkinSettings, updateCheckinSettings,
     clients, leads, appointments,
     developments,
     loading, user
@@ -88,6 +90,44 @@ export default function AdminPanel() {
   const [editingDir, setEditingDir] = useState<Directorate | null>(null);
   const [dirForm, setDirForm] = useState<Partial<Directorate>>({ name: '', description: '' });
   const [isSavingDir, setIsSavingDir] = useState(false);
+
+  // Check-in settings
+  const [checkinForm, setCheckinForm] = useState({ start: '08:00', end: '13:30' });
+  const [isSavingCheckin, setIsSavingCheckin] = useState(false);
+  const [checkinFeedback, setCheckinFeedback] = useState('');
+
+  useEffect(() => {
+    if (!checkinSettings) return;
+    setCheckinForm({
+      start: minutesToHHMM(checkinSettings.start_minutes),
+      end: minutesToHHMM(checkinSettings.end_minutes),
+    });
+  }, [checkinSettings]);
+
+  const handleSaveCheckinSettings = async () => {
+    const startMinutes = hhmmToMinutes(checkinForm.start);
+    const endMinutes = hhmmToMinutes(checkinForm.end);
+    if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes)) {
+      setCheckinFeedback('Informe horários válidos.');
+      return;
+    }
+    if (endMinutes <= startMinutes) {
+      setCheckinFeedback('O horário final deve ser posterior ao horário inicial.');
+      return;
+    }
+
+    setIsSavingCheckin(true);
+    setCheckinFeedback('');
+    try {
+      await updateCheckinSettings(startMinutes, endMinutes);
+      setCheckinFeedback('Horário salvo com sucesso.');
+    } catch (error: any) {
+      console.error('Erro ao salvar horário de check-in:', error);
+      setCheckinFeedback(`Não foi possível salvar o horário. ${error?.message || ''}`.trim());
+    } finally {
+      setIsSavingCheckin(false);
+    }
+  };
 
   // Extra tools dropdown/modal
   const [isToolsMenuOpen, setIsToolsMenuOpen] = useState(false);
@@ -954,6 +994,14 @@ export default function AdminPanel() {
       alert(`Não foi possível atualizar o cargo. ${e?.message || ''}`.trim());
     }
   };
+  const handleCheckinUnitChange = async (id: string, checkin_unit_code: string) => {
+    try {
+      await updateProfile(id, { checkin_unit_code });
+    } catch (error: any) {
+      console.error('Erro ao atualizar unidade de check-in:', error);
+      alert(`Não foi possível atualizar a unidade de check-in. ${error?.message || ''}`.trim());
+    }
+  };
   const handleDirectorateChange = async (id: string, directorate_id: string | null) => {
     try {
       const targetDirectorateId = directorate_id || null;
@@ -1392,6 +1440,18 @@ export default function AdminPanel() {
                               .filter(p => p.id !== u.id && p.role?.toUpperCase() === 'COORDENADOR' && isProfileActive((p as any).status))
                               .map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                           </select>
+                          {isAdmin && (
+                            <select
+                              value={u.checkin_unit_code ?? 'zona_oeste'}
+                              onChange={e => handleCheckinUnitChange(u.id, e.target.value)}
+                              aria-label={`Unidade de check-in de ${u.name}`}
+                              className="w-full md:w-40 min-h-11 text-xs bg-surface-50 border border-surface-200 rounded-lg px-2 py-2 focus:outline-none focus:border-gold-400"
+                            >
+                              {checkinUnits.map(unit => (
+                                <option key={unit.code} value={unit.code}>{unit.name}</option>
+                              ))}
+                            </select>
+                          )}
                         </div>
                       </div>
                     </PremiumCard>
@@ -2018,6 +2078,71 @@ export default function AdminPanel() {
           </div>
         );
 
+      case 'checkin':
+        if (!isAdmin) return null;
+        return (
+          <div className="max-w-2xl space-y-4">
+            <PremiumCard className="p-4 sm:p-5 space-y-5">
+              <div>
+                <h3 className="text-base sm:text-lg font-bold text-text-primary flex items-center gap-2">
+                  <Clock size={18} className="text-gold-500" /> Horário do check-in
+                </h3>
+                <p className="text-xs text-text-secondary mt-1">
+                  Janela diária no fuso de Brasília, válida para as duas unidades.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary block mb-1">Início</label>
+                  <input
+                    type="time"
+                    value={checkinForm.start}
+                    onChange={event => setCheckinForm(current => ({ ...current, start: event.target.value }))}
+                    className="w-full min-h-11 px-3 bg-surface-50 rounded-lg border border-surface-200 text-sm text-text-primary focus:outline-none focus:border-gold-400"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary block mb-1">Fim</label>
+                  <input
+                    type="time"
+                    value={checkinForm.end}
+                    onChange={event => setCheckinForm(current => ({ ...current, end: event.target.value }))}
+                    className="w-full min-h-11 px-3 bg-surface-50 rounded-lg border border-surface-200 text-sm text-text-primary focus:outline-none focus:border-gold-400"
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-surface-200 pt-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary mb-2">Unidades protegidas</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {checkinUnits.map(unit => (
+                    <div key={unit.code} className="rounded-xl border border-surface-200 bg-surface-50 p-3">
+                      <p className="text-sm font-bold text-text-primary flex items-center gap-1.5">
+                        <MapPin size={14} className="text-gold-500" /> {unit.name}
+                      </p>
+                      <p className="text-[11px] text-text-secondary mt-1">
+                        Raio de {unit.max_radius_meters.toLocaleString('pt-BR')} m · precisão máxima de {unit.max_accuracy_meters} m
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {checkinFeedback && (
+                <p className={`text-xs ${checkinFeedback.includes('sucesso') ? 'text-emerald-500' : 'text-red-400'}`} role="status">
+                  {checkinFeedback}
+                </p>
+              )}
+
+              <RoundedButton fullWidth onClick={handleSaveCheckinSettings} disabled={isSavingCheckin}>
+                {isSavingCheckin ? <Loader2 size={15} className="animate-spin" /> : <Clock size={15} />}
+                {isSavingCheckin ? 'Salvando...' : 'Salvar horário'}
+              </RoundedButton>
+            </PremiumCard>
+          </div>
+        );
+
       case 'directorates':
         return (
           <div className="space-y-4">
@@ -2362,6 +2487,7 @@ export default function AdminPanel() {
           { id: 'commissions', label: 'Comissionamento', icon: DollarSign },
           { id: 'goals', label: 'Metas', icon: Target },
           { id: 'gamification', label: 'Gamificação', icon: Zap },
+          { id: 'checkin', label: 'Check-in', icon: Clock, adminOnly: true },
         ].filter(tab => !tab.adminOnly || isAdmin).map((tab) => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id as Tab)}
             className={`shrink-0 min-h-11 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all ${activeTab === tab.id ? 'bg-gold-500 text-white shadow-md shadow-gold-500/20' : 'bg-card-bg dark:bg-surface-100 text-text-secondary border border-surface-200'}`}>

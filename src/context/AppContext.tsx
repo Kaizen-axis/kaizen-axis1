@@ -18,6 +18,24 @@ export interface Directorate {
   created_at?: string;
 }
 
+export interface CheckinUnit {
+  code: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  max_radius_meters: number;
+  max_accuracy_meters: number;
+  active: boolean;
+}
+
+export interface CheckinSettings {
+  id: number;
+  start_minutes: number;
+  end_minutes: number;
+  updated_at?: string;
+  updated_by?: string | null;
+}
+
 export interface Profile {
   id: string;
   name: string;
@@ -33,6 +51,7 @@ export interface Profile {
   chat_avatar_url?: string | null;
   chat_status_text?: string | null;
   chat_availability?: string | null;
+  checkin_unit_code?: string | null;
 }
 
 export interface Appointment {
@@ -246,6 +265,12 @@ interface AppContextValue {
   updateDirectorate: (id: string, data: Partial<Directorate>) => Promise<void>;
   deleteDirectorate: (id: string) => Promise<void>;
 
+  // Check-in multiunidade
+  checkinUnits: CheckinUnit[];
+  checkinSettings: CheckinSettings | null;
+  refreshCheckinConfig: () => Promise<void>;
+  updateCheckinSettings: (startMinutes: number, endMinutes: number) => Promise<void>;
+
   // Portals
   portals: Portal[];
   refreshPortals: () => Promise<void>;
@@ -282,6 +307,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [directorates, setDirectorates] = useState<Directorate[]>([]);
+  const [checkinUnits, setCheckinUnits] = useState<CheckinUnit[]>([]);
+  const [checkinSettings, setCheckinSettings] = useState<CheckinSettings | null>(null);
   const [portals, setPortals] = useState<Portal[]>([]);
   const [trainings, setTrainings] = useState<TrainingItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1881,6 +1908,51 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch (e) { console.error('Erro ao deletar diretoria:', e); }
   }, [refreshDirectorates]);
 
+  // ─── Check-in multiunidade ────────────────────────────────────────────────
+
+  const refreshCheckinConfig = useCallback(async () => {
+    try {
+      const [unitsResult, settingsResult] = await Promise.all([
+        supabase
+          .from('checkin_units')
+          .select('code, name, latitude, longitude, max_radius_meters, max_accuracy_meters, active')
+          .eq('active', true)
+          .order('name'),
+        supabase
+          .from('checkin_settings')
+          .select('id, start_minutes, end_minutes, updated_at, updated_by')
+          .eq('id', 1)
+          .maybeSingle(),
+      ]);
+
+      if (unitsResult.error) throw unitsResult.error;
+      if (settingsResult.error) throw settingsResult.error;
+
+      setCheckinUnits((unitsResult.data as CheckinUnit[]) ?? []);
+      setCheckinSettings((settingsResult.data as CheckinSettings | null) ?? null);
+    } catch (error) {
+      console.error('Erro ao carregar configuração de check-in:', error);
+    }
+  }, []);
+
+  const updateCheckinSettings = useCallback(async (
+    startMinutes: number,
+    endMinutes: number,
+  ) => {
+    const { error } = await supabase
+      .from('checkin_settings')
+      .update({
+        start_minutes: startMinutes,
+        end_minutes: endMinutes,
+        updated_at: new Date().toISOString(),
+        updated_by: userRef.current?.id ?? null,
+      })
+      .eq('id', 1);
+
+    if (error) throw error;
+    await refreshCheckinConfig();
+  }, [refreshCheckinConfig]);
+
   // ─── Portals ──────────────────────────────────────────────────────────────
 
   const refreshPortals = useCallback(async () => {
@@ -2029,13 +2101,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         refreshAnnouncements(),
         refreshProfiles(),
         refreshDirectorates(),
+        refreshCheckinConfig(),
       ]);
     } finally {
       // loading controla somente a inicialização de sessão/tela protegida.
       // Atualizações em background não devem desmontar a UI inteira.
       setLoading(false);
     }
-  }, [refreshClients, refreshLeads, refreshAppointments, refreshTasks, refreshDevelopments, refreshTeams, refreshGoals, refreshAnnouncements, refreshProfiles, refreshDirectorates]);
+  }, [refreshClients, refreshLeads, refreshAppointments, refreshTasks, refreshDevelopments, refreshTeams, refreshGoals, refreshAnnouncements, refreshProfiles, refreshDirectorates, refreshCheckinConfig]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -2111,6 +2184,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addDirectorate,
       updateDirectorate,
       deleteDirectorate,
+      checkinUnits,
+      checkinSettings,
+      refreshCheckinConfig,
+      updateCheckinSettings,
       portals,
       refreshPortals,
       addPortal,
