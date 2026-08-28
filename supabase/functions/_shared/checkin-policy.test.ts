@@ -13,6 +13,8 @@ const zonaNorte = {
   longitude: -43.28214,
   max_radius_meters: 1000,
   max_accuracy_meters: 120,
+  start_minutes: 480,
+  end_minutes: 810,
   active: true,
 };
 
@@ -24,8 +26,6 @@ describe('evaluateCheckinPolicy', () => {
       longitude: -43.28214,
       accuracy: 20,
       currentMinutes: 600,
-      startMinutes: 480,
-      endMinutes: 810,
     });
 
     assert.equal(result.ok, true);
@@ -46,8 +46,6 @@ describe('evaluateCheckinPolicy', () => {
       longitude: clientBody.longitude,
       accuracy: clientBody.accuracy,
       currentMinutes: 600,
-      startMinutes: 480,
-      endMinutes: 810,
     });
 
     assert.equal(result.ok, false);
@@ -62,8 +60,6 @@ describe('evaluateCheckinPolicy', () => {
       longitude: -43.28214,
       accuracy: 121,
       currentMinutes: 600,
-      startMinutes: 480,
-      endMinutes: 810,
     });
 
     assert.equal(result.ok, false);
@@ -77,12 +73,39 @@ describe('evaluateCheckinPolicy', () => {
       longitude: -43.28214,
       accuracy: 20,
       currentMinutes: 811,
-      startMinutes: 480,
-      endMinutes: 810,
     });
 
     assert.equal(result.ok, false);
     assert.equal(result.error, 'fora_do_horario');
+  });
+
+  it('uses the schedule of the assigned unit', () => {
+    const west = {
+      ...zonaNorte,
+      code: 'zona_oeste',
+      name: 'Zona Oeste',
+      start_minutes: 480,
+      end_minutes: 540,
+    };
+    const north = {
+      ...zonaNorte,
+      start_minutes: 560,
+      end_minutes: 720,
+    };
+    const sharedInput = {
+      latitude: zonaNorte.latitude,
+      longitude: zonaNorte.longitude,
+      accuracy: 20,
+      currentMinutes: 570,
+      startMinutes: 0,
+      endMinutes: 1439,
+    };
+
+    const westResult = evaluateCheckinPolicy({ ...sharedInput, unit: west });
+    const northResult = evaluateCheckinPolicy({ ...sharedInput, unit: north });
+
+    assert.equal(westResult.error, 'fora_do_horario');
+    assert.equal(northResult.ok, true);
   });
 });
 

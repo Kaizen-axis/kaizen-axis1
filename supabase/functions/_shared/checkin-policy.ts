@@ -5,6 +5,8 @@ export interface CheckinUnitPolicy {
   longitude: number;
   max_radius_meters: number;
   max_accuracy_meters: number;
+  start_minutes: number;
+  end_minutes: number;
   active: boolean;
 }
 
@@ -46,8 +48,6 @@ export function evaluateCheckinPolicy(input: {
   longitude: number;
   accuracy?: number;
   currentMinutes: number;
-  startMinutes: number;
-  endMinutes: number;
 }): CheckinPolicyResult {
   const distance = haversineMeters(
     input.latitude,
@@ -64,8 +64,8 @@ export function evaluateCheckinPolicy(input: {
   }
 
   if (
-    input.currentMinutes < input.startMinutes
-    || input.currentMinutes > input.endMinutes
+    input.currentMinutes < input.unit.start_minutes
+    || input.currentMinutes > input.unit.end_minutes
   ) {
     return { ok: false, error: 'fora_do_horario', distance };
   }
