@@ -1,20 +1,24 @@
 import { useApp } from '@/context/AppContext';
+import {
+    isReceptionRole,
+    normalizeUserRole,
+    type UserRole,
+} from '@/lib/auth/userRoles';
 
-export type UserRole = 'ADMIN' | 'DIRETOR' | 'GERENTE' | 'COORDENADOR' | 'CORRETOR' | 'RECEPCAO' | 'ANALISTA';
+export type { UserRole } from '@/lib/auth/userRoles';
 
 export function useAuthorization() {
     const { profile } = useApp();
 
     // Normalize role casing to avoid mismatches like 'Corretor' !== 'CORRETOR'
-    const rawRole = profile?.role ?? 'CORRETOR';
-    const role = String(rawRole).toUpperCase() as UserRole;
+    const role: UserRole = normalizeUserRole(profile?.role);
 
     const isAdmin = role === 'ADMIN';
     const isDirector = role === 'DIRETOR';
     const isManager = role === 'GERENTE';
     const isCoordinator = role === 'COORDENADOR';
     const isBroker = role === 'CORRETOR';
-    const isReception = role === 'RECEPCAO';
+    const isReception = isReceptionRole(role);
     const isAnalyst = role === 'ANALISTA';
     const canAccessIncomeAnalysis = isAdmin || isDirector || isManager || isCoordinator || isAnalyst;
 

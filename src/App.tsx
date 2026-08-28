@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ResponsiveLayout } from '@/components/layout/ResponsiveLayout';
-import { useAuthorization, UserRole } from '@/hooks/useAuthorization';
+import { useAuthorization, type UserRole } from '@/hooks/useAuthorization';
 import { useApp } from '@/context/AppContext';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 
@@ -49,7 +49,7 @@ const isInactiveProfile = (status?: string) => {
 // ─── Auth guard (all authenticated users) ───────────────────────────────────
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { profile, loading, session } = useApp();
-  const { role, isAnalyst } = useAuthorization();
+  const { isAnalyst, isReception } = useAuthorization();
   const location = useLocation();
 
   // Show a blank loading screen (or simple spinner) while Auth context initializes
@@ -73,7 +73,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace />;
   }
 
-  if (role === 'RECEPCAO') {
+  if (isReception) {
     if (location.pathname !== '/checkin/display') {
       return <Navigate to="/checkin/display" replace />;
     }
@@ -100,7 +100,7 @@ function RoleRoute({
   children: React.ReactNode;
   allowed: UserRole[];
 }) {
-  const { role } = useAuthorization();
+  const { role, isReception } = useAuthorization();
   const { profile, loading, session } = useApp();
   const location = useLocation();
 
@@ -124,7 +124,7 @@ function RoleRoute({
   }
   if (!allowed.includes(role)) return <Navigate to="/" replace />;
 
-  if (role === 'RECEPCAO') {
+  if (isReception) {
     if (location.pathname !== '/checkin/display') {
       return <Navigate to="/checkin/display" replace />;
     }
@@ -183,7 +183,7 @@ export default function App() {
         <Route path="/pdf-tools" element={<ProtectedRoute><PdfTools /></ProtectedRoute>} />
         <Route path="/checkin" element={<ProtectedRoute><CheckIn /></ProtectedRoute>} />
         <Route path="/checkin/display" element={
-          <RoleRoute allowed={['ADMIN', 'DIRETOR', 'GERENTE', 'RECEPCAO']}>
+          <RoleRoute allowed={['ADMIN', 'DIRETOR', 'GERENTE', 'RECEPCAO', 'RECEPCAO_ZN']}>
             <CheckInDisplay />
           </RoleRoute>
         } />
