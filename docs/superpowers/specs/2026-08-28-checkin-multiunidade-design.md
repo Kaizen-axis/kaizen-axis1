@@ -9,7 +9,9 @@
 
 Permitir que cada usuário faça check-in exclusivamente na unidade da Kaizen à
 qual foi vinculado e dar aos administradores autonomia para alterar a janela
-diária de check-in de cada unidade sem edição de código ou novo deploy.
+diária de check-in de cada unidade sem edição de código ou novo deploy. Cada
+unidade também deve possuir um QR diário próprio, exibido automaticamente pela
+conta de recepção correspondente.
 
 O preview deve ser validável no Vercel sem substituir a Edge Function usada pelo
 site atualmente em produção.
@@ -35,13 +37,21 @@ site atualmente em produção.
   navegador não informa nem escolhe a unidade no momento do check-in.
 - O preview usa uma nova função `checkin-geo-v2`; a função `checkin-geo` atual
   permanece intocada durante a validação.
+- O cargo existente `RECEPCAO` representa a recepção da Zona Oeste.
+- Será criado o novo cargo `RECEPCAO_ZN`, exclusivo da recepção da Zona Norte.
+- Ambos os cargos de recepção acessam somente a tela de QR e são redirecionados
+  para ela imediatamente após o login.
+- `ADMIN`, `DIRETOR` e `GERENTE` mantêm acesso à tela e recebem o QR da unidade
+  configurada no próprio perfil.
+- O QR da Zona Oeste nunca é aceito para um usuário da Zona Norte e vice-versa.
 
 ## Abordagem escolhida
 
 Será usada uma evolução aditiva no mesmo banco Supabase: novas estruturas de
-configuração, um vínculo de unidade no perfil e uma nova Edge Function. O código
-de produção atual não consome essas estruturas e continua chamando a função
-antiga, evitando que testes no preview alterem o comportamento do site publicado.
+configuração, um vínculo de unidade no perfil, tokens QR por unidade e uma nova
+Edge Function. O código de produção atual não consome essas estruturas e
+continua chamando a função e o QR globais antigos, evitando que testes no
+preview alterem o comportamento do site publicado.
 
 As alternativas rejeitadas foram alterar diretamente `checkin-geo`, pois uma
 publicação afetaria produção antes da aprovação, e criar outro projeto Supabase,
@@ -102,6 +112,50 @@ frontend e a função antigos. A partir desta evolução, o preview lê e grava 
 horários em `checkin_units`; `checkin_settings` deixa de ser a fonte do horário
 para `checkin-geo-v2`.
 
+### `daily_qr_tokens_by_unit`
+
+Nova tabela paralela aos tokens globais atuais:
+
+- `token_date date not null default current_date`;
+- `unit_code text not null references checkin_units(code)`;
+- `token text not null unique`;
+- `created_at timestamptz not null default now()`;
+- chave primária composta por `(token_date, unit_code)`.
+
+Ela armazena exatamente um token por unidade e por dia. A tabela global
+`daily_qr_tokens` e suas funções atuais permanecem intactas para compatibilidade
+com a produção.
+
+O acesso ocorre somente por duas RPCs `SECURITY DEFINER`, com `search_path`
+restrito e sem leitura direta do token por usuários comuns:
+
+- `get_or_create_unit_daily_qr()` não recebe unidade do navegador. Ela lê o
+  usuário autenticado e resolve a unidade no servidor: `RECEPCAO` sempre usa
+  `zona_oeste`, `RECEPCAO_ZN` sempre usa `zona_norte`, e os cargos de liderança
+  usam `profiles.checkin_unit_code`. Retorna token, código e nome da unidade.
+- `validate_unit_daily_qr(p_token, p_unit_code)` confirma simultaneamente data,
+  token e unidade. Na Edge Function, `p_unit_code` vem do perfil autenticado
+  carregado pelo servidor, nunca do body enviado pelo navegador.
+
+Somente `RECEPCAO`, `RECEPCAO_ZN`, `ADMIN`, `DIRETOR` e `GERENTE` podem executar
+a RPC de geração/exibição. A validação fica disponível apenas ao fluxo seguro da
+Edge Function.
+
+## Cargos e roteamento
+
+O tipo de cargo da aplicação passa a incluir `RECEPCAO_ZN`.
+
+- Ao alterar um perfil para `RECEPCAO`, o Painel Admin também alinha sua unidade
+  para `zona_oeste`.
+- Ao alterar um perfil para `RECEPCAO_ZN`, o Painel Admin também alinha sua
+  unidade para `zona_norte`.
+- Os dois cargos são tratados como recepção nas guardas de rota, não recebem o
+  layout geral e só permanecem em `/checkin/display`.
+- Na interface, o valor técnico `RECEPCAO_ZN` pode ser apresentado como
+  `RECEPÇÃO ZN`, sem alterar o valor persistido.
+- A unidade é resolvida novamente no banco pela RPC; o redirecionamento do
+  frontend não constitui a proteção de segurança.
+
 ## Edge Function `checkin-geo-v2`
 
 A nova função mantém autenticação, rate limit, QR diário, proteção contra GPS
@@ -113,7 +167,7 @@ impreciso e inserção por `fazer_checkin` existentes. O fluxo passa a ser:
 4. Carregar da própria unidade sua janela de início e fim, usando 08:00–13:30
    como fallback seguro apenas se a configuração estiver indisponível.
 5. Validar coordenadas e precisão recebidas.
-6. Validar o QR diário.
+6. Validar o QR diário contra o código da unidade carregada no servidor.
 7. Validar o horário em `America/Sao_Paulo`.
 8. Calcular Haversine exclusivamente contra as coordenadas da unidade atribuída.
 9. Chamar o RPC atômico `fazer_checkin` já existente.
@@ -125,6 +179,7 @@ Erros específicos:
 - unidade inativa ou inexistente: bloquear check-in;
 - fora do raio: informar a unidade esperada, distância calculada e limite;
 - fora do horário: informar a janela vigente;
+- QR de outra unidade: rejeitar como inválido para a unidade atribuída;
 - falha de configuração: registrar detalhes apenas no servidor e retornar
   mensagem segura ao usuário.
 
@@ -144,6 +199,8 @@ será incluído um seletor `Unidade de check-in` com Zona Oeste e Zona Norte.
   distribuídos em uma única linha de colunas iguais;
 - em telas estreitas, os seletores continuam quebrando de forma responsiva para
   preservar legibilidade e área de toque.
+- o seletor de cargo inclui `RECEPCAO_ZN`; escolher qualquer cargo de recepção
+  alinha automaticamente o seletor de unidade correspondente.
 
 ### Aba Check-in
 
@@ -174,17 +231,37 @@ A tela passa a mostrar, quando o usuário estiver autenticado:
 O frontend chamará `checkin-geo-v2` nesta branch. Nenhuma decisão de segurança
 depende da unidade exibida no navegador.
 
+## Tela de exibição do QR
+
+`CheckInDisplay` continua sendo a tela inicial automática das contas de
+recepção, mas passa a consumir `get_or_create_unit_daily_qr()`.
+
+Ela mostra de forma inequívoca:
+
+- `QR Code — Zona Oeste` para `RECEPCAO`;
+- `QR Code — Zona Norte` para `RECEPCAO_ZN`;
+- a unidade definida no perfil para `ADMIN`, `DIRETOR` e `GERENTE`;
+- a janela de horário da unidade exibida;
+- a contagem para a renovação do token à meia-noite.
+
+O QR contém a URL de check-in com o token, como hoje. Não é necessário incluir
+ou confiar em um parâmetro de unidade na URL, pois o vínculo do token é validado
+no servidor.
+
 ## Compatibilidade e implantação
 
 - A branch nasce do commit que a Vercel confirmou como produção, não de `main`.
 - O push da branch aciona um deployment Preview na Vercel.
 - As mudanças SQL são aditivas e não são consumidas pelo frontend atual.
 - `checkin-geo` não será sobrescrita durante o preview.
-- Para validar o fluxo completo, a migration e `checkin-geo-v2` precisam ser
-  publicadas no projeto Supabase vinculado.
-- A credencial CLI disponível durante o levantamento respondeu `403`; se isso
-  persistir, a branch será entregue pronta e os dois comandos de publicação
-  serão informados para execução por uma conta proprietária.
+- `daily_qr_tokens`, `get_or_create_daily_qr()` e `validate_daily_qr()` não serão
+  alteradas durante o preview.
+- A nova migration e `checkin-geo-v2` serão publicadas no projeto Supabase
+  vinculado antes do frontend atualizado.
+- Como o Supabase é compartilhado, durante a validação a conta
+  `RECEPCAO_ZN` deve usar exclusivamente o endereço de preview. O frontend de
+  produção ainda não conhece esse cargo até uma futura promoção; a conta da
+  recepção atual não será convertida para o novo cargo durante o teste.
 
 ## Testes e critérios de aceite
 
@@ -193,6 +270,9 @@ Os testes serão curtos e direcionados às regras críticas:
 - conversão e validação da janela de horário por unidade;
 - cálculo de distância e bloqueio pela unidade atribuída;
 - impossibilidade de escolher outra unidade no payload;
+- geração de tokens diferentes para as duas unidades no mesmo dia;
+- rejeição do QR de uma unidade quando o perfil pertence à outra;
+- resolução de `RECEPCAO` como Oeste e `RECEPCAO_ZN` como Norte;
 - fallback controlado do horário;
 - build Vite/TypeScript.
 
@@ -208,12 +288,20 @@ UAT do preview:
    página e encontra os mesmos valores.
 5. Edge e tela usam a janela da unidade atribuída, sem misturar configurações.
 6. Não-ADMIN não vê nem consegue gravar as configurações.
-7. O endereço de produção continua chamando a função antiga durante o preview.
+7. Login `RECEPCAO` abre diretamente o QR identificado como Zona Oeste.
+8. Login `RECEPCAO_ZN` abre diretamente o QR identificado como Zona Norte.
+9. Os dois QRs do mesmo dia são diferentes.
+10. Usuário da Zona Norte não consegue usar o QR da Zona Oeste, nem o inverso.
+11. ADMIN, DIRETOR e GERENTE veem o QR da unidade definida no próprio perfil.
+12. O endereço de produção continua chamando a função e o QR globais antigos
+    durante o preview.
 
 ## Fora de escopo
 
 - horários diferentes por dia da semana;
 - escolha de unidade pelo usuário durante o check-in;
 - mapa para editar coordenadas;
-- alteração do QR diário ou da lógica de distribuição;
+- mais de um QR por unidade no mesmo dia;
+- escolha manual de unidade na tela de exibição do QR;
+- alteração da lógica de distribuição;
 - projeto Supabase separado para preview.
