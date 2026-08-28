@@ -10,6 +10,11 @@ import { supabase } from '@/lib/supabase';
 import { useApp } from '@/context/AppContext';
 import { cn } from '@/lib/utils';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import {
+  getAssignedUnit,
+  getCheckinWindowLabel,
+  isCheckinOpen,
+} from '@/lib/checkin/checkinUi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,7 +56,7 @@ function normalizeRole(role?: string | null) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CheckIn() {
-  const { user, profile, signOut } = useApp();
+  const { user, profile, signOut, checkinUnits, checkinSettings } = useApp();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const qrToken = searchParams.get('token'); // token vindo do QR scan
@@ -216,8 +221,12 @@ export default function CheckIn() {
     }
   };
 
-  // Bloqueio de horário: Check-in disponível das 08:00 às 13:30
-  const isOpen = brtMinutes >= (8 * 60) && brtMinutes <= (13 * 60 + 30);
+  // A tela e a Edge usam a mesma janela persistida, com fallback seguro.
+  const startMinutes = checkinSettings?.start_minutes ?? (8 * 60);
+  const endMinutes = checkinSettings?.end_minutes ?? (13 * 60 + 30);
+  const windowLabel = getCheckinWindowLabel(startMinutes, endMinutes);
+  const isOpen = isCheckinOpen(brtMinutes, startMinutes, endMinutes);
+  const assignedUnit = getAssignedUnit(profile?.checkin_unit_code, checkinUnits);
 
   // ── Fila do dia ───────────────────────────────────────────────────────────
   const fetchQueue = useCallback(async () => {
@@ -344,7 +353,7 @@ export default function CheckIn() {
     const timeoutId = setTimeout(() => abortCtrl.abort(), 20_000);
 
     try {
-      const { data, error } = await supabase.functions.invoke('checkin-geo', {
+      const { data, error } = await supabase.functions.invoke('checkin-geo-v2', {
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
         body: {
           latitude:  pos.coords.latitude,
@@ -373,9 +382,7 @@ export default function CheckIn() {
             return;
           }
 
-          const safeMessage = body?.error === 'fora_do_raio'
-            ? 'Não foi possível validar sua presença neste local.'
-            : body?.error === 'gps_impreciso'
+          const safeMessage = body?.error === 'gps_impreciso'
             ? 'Não foi possível validar sua localização. Tente novamente.'
             : body?.message || body?.error || `Erro ${status}`;
 
@@ -481,7 +488,11 @@ export default function CheckIn() {
         <h1 className="v3-serif text-2xl sm:text-3xl text-text-primary tracking-tight mt-1">Check-in</h1>
         <p className="text-sm text-text-secondary mt-1.5 flex items-center gap-2">
           <span className={`inline-block w-1.5 h-1.5 rounded-full ${isOpen ? 'bg-emerald-400' : 'bg-surface-500'}`} />
-          {isOpen ? 'Janela de check-in aberta' : 'Disponível das 08:00 às 13:30'}
+          {isOpen ? 'Janela de check-in aberta' : `Disponível das ${windowLabel}`}
+        </p>
+        <p className="text-xs text-text-secondary mt-2 flex items-center gap-1.5">
+          <MapPin size={13} className="text-gold-500" />
+          {assignedUnit?.name ?? 'Unidade de check-in não configurada'}
         </p>
       </div>
 
@@ -518,7 +529,7 @@ export default function CheckIn() {
               : 'bg-surface-100 text-text-secondary',
           )}>
             <Clock size={13} />
-            {isOpen ? 'Aberto · 08:00–13:30' : 'Fechado · abre às 08:00'}
+            {isOpen ? `Aberto · ${windowLabel}` : `Fechado · ${windowLabel}`}
           </div>
 
           {/* Main button */}
@@ -728,8 +739,8 @@ export default function CheckIn() {
           <div className="space-y-2.5 pt-2">
             {[
                { icon: QrCode,   label: 'Leitura obrigatória', value: 'QR Code da recepção' },
-               { icon: Clock,    label: 'Horário de check-in', value: '08:00 – 13:30' },
-               { icon: MapPin,   label: 'Validação ativa',     value: 'Presença no local' },
+               { icon: Clock,    label: 'Horário de check-in', value: windowLabel },
+               { icon: MapPin,   label: 'Sua unidade', value: assignedUnit?.name ?? 'Unidade não configurada' },
                { icon: Users,    label: 'Distribuição ativa',  value: '08:00 – 22:00, Round-Robin' },
             ].map(({ icon: Icon, label, value }) => (
               <div key={label} className="flex items-center gap-3 bg-card-bg rounded-xl p-4 border border-surface-100">
