@@ -31,6 +31,11 @@ import { FilterMenu } from '@/pages/reports/FilterMenu';
 import { buildReportHref } from '@/lib/reports/reportNav';
 import { formatGoalProgressLine, goalObjectiveBadge } from '@/lib/goals/objectiveLabel';
 import { hhmmToMinutes, minutesToHHMM } from '@/lib/checkin/checkinUi';
+import {
+  getReceptionUnitCode,
+  getUserRoleLabel,
+  USER_ROLE_OPTIONS,
+} from '@/lib/auth/userRoles';
 
 import { CardActionsMenu, type CardActionItem } from '@/components/ui/CardActionsMenu';
 import { CommissionManagement } from '@/pages/admin/CommissionManagement';
@@ -1008,10 +1013,14 @@ export default function AdminPanel() {
   // ── Users Actions ──────────────────────────────────────────────────────────
   const handleRoleChange = async (id: string, role: string) => {
     try {
-      await updateProfile(id, { role });
-    } catch (e: any) {
-      console.error('Erro ao atualizar perfil (role):', e);
-      alert(`Não foi possível atualizar o cargo. ${e?.message || ''}`.trim());
+      const receptionUnit = getReceptionUnitCode(role);
+      await updateProfile(id, {
+        role,
+        ...(receptionUnit ? { checkin_unit_code: receptionUnit } : {}),
+      });
+    } catch (error: any) {
+      console.error('Erro ao atualizar perfil (role):', error);
+      alert(`Não foi possível atualizar o cargo. ${error?.message || ''}`.trim());
     }
   };
   const handleCheckinUnitChange = async (id: string, checkin_unit_code: string) => {
@@ -1186,6 +1195,11 @@ export default function AdminPanel() {
         manager_id: null,
         coordinator_id: approvalForm.coordinator_id || null,
       };
+
+      const receptionUnit = getReceptionUnitCode(approvalForm.role);
+      if (receptionUnit) {
+        updateData.checkin_unit_code = receptionUnit;
+      }
 
       // Se escolheu uma equipe, a diretoria e o gestor herdaram dessa equipe
       if (selectedTeam) {
@@ -1400,7 +1414,7 @@ export default function AdminPanel() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold text-text-primary truncate">{u.name}</p>
-                          <p className="text-xs text-text-secondary">{u.role}</p>
+                          <p className="text-xs text-text-secondary">{getUserRoleLabel(u.role)}</p>
                         </div>
                         <CardActionsMenu
                           items={[
@@ -1429,7 +1443,9 @@ export default function AdminPanel() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 items-center">
                           <select value={u.role} onChange={e => handleRoleChange(u.id, e.target.value)}
                             className="w-full min-w-0 h-9 text-[11px] bg-surface-50 border border-surface-200 rounded-lg px-2 py-1 focus:outline-none focus:border-gold-400">
-                            {['CORRETOR', 'COORDENADOR', 'GERENTE', 'DIRETOR', 'ADMIN', 'RECEPCAO', 'ANALISTA'].map(r => <option key={r} value={r}>{r}</option>)}
+                            {USER_ROLE_OPTIONS.map(option => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
                           </select>
                           <select value={(u as any).directorate_id ?? ''} onChange={e => handleDirectorateChange(u.id, e.target.value || null)}
                             className="w-full min-w-0 h-9 text-[11px] bg-surface-50 border border-surface-200 rounded-lg px-2 py-1 focus:outline-none focus:border-gold-400">
@@ -2610,7 +2626,9 @@ export default function AdminPanel() {
             <label className="block text-sm font-medium text-text-secondary mb-1">Cargo</label>
             <select value={approvalForm.role} onChange={e => setApprovalForm(p => ({ ...p, role: e.target.value }))}
               className="w-full p-3 bg-surface-50 rounded-xl border-none focus:ring-2 focus:ring-gold-200 text-text-primary">
-              {['CORRETOR', 'COORDENADOR', 'GERENTE', 'DIRETOR', 'ADMIN', 'RECEPCAO', 'ANALISTA'].map(r => <option key={r} value={r}>{r}</option>)}
+              {USER_ROLE_OPTIONS.map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
             </select>
           </div>
           <div>
