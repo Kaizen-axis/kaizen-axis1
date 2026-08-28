@@ -202,17 +202,20 @@ Deno.serve(async (req: Request) => {
 
   const normalizedQrToken = qrToken.trim();
   const { data: validQr, error: qrError } = await supabase.rpc(
-    'validate_daily_qr',
-    { p_token: normalizedQrToken },
+    'validate_unit_daily_qr',
+    {
+      p_token: normalizedQrToken,
+      p_unit_code: unit.code,
+    },
   );
   if (qrError) {
-    console.error('[checkin-geo-v2] validate_daily_qr failed:', qrError.message);
+    console.error('[checkin-geo-v2] validate_unit_daily_qr failed:', qrError.message);
     return json({ error: 'db_error', message: 'Falha ao validar QR Code.' }, 500, responseHeaders);
   }
   if (!validQr) {
     return json({
       error: 'token_invalido',
-      message: 'QR Code inválido ou de outro dia. Peça ao gestor para exibir o QR atual.',
+      message: `QR Code inválido para a unidade ${unit.name} ou para a data atual.`,
     }, 403, responseHeaders);
   }
 
