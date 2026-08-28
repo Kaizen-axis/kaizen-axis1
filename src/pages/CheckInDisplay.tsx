@@ -6,6 +6,15 @@ import { supabase } from '@/lib/supabase';
 import { useApp } from '@/context/AppContext';
 import { useAuthorization } from '@/hooks/useAuthorization';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { getCheckinWindowLabel, isCheckinOpen } from '@/lib/checkin/checkinUi';
+
+interface UnitQrData {
+  token: string;
+  unit_code: string;
+  unit_name: string;
+  start_minutes: number;
+  end_minutes: number;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -39,7 +48,8 @@ function formatCountdown(secs: number) {
 
 export default function CheckInDisplay() {
   const { signOut } = useApp();
-  const { role } = useAuthorization();
+  const { isReception } = useAuthorization();
+  const [qrData, setQrData]       = useState<UnitQrData | null>(null);
   const [qrUrl, setQrUrl]         = useState<string | null>(null);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState<string | null>(null);
@@ -55,10 +65,21 @@ export default function CheckInDisplay() {
     setLoading(true);
     setError(null);
     try {
-      const { data: token, error: rpcErr } = await supabase.rpc('get_or_create_daily_qr');
-      if (rpcErr || !token) throw new Error(rpcErr?.message || 'Erro ao gerar QR');
-      const appUrl = window.location.origin;
-      setQrUrl(`${appUrl}/checkin?token=${token}`);
+      const { data, error: rpcError } = await supabase.rpc('get_or_create_unit_daily_qr');
+      const payload = data as UnitQrData | null;
+      if (
+        rpcError
+        || !payload?.token
+        || !payload.unit_code
+        || !payload.unit_name
+        || !Number.isFinite(payload.start_minutes)
+        || !Number.isFinite(payload.end_minutes)
+      ) {
+        throw new Error(rpcError?.message || 'Não foi possível carregar o QR da unidade.');
+      }
+
+      setQrData(payload);
+      setQrUrl(`${window.location.origin}/checkin?token=${payload.token}`);
     } catch (e: any) {
       setError(e.message || 'Erro desconhecido');
     } finally {
@@ -121,7 +142,10 @@ export default function CheckInDisplay() {
   }, []);
 
   const nowMinutes = clock.h * 60 + clock.m;
-  const isOpen = nowMinutes >= (8 * 60) && nowMinutes <= (13 * 60 + 30);
+  const startMinutes = qrData?.start_minutes ?? 480;
+  const endMinutes = qrData?.end_minutes ?? 810;
+  const windowLabel = getCheckinWindowLabel(startMinutes, endMinutes);
+  const isOpen = isCheckinOpen(nowMinutes, startMinutes, endMinutes);
 
   const handleSignOut = async () => {
     if (signingOut) return;
@@ -154,7 +178,7 @@ export default function CheckInDisplay() {
             <Users size={13} className="text-text-secondary" />
             <span className="text-xs font-semibold text-white">{checkins} check-in{checkins !== 1 ? 's' : ''} hoje</span>
           </div>
-          {role === 'RECEPCAO' && (
+          {isReception && (
             <button
               onClick={() => setIsLogoutConfirmOpen(true)}
               disabled={signingOut}
@@ -173,14 +197,18 @@ export default function CheckInDisplay() {
         {/* Header */}
         <div className="bg-gradient-to-r from-gold-500/10 to-gold-400/5 border-b border-surface-200 px-8 py-5 flex items-center justify-between">
           <div>
-            <h1 className="text-white text-xl font-bold">Check-in Diário</h1>
+            <h1 className="text-white text-xl font-bold">
+              QR Code — {qrData?.unit_name ?? 'Carregando unidade'}
+            </h1>
             <p className="text-text-secondary text-sm mt-0.5 capitalize">{clock.label}</p>
           </div>
           <div className="text-right">
             <p className="text-white font-mono text-3xl font-bold tracking-tight">{clock.time}</p>
             <div className={`flex items-center justify-end gap-1.5 mt-1 ${isOpen ? 'text-green-400' : 'text-text-secondary'}`}>
               <div className={`w-2 h-2 rounded-full ${isOpen ? 'bg-green-400 animate-pulse' : 'bg-surface-400'}`} />
-              <span className="text-xs font-medium">{isOpen ? 'Aberto · 08:00–13:30' : 'Fechado · abre às 08:00'}</span>
+              <span className="text-xs font-medium">
+                {isOpen ? `Aberto · ${windowLabel}` : `Fechado · ${windowLabel}`}
+              </span>
             </div>
           </div>
         </div>
@@ -237,7 +265,7 @@ export default function CheckInDisplay() {
           <div className="flex flex-col items-center text-center">
             <Clock size={16} className="text-gold-400 mb-1" />
             <p className="text-[10px] text-text-secondary uppercase tracking-wide">Horário</p>
-            <p className="text-xs text-gray-300 font-medium">08:00 – 13:30</p>
+            <p className="text-xs text-gray-300 font-medium">{windowLabel}</p>
           </div>
           <div className="flex flex-col items-center text-center">
             <RefreshCw size={16} className="text-gold-400 mb-1" />
