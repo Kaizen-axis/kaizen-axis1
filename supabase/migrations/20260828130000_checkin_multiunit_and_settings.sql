@@ -131,7 +131,17 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
-  IF NEW.checkin_unit_code IS DISTINCT FROM OLD.checkin_unit_code
+  IF TG_OP = 'INSERT'
+    AND NEW.checkin_unit_code IS DISTINCT FROM 'zona_oeste'
+    AND COALESCE((SELECT auth.role()), '') <> 'service_role'
+    AND COALESCE((SELECT public.app_current_user_role()), '') <> 'ADMIN'
+  THEN
+    RAISE EXCEPTION 'Somente administradores podem alterar a unidade de check-in.'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF TG_OP = 'UPDATE'
+    AND NEW.checkin_unit_code IS DISTINCT FROM OLD.checkin_unit_code
     AND COALESCE((SELECT auth.role()), '') <> 'service_role'
     AND COALESCE((SELECT public.app_current_user_role()), '') <> 'ADMIN'
   THEN
@@ -147,7 +157,7 @@ REVOKE ALL ON FUNCTION public.protect_profile_checkin_unit() FROM PUBLIC;
 
 DROP TRIGGER IF EXISTS trg_protect_profile_checkin_unit ON public.profiles;
 CREATE TRIGGER trg_protect_profile_checkin_unit
-BEFORE UPDATE OF checkin_unit_code ON public.profiles
+BEFORE INSERT OR UPDATE OF checkin_unit_code ON public.profiles
 FOR EACH ROW
 EXECUTE FUNCTION public.protect_profile_checkin_unit();
 

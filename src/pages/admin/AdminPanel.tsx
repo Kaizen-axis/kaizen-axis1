@@ -1406,7 +1406,7 @@ export default function AdminPanel() {
 
                       {/* Dropdowns */}
                       <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:justify-between">
-                        <div className="flex flex-col gap-1.5 md:flex-row md:gap-2 md:items-center">
+                        <div className="flex flex-col gap-1.5 md:flex-row md:flex-wrap md:gap-2 md:items-center">
                           <select value={u.role} onChange={e => handleRoleChange(u.id, e.target.value)}
                             className="w-full md:w-40 min-h-11 text-xs bg-surface-50 border border-surface-200 rounded-lg px-2 py-2 focus:outline-none focus:border-gold-400">
                             {['CORRETOR', 'COORDENADOR', 'GERENTE', 'DIRETOR', 'ADMIN', 'RECEPCAO', 'ANALISTA'].map(r => <option key={r} value={r}>{r}</option>)}
