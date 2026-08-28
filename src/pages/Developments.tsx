@@ -8,6 +8,7 @@ import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useApp, Development } from '@/context/AppContext';
 import { useAuthorization } from '@/hooks/useAuthorization';
 import { supabase } from '@/lib/supabase';
+import { PhoneInput } from '@/components/ui/MaskedInputs';
 
 const CARD_GAP = 16;
 
@@ -661,8 +662,12 @@ export default function Developments() {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <input name="phone" placeholder="Telefone / WhatsApp" value={newDev.contact?.phone} onChange={handleContactChange}
-                className="w-full p-3 bg-surface-50 rounded-xl border-none focus:ring-2 focus:ring-gold-200 text-text-primary" />
+              <PhoneInput
+                placeholder="Telefone / WhatsApp"
+                value={newDev.contact?.phone || ''}
+                onChange={phone => setNewDev(prev => ({ ...prev, contact: { ...prev.contact!, phone } }))}
+                className="w-full p-3 bg-surface-50 rounded-xl border-none focus:ring-2 focus:ring-gold-200 text-text-primary"
+              />
               <input name="email" placeholder="Email" value={newDev.contact?.email} onChange={handleContactChange}
                 className="w-full p-3 bg-surface-50 rounded-xl border-none focus:ring-2 focus:ring-gold-200 text-text-primary" />
             </div>

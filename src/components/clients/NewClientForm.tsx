@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { PremiumCard, RoundedButton, SectionHeader } from '@/components/ui/PremiumComponents';
 import { ChevronLeft, Save, UploadCloud, FileText, X, Loader2, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { CLIENT_STAGES, Client, ClientStage, isStageRestrictedForRole, missingFieldsForConcluido } from '@/data/clients';
-import { RJ_CITIES, getNeighborhoods } from '@/data/cities';
 import { BUILDERS } from '@/data/builders';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
+import { CpfInput, PhoneInput } from '@/components/ui/MaskedInputs';
+import { AddressSelects } from '@/components/ui/AddressSelects';
 import { useApp } from '@/context/AppContext';
 import { useAuthorization } from '@/hooks/useAuthorization';
 import { CLIENT_DOCUMENT_ACCEPT, prepareClientUploadFile } from '@/lib/client-document-upload';
@@ -128,6 +129,7 @@ export function NewClientForm({
   // Etapas que o papel atual pode escolher ao criar o cliente (mesma regra do mover)
   const selectableStages = CLIENT_STAGES.filter(s => !isStageRestrictedForRole(s, role));
 
+  const [interestState, setInterestState] = useState('RJ');
   const [formData, setFormData] = useState(() => {
     if (client) return formFromClient(client);
     if (prefill) return defaultFormData;
@@ -460,12 +462,10 @@ export function NewClientForm({
             </div>
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-1">CPF</label>
-              <input
-                name="cpf"
+              <CpfInput
                 value={formData.cpf}
-                onChange={handleChange}
+                onChange={cpf => setFormData(prev => ({ ...prev, cpf }))}
                 className="w-full p-3 bg-surface-50 rounded-xl border-none focus:ring-2 focus:ring-gold-200 dark:focus:ring-gold-800 text-text-primary"
-                placeholder="000.000.000-00"
               />
             </div>
             <div>
@@ -481,13 +481,10 @@ export function NewClientForm({
             </div>
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-1">Telefone</label>
-              <input
-                name="phone"
-                type="tel"
+              <PhoneInput
                 value={formData.phone}
-                onChange={handleChange}
+                onChange={phone => setFormData(prev => ({ ...prev, phone }))}
                 className="w-full p-3 bg-surface-50 rounded-xl border-none focus:ring-2 focus:ring-gold-200 dark:focus:ring-gold-800 text-text-primary"
-                placeholder="(00) 00000-0000"
               />
             </div>
             <div>
@@ -674,37 +671,19 @@ export function NewClientForm({
           <SectionHeader title="Interesse" />
           <PremiumCard className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-text-secondary mb-1">Cidade de Interesse</label>
-              <SearchableSelect
-                value={formData.regionOfInterest}
-                onChange={(v) => setFormData(prev => ({ ...prev, regionOfInterest: v, neighborhood: '' }))}
-                options={RJ_CITIES}
-                placeholder="Selecione a cidade"
-                searchPlaceholder="Buscar cidade do RJ..."
+              <label className="block text-sm font-medium text-text-secondary mb-1">Estado, cidade e bairro de interesse</label>
+              <AddressSelects
+                value={{
+                  state: interestState,
+                  city: formData.regionOfInterest,
+                  neighborhood: formData.neighborhood,
+                }}
+                onChange={({ state, city, neighborhood }) => {
+                  setInterestState(state);
+                  setFormData(prev => ({ ...prev, regionOfInterest: city, neighborhood }));
+                }}
               />
             </div>
-            {formData.regionOfInterest && (
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">Bairro</label>
-                {getNeighborhoods(formData.regionOfInterest).length > 0 ? (
-                  <SearchableSelect
-                    value={formData.neighborhood}
-                    onChange={(v) => setFormData(prev => ({ ...prev, neighborhood: v }))}
-                    options={getNeighborhoods(formData.regionOfInterest)}
-                    placeholder="Selecione o bairro"
-                    searchPlaceholder={`Buscar bairro em ${formData.regionOfInterest}...`}
-                  />
-                ) : (
-                  <input
-                    name="neighborhood"
-                    value={formData.neighborhood}
-                    onChange={handleChange}
-                    className="w-full p-3 bg-surface-50 rounded-xl border-none focus:ring-2 focus:ring-gold-200 dark:focus:ring-gold-800 text-text-primary"
-                    placeholder="Digite o bairro (opcional)"
-                  />
-                )}
-              </div>
-            )}
             <div>
               <label className="block text-sm font-medium text-text-secondary mb-1">Empreendimento</label>
               <input

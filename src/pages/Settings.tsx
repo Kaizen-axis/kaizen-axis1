@@ -12,6 +12,11 @@ import { supabase } from '@/lib/supabase';
 import { GamificationProfile } from '@/components/gamification/GamificationProfile';
 import { useApp } from '@/context/AppContext';
 import { setupPushSubscription } from '@/context/NotificationContext';
+import { CpfInput, PhoneInput } from '@/components/ui/MaskedInputs';
+import { AddressSelects } from '@/components/ui/AddressSelects';
+import { formatCpf } from '@/lib/masks';
+
+const RELATION_PRESETS = ['Pai/Mãe', 'Cônjuge', 'Filho/Filha'] as const;
 
 // ─── tipos ──────────────────────────────────────────────────────────────────
 interface Profile {
@@ -21,7 +26,38 @@ interface Profile {
   cpf: string;
   avatar_url: string;
   push_notifications_enabled: boolean;
+  phone: string | null;
+  address_cep: string | null;
+  address_street: string | null;
+  address_number: string | null;
+  address_complement: string | null;
+  address_neighborhood: string | null;
+  address_city: string | null;
+  address_state: string | null;
+  emergency_name: string | null;
+  emergency_phone: string | null;
+  emergency_relation: string | null;
+  team_id: string | null;
+  coordinator_id: string | null;
+  directorate_id: string | null;
 }
+
+const EMPTY_EDIT = {
+  name: '',
+  cpf: '',
+  avatar_url: '',
+  phone: '',
+  address_cep: '',
+  address_street: '',
+  address_number: '',
+  address_complement: '',
+  address_neighborhood: '',
+  address_city: '',
+  address_state: '',
+  emergency_name: '',
+  emergency_phone: '',
+  emergency_relation: '',
+};
 
 type ToastType = 'success' | 'error' | 'info';
 
@@ -66,12 +102,13 @@ function isIosDevice() {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Settings() {
   const navigate = useNavigate();
-  const { signOut } = useApp();
+  const { signOut, teams, allProfiles, directorates } = useApp();
   const { requestConfirm, confirmDialogProps } = useConfirmDialog();
 
   // ── estado de dados ──────────────────────────────────────────────────────
   const [profile, setProfile] = useState<Profile | null>(null);
   const [userEmail, setUserEmail] = useState('');
+  const [joinedAt, setJoinedAt] = useState<string | null>(null);
   const [is2FAEnabled, setIs2FAEnabled] = useState(false);
   const [mfaFactorId, setMfaFactorId] = useState('');
   const [loading, setLoading] = useState(true);
@@ -89,12 +126,13 @@ export default function Settings() {
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   // ── formulários ───────────────────────────────────────────────────────────
-  const [editProfile, setEditProfile] = useState({ name: '', cpf: '', avatar_url: '' });
+  const [editProfile, setEditProfile] = useState(EMPTY_EDIT);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState('');
   const [emailData, setEmailData] = useState({ new: '', confirm: '' });
   const [passwordData, setPasswordData] = useState({ new: '', confirm: '' });
   const [saving, setSaving] = useState(false);
+  const [relationOther, setRelationOther] = useState(false);
 
   // ── 2FA ──────────────────────────────────────────────────────────────────
   const [mfaQrUri, setMfaQrUri] = useState('');
@@ -115,10 +153,11 @@ export default function Settings() {
         if (!user) { navigate('/login'); return; }
 
         setUserEmail(user.email ?? '');
+        setJoinedAt(user.created_at ?? null);
 
         const { data: p } = await supabase
           .from('profiles')
-          .select('id, name, role, cpf, avatar_url, push_notifications_enabled')
+          .select('id, name, role, cpf, avatar_url, push_notifications_enabled, phone, address_cep, address_street, address_number, address_complement, address_neighborhood, address_city, address_state, emergency_name, emergency_phone, emergency_relation, team_id, coordinator_id, directorate_id')
           .eq('id', user.id)
           .single();
 
@@ -165,9 +204,26 @@ export default function Settings() {
 
   // ── abrir modal de perfil ─────────────────────────────────────────────────
   const handleOpenProfileModal = () => {
-    setEditProfile({ name: profile?.name ?? '', cpf: profile?.cpf ?? '', avatar_url: profile?.avatar_url ?? '' });
+    setEditProfile({
+      name: profile?.name ?? '',
+      cpf: profile?.cpf ?? '',
+      avatar_url: profile?.avatar_url ?? '',
+      phone: profile?.phone ?? '',
+      address_cep: profile?.address_cep ?? '',
+      address_street: profile?.address_street ?? '',
+      address_number: profile?.address_number ?? '',
+      address_complement: profile?.address_complement ?? '',
+      address_neighborhood: profile?.address_neighborhood ?? '',
+      address_city: profile?.address_city ?? '',
+      address_state: profile?.address_state ?? '',
+      emergency_name: profile?.emergency_name ?? '',
+      emergency_phone: profile?.emergency_phone ?? '',
+      emergency_relation: profile?.emergency_relation ?? '',
+    });
     setAvatarFile(null);
     setAvatarPreview(profile?.avatar_url ?? '');
+    const rel = profile?.emergency_relation ?? '';
+    setRelationOther(!!rel && !RELATION_PRESETS.includes(rel as typeof RELATION_PRESETS[number]));
     setIsProfileModalOpen(true);
   };
 
@@ -199,12 +255,43 @@ export default function Settings() {
 
       const { error } = await supabase
         .from('profiles')
-        .update({ name: editProfile.name, cpf: editProfile.cpf, avatar_url: avatarUrl })
+        .update({
+          name: editProfile.name,
+          cpf: editProfile.cpf,
+          avatar_url: avatarUrl,
+          phone: editProfile.phone || null,
+          address_cep: editProfile.address_cep || null,
+          address_street: editProfile.address_street || null,
+          address_number: editProfile.address_number || null,
+          address_complement: editProfile.address_complement || null,
+          address_neighborhood: editProfile.address_neighborhood || null,
+          address_city: editProfile.address_city || null,
+          address_state: editProfile.address_state || null,
+          emergency_name: editProfile.emergency_name || null,
+          emergency_phone: editProfile.emergency_phone || null,
+          emergency_relation: editProfile.emergency_relation || null,
+        })
         .eq('id', profile.id);
 
       if (error) throw new Error(error.message);
 
-      setProfile(prev => prev ? { ...prev, name: editProfile.name, cpf: editProfile.cpf, avatar_url: avatarUrl } : prev);
+      setProfile(prev => prev ? {
+        ...prev,
+        name: editProfile.name,
+        cpf: editProfile.cpf,
+        avatar_url: avatarUrl,
+        phone: editProfile.phone || null,
+        address_cep: editProfile.address_cep || null,
+        address_street: editProfile.address_street || null,
+        address_number: editProfile.address_number || null,
+        address_complement: editProfile.address_complement || null,
+        address_neighborhood: editProfile.address_neighborhood || null,
+        address_city: editProfile.address_city || null,
+        address_state: editProfile.address_state || null,
+        emergency_name: editProfile.emergency_name || null,
+        emergency_phone: editProfile.emergency_phone || null,
+        emergency_relation: editProfile.emergency_relation || null,
+      } : prev);
       setIsProfileModalOpen(false);
       showToast('Perfil atualizado com sucesso!');
     } catch (e: unknown) {
@@ -372,6 +459,10 @@ export default function Settings() {
     divider: 'w-full h-px bg-surface-100',
   };
 
+  const teamName = teams.find(t => t.id === profile?.team_id)?.name;
+  const coordinatorName = allProfiles.find(p => p.id === profile?.coordinator_id)?.name;
+  const directorateName = directorates.find(d => d.id === profile?.directorate_id)?.name;
+
   return (
     <div className="p-6 pb-28 min-h-screen bg-surface-50 space-y-6">
       <PageHeader title="Configurações" subtitle="Gerencie seu perfil, preferências e segurança." />
@@ -393,7 +484,7 @@ export default function Settings() {
         <div className="flex-1 min-w-0">
           <h3 className="font-bold text-text-primary text-lg truncate">{profile?.name || 'Sem nome'}</h3>
           <p className="text-sm text-text-secondary">{profile?.role}</p>
-          {profile?.cpf && <p className="text-xs text-text-secondary mt-0.5">CPF: {profile.cpf}</p>}
+          {profile?.cpf && <p className="text-xs text-text-secondary mt-0.5">CPF: {formatCpf(profile.cpf)}</p>}
         </div>
         <ChevronRight className="text-text-secondary group-hover:text-gold-500 transition-colors flex-shrink-0" />
       </PremiumCard>
@@ -493,7 +584,7 @@ export default function Settings() {
       <p className="text-center text-xs text-text-secondary pb-4">Kaizen Axis v1.0.0</p>
 
       {/* ════════ MODAL: Perfil ════════════════════════════════════════ */}
-      <Modal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} title="Editar Perfil">
+      <Modal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} title="Editar Perfil" panelClassName="max-w-lg">
         <div className="space-y-6">
           {/* Avatar */}
           <div className="flex flex-col items-center gap-3">
@@ -535,9 +626,107 @@ export default function Settings() {
               <p className="text-[10px] text-text-secondary mt-1 ml-1">O cargo é definido pelo administrador.</p>
             </div>
             <div>
+              <label className={cls.label}>Data de ingresso</label>
+              <div className="w-full p-3 bg-surface-100 rounded-xl text-text-secondary text-sm cursor-not-allowed">
+                {joinedAt ? new Date(joinedAt).toLocaleDateString('pt-BR') : 'Não disponível'}
+              </div>
+            </div>
+            <div>
               <label className={cls.label}>CPF</label>
-              <input value={editProfile.cpf} onChange={e => setEditProfile(p => ({ ...p, cpf: e.target.value }))}
-                className={cls.input} placeholder="000.000.000-00" />
+              <CpfInput value={editProfile.cpf} onChange={cpf => setEditProfile(p => ({ ...p, cpf }))} className={cls.input} />
+            </div>
+            <div>
+              <label className={cls.label}>Telefone</label>
+              <PhoneInput value={editProfile.phone} onChange={phone => setEditProfile(p => ({ ...p, phone }))} className={cls.input} />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="col-span-2">
+                <label className={cls.label}>Rua</label>
+                <input value={editProfile.address_street} onChange={e => setEditProfile(p => ({ ...p, address_street: e.target.value }))}
+                  className={cls.input} placeholder="Logradouro" />
+              </div>
+              <div>
+                <label className={cls.label}>Nº</label>
+                <input value={editProfile.address_number} onChange={e => setEditProfile(p => ({ ...p, address_number: e.target.value }))}
+                  className={cls.input} />
+              </div>
+            </div>
+            <div>
+              <label className={cls.label}>Complemento</label>
+              <input value={editProfile.address_complement} onChange={e => setEditProfile(p => ({ ...p, address_complement: e.target.value }))}
+                className={cls.input} placeholder="Apto, bloco..." />
+            </div>
+            <div>
+              <label className={cls.label}>CEP</label>
+              <input value={editProfile.address_cep} onChange={e => setEditProfile(p => ({ ...p, address_cep: e.target.value }))}
+                className={cls.input} placeholder="00000-000" />
+            </div>
+            <AddressSelects
+              value={{
+                state: editProfile.address_state,
+                city: editProfile.address_city,
+                neighborhood: editProfile.address_neighborhood,
+              }}
+              onChange={({ state, city, neighborhood }) => setEditProfile(p => ({
+                ...p,
+                address_state: state,
+                address_city: city,
+                address_neighborhood: neighborhood,
+              }))}
+            />
+            <div>
+              <label className={cls.label}>Contato de emergência</label>
+              <input value={editProfile.emergency_name} onChange={e => setEditProfile(p => ({ ...p, emergency_name: e.target.value }))}
+                className={cls.input} placeholder="Nome" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className={cls.label}>Telefone emergência</label>
+                <PhoneInput value={editProfile.emergency_phone} onChange={emergency_phone => setEditProfile(p => ({ ...p, emergency_phone }))} className={cls.input} />
+              </div>
+              <div>
+                <label className={cls.label}>Parentesco</label>
+                <select
+                  value={RELATION_PRESETS.includes(editProfile.emergency_relation as typeof RELATION_PRESETS[number])
+                    ? editProfile.emergency_relation
+                    : (relationOther ? 'Outro' : '')}
+                  onChange={e => {
+                    const next = e.target.value;
+                    if (next === 'Outro') {
+                      setRelationOther(true);
+                      setEditProfile(p => ({
+                        ...p,
+                        emergency_relation: RELATION_PRESETS.includes(p.emergency_relation as typeof RELATION_PRESETS[number]) ? '' : p.emergency_relation,
+                      }));
+                      return;
+                    }
+                    setRelationOther(false);
+                    setEditProfile(p => ({ ...p, emergency_relation: next }));
+                  }}
+                  className={cls.input}
+                >
+                  <option value="">Selecione</option>
+                  {RELATION_PRESETS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                  <option value="Outro">Outro</option>
+                </select>
+              </div>
+            </div>
+            {relationOther && (
+              <div>
+                <label className={cls.label}>Especificar parentesco</label>
+                <input
+                  value={RELATION_PRESETS.includes(editProfile.emergency_relation as typeof RELATION_PRESETS[number]) ? '' : editProfile.emergency_relation}
+                  onChange={e => setEditProfile(p => ({ ...p, emergency_relation: e.target.value }))}
+                  className={cls.input}
+                  placeholder="Digite o parentesco"
+                />
+              </div>
+            )}
+            <div className="space-y-2 pt-1">
+              <p className="text-[10px] text-text-secondary">Equipe, coordenação e diretoria são definidas pelo administrador.</p>
+              <div className="w-full p-3 bg-surface-100 rounded-xl text-text-secondary text-sm">Equipe: {teamName || 'Não definida'}</div>
+              <div className="w-full p-3 bg-surface-100 rounded-xl text-text-secondary text-sm">Coordenação: {coordinatorName || 'Não definida'}</div>
+              <div className="w-full p-3 bg-surface-100 rounded-xl text-text-secondary text-sm">Diretoria: {directorateName || 'Não definida'}</div>
             </div>
           </div>
 

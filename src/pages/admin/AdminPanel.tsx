@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { PageHeader, PremiumCard, RoundedButton } from '@/components/ui/PremiumComponents';
-import { Users, Shield, Target, Megaphone, BarChart3, Plus, Search, Trophy, Download, FileSpreadsheet, FileText, Trash2, Edit2, ChevronDown, ChevronLeft, Calendar, Loader2, Building2, TrendingUp, Printer, Star, Award, Zap, Flame, MoreHorizontal, FileDown, MapPin, Ban, Lock } from 'lucide-react';
+import { Users, Shield, Target, Megaphone, BarChart3, Plus, Search, Trophy, Download, FileSpreadsheet, FileText, Trash2, Edit2, ChevronDown, ChevronLeft, Calendar, Loader2, Building2, TrendingUp, Printer, Star, Award, Zap, Flame, MoreHorizontal, FileDown, MapPin, Ban, Lock, UserCircle, DollarSign } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useApp, Team, Goal, Announcement, Directorate } from '@/context/AppContext';
+import { logAuditEvent } from '@/services/auditLogger';
 import { useAuthorization } from '@/hooks/useAuthorization';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, PieChart, Pie, Cell } from 'recharts';
@@ -28,11 +29,14 @@ import { TeamCardGrid } from '@/pages/reports/TeamCardGrid';
 import { DiretoriaCardGrid } from '@/pages/reports/DiretoriaCardGrid';
 import { FilterMenu } from '@/pages/reports/FilterMenu';
 import { buildReportHref } from '@/lib/reports/reportNav';
-import { logAuditEvent } from '@/services/auditLogger';
 import { formatGoalProgressLine, goalObjectiveBadge } from '@/lib/goals/objectiveLabel';
 
 import { CardActionsMenu, type CardActionItem } from '@/components/ui/CardActionsMenu';
+import { CommissionManagement } from '@/pages/admin/CommissionManagement';
+import { UserProfileModal } from '@/components/admin/UserProfileModal';
 import { ScrollTabBar } from '@/components/ui/ScrollTabBar';
+
+type Tab = 'users' | 'teams' | 'goals' | 'announcements' | 'reports' | 'commissions' | 'directorates' | 'gamification';
 
 export default function AdminPanel() {
   // ── Hard role guard: only ADMIN and DIRETOR can access this page ────────────
@@ -55,6 +59,7 @@ export default function AdminPanel() {
   const [activeGoalTab, setActiveGoalTab] = useState<'active' | 'ended'>('active');
   const [activeGamifSection, setActiveGamifSection] = useState<'xp' | 'conquistas'>('xp');
   const [searchTerm, setSearchTerm] = useState('');
+  const [profileUserId, setProfileUserId] = useState<string | null>(null);
 
   // Team modal
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
@@ -1332,6 +1337,11 @@ export default function AdminPanel() {
                         <CardActionsMenu
                           items={[
                             {
+                              label: 'Perfil',
+                              icon: <UserCircle size={13} />,
+                              onClick: () => setProfileUserId(u.id),
+                            },
+                            {
                               label: 'Desativar acesso',
                               icon: <Ban size={13} />,
                               onClick: () => handleDeactivateUser(u.id, u.name || 'Usuário'),
@@ -2220,7 +2230,8 @@ export default function AdminPanel() {
             )}
           </div>
         );
-
+      case 'commissions':
+        return <CommissionManagement />;
     }
   }; // end renderContent
 
@@ -2348,6 +2359,7 @@ export default function AdminPanel() {
           { id: 'directorates', label: 'Diretorias', icon: Building2 },
           { id: 'reports', label: 'Central de relatórios', icon: BarChart3, adminOnly: true },
           { id: 'announcements', label: 'Anúncios', icon: Megaphone },
+          { id: 'commissions', label: 'Comissionamento', icon: DollarSign },
           { id: 'goals', label: 'Metas', icon: Target },
           { id: 'gamification', label: 'Gamificação', icon: Zap },
         ].filter(tab => !tab.adminOnly || isAdmin).map((tab) => (
@@ -2413,6 +2425,14 @@ export default function AdminPanel() {
 
         {renderTabContent()}
       </div>
+
+      <UserProfileModal
+        userId={profileUserId}
+        isOpen={!!profileUserId}
+        onClose={() => setProfileUserId(null)}
+      />
+
+      <ConfirmDialog {...confirmDialogProps} />
 
       {/* Approval Modal */}
       <Modal isOpen={isApprovalModalOpen} onClose={() => setIsApprovalModalOpen(false)} title="Aprovar Usuário">

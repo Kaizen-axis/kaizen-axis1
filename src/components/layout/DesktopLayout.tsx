@@ -219,8 +219,17 @@ function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => 
             collapsed ? 'justify-center py-2' : 'gap-3 px-3 py-2.5',
           )}
         >
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-sm shadow-primary-500/25">
-            {(userName || '?').charAt(0).toUpperCase()}
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-sm shadow-primary-500/25 overflow-hidden">
+            {profile?.avatar_url ? (
+              <img
+                src={profile.avatar_url}
+                alt=""
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              (userName || '?').charAt(0).toUpperCase()
+            )}
           </div>
           {!collapsed && (
             <>

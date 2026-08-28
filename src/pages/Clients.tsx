@@ -23,6 +23,9 @@ import { EditClientModal } from '@/components/clients/EditClientModal';
 import { ClientFichaModal } from '@/components/clients/ClientFichaModal';
 import { SendEmailModal } from '@/components/clients/SendEmailModal';
 import { supabase } from '@/lib/supabase';
+import { CpfInput, PhoneInput } from '@/components/ui/MaskedInputs';
+import { AddressSelects } from '@/components/ui/AddressSelects';
+import { formatPhone } from '@/lib/masks';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -38,18 +41,12 @@ function timeAgo(isoDate: string) {
   return new Date(isoDate).toLocaleDateString('pt-BR');
 }
 
-function formatPhone(phone: string) {
-  const d = phone.replace(/\D/g, '');
-  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
-  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
-  return phone;
-}
-
 function whatsappDigits(phone?: string) {
   const digits = (phone || '').replace(/\D/g, '');
   if (!digits) return '';
   return digits.startsWith('55') ? digits : `55${digits}`;
 }
+
 
 // ─── Urgency indicator ────────────────────────────────────────────────────────
 
@@ -189,6 +186,8 @@ function ConvertLeadModal({ lead, onClose, onConfirm }: {
     grossIncome: lead.ai_metadata?.income || '',
     incomeType: 'CLT' as string,
     regionOfInterest: lead.ai_metadata?.region || '',
+    neighborhood: '',
+    interestState: 'RJ',
     intendedValue: '',
     observations: lead.aiSummary ? `Resumo IA: ${lead.aiSummary}` : '',
     stage: 'Em Análise' as string,
@@ -247,12 +246,12 @@ function ConvertLeadModal({ lead, onClose, onConfirm }: {
             </div>
             <div>
               <label className="text-xs font-medium text-text-secondary mb-1 block">Telefone *</label>
-              <input className={inputClass} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} required placeholder="(xx) xxxxx-xxxx" />
+              <PhoneInput className={inputClass} value={form.phone} onChange={phone => setForm(f => ({ ...f, phone }))} required />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-text-secondary mb-1 block">CPF</label>
-                <input className={inputClass} value={form.cpf} onChange={e => setForm(f => ({ ...f, cpf: e.target.value }))} placeholder="000.000.000-00" />
+                <CpfInput className={inputClass} value={form.cpf} onChange={cpf => setForm(f => ({ ...f, cpf }))} />
               </div>
               <div>
                 <label className="text-xs font-medium text-text-secondary mb-1 block">E-mail</label>
@@ -275,13 +274,24 @@ function ConvertLeadModal({ lead, onClose, onConfirm }: {
                 </select>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-text-secondary mb-1 block">Região de Interesse</label>
-                <input className={inputClass} value={form.regionOfInterest} onChange={e => setForm(f => ({ ...f, regionOfInterest: e.target.value }))} placeholder="Bairro / Cidade" />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-text-secondary mb-1 block">Valor</label>
+            <div>
+              <label className="text-xs font-medium text-text-secondary mb-1 block">Estado, cidade e bairro</label>
+              <AddressSelects
+                value={{
+                  state: form.interestState,
+                  city: form.regionOfInterest,
+                  neighborhood: form.neighborhood,
+                }}
+                onChange={({ state, city, neighborhood }) => setForm(f => ({
+                  ...f,
+                  interestState: state,
+                  regionOfInterest: city,
+                  neighborhood,
+                }))}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-text-secondary mb-1 block">Valor</label>
                 <input className={inputClass} value={form.intendedValue} onChange={e => {
                   let val = e.target.value;
                   let v = val.replace(/\D/g, '');
@@ -293,7 +303,6 @@ function ConvertLeadModal({ lead, onClose, onConfirm }: {
                   }
                   setForm(f => ({ ...f, intendedValue: val }));
                 }} placeholder="R$ 200.000" />
-              </div>
             </div>
             <div>
               <label className="text-xs font-medium text-text-secondary mb-1 block">Etapa Inicial</label>

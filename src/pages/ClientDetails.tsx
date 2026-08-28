@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { PremiumCard, StatusBadge, SectionHeader, RoundedButton } from '@/components/ui/PremiumComponents';
 import { ChevronLeft, Mail, Calendar, Edit2, Building2, Wallet, History, Trash2, FileText, Save, X, UploadCloud, Plus, ChevronDown, ChevronUp, FileDown, MessageCircle, Video } from 'lucide-react';
 import { Client, ClientDocument } from '@/data/clients';
+import { formatCpf, formatPhone } from '@/lib/masks';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
@@ -616,6 +617,20 @@ export default function ClientDetails({
       alert(`Erro ao salvar espelho: ${error.message}`);
       return;
     }
+
+    const { data: ledger, error: ledgerError } = await supabase
+      .from('commission_entries')
+      .select('id')
+      .eq('client_id', id)
+      .maybeSingle();
+    if (ledgerError) {
+      alert(`Espelho salvo, mas não foi possível conferir a comissão: ${ledgerError.message}`);
+      return;
+    }
+    if (!ledger) {
+      alert('Espelho salvo, mas o card de comissão não foi criado. Confira se as migrations de commission_entries estão aplicadas no banco.');
+      return;
+    }
     alert('Espelho salvo com sucesso.');
   };
 
@@ -843,9 +858,9 @@ export default function ClientDetails({
             <div className="grid grid-cols-1 gap-4">
               {[
                 { label: 'Nome', value: client.name },
-                { label: 'CPF', value: client.cpf },
+                { label: 'CPF', value: client.cpf ? formatCpf(client.cpf) : '' },
                 { label: 'Email', value: client.email },
-                { label: 'Telefone', value: client.phone },
+                { label: 'Telefone', value: client.phone ? formatPhone(client.phone) : '' },
                 { label: 'Endereço', value: client.address },
                 { label: 'Profissão', value: client.profession },
                 { label: 'Renda Bruta', value: client.grossIncome },
@@ -885,7 +900,7 @@ export default function ClientDetails({
             <PremiumCard className="space-y-2">
               <p className="text-xs text-text-secondary uppercase tracking-wider">Proponente 1 (Titular da ficha)</p>
               <p className="text-sm text-text-primary font-semibold">{client.name}</p>
-              <p className="text-sm text-text-secondary">CPF: {client.cpf || 'Não informado'} • Renda: {client.grossIncome || 'Não informada'}</p>
+              <p className="text-sm text-text-secondary">CPF: {client.cpf ? formatCpf(client.cpf) : 'Não informado'} • Renda: {client.grossIncome || 'Não informada'}</p>
             </PremiumCard>
 
             {(client.proponents || []).map((proponent, index) => {
@@ -904,9 +919,9 @@ export default function ClientDetails({
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <input value={editingProponent.name} onChange={e => setEditingProponent(prev => ({ ...prev, name: e.target.value }))} className="w-full h-11 px-3 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary" placeholder="Nome" />
-                      <input value={editingProponent.cpf} onChange={e => setEditingProponent(prev => ({ ...prev, cpf: e.target.value }))} className="w-full h-11 px-3 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary" placeholder="CPF" />
+                      <CpfInput value={editingProponent.cpf} onChange={cpf => setEditingProponent(prev => ({ ...prev, cpf }))} className="w-full h-11 px-3 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary" />
                       <input value={editingProponent.email} onChange={e => setEditingProponent(prev => ({ ...prev, email: e.target.value }))} className="w-full h-11 px-3 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary" placeholder="Email" />
-                      <input value={editingProponent.phone} onChange={e => setEditingProponent(prev => ({ ...prev, phone: e.target.value }))} className="w-full h-11 px-3 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary" placeholder="Telefone" />
+                      <PhoneInput value={editingProponent.phone} onChange={phone => setEditingProponent(prev => ({ ...prev, phone }))} className="w-full h-11 px-3 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary" />
                       <input value={editingProponent.address} onChange={e => setEditingProponent(prev => ({ ...prev, address: e.target.value }))} className="w-full h-11 px-3 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary" placeholder="Endereço" />
                       <input value={editingProponent.profession} onChange={e => setEditingProponent(prev => ({ ...prev, profession: e.target.value }))} className="w-full h-11 px-3 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary" placeholder="Profissão" />
                       <input value={editingProponent.grossIncome} onChange={e => setEditingProponent(prev => ({ ...prev, grossIncome: e.target.value }))} className="w-full h-11 px-3 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary" placeholder="Renda Bruta" />
@@ -949,8 +964,8 @@ export default function ClientDetails({
                   {openProponentIndex === index && (
                     <>
                       <p className="text-sm text-text-primary font-medium">{proponent.name}</p>
-                      <p className="text-xs text-text-secondary">CPF: {proponent.cpf || 'Não informado'} • Email: {proponent.email || 'Não informado'}</p>
-                      <p className="text-xs text-text-secondary">Telefone: {proponent.phone || 'Não informado'} • Endereço: {proponent.address || 'Não informado'}</p>
+                      <p className="text-xs text-text-secondary">CPF: {proponent.cpf ? formatCpf(proponent.cpf) : 'Não informado'} • Email: {proponent.email || 'Não informado'}</p>
+                      <p className="text-xs text-text-secondary">Telefone: {proponent.phone ? formatPhone(proponent.phone) : 'Não informado'} • Endereço: {proponent.address || 'Não informado'}</p>
                       <p className="text-xs text-text-secondary">Profissão: {proponent.profession || 'Não informada'}</p>
                       <p className="text-xs text-text-secondary">Renda: {proponent.grossIncome || 'Não informada'} • Tipo: {proponent.incomeType || 'Não informado'}</p>
                       <p className="text-xs text-text-secondary">Cotista: {proponent.cotista || 'Não informado'} • Fator Social: {proponent.socialFactor || 'Não informado'}</p>
@@ -981,9 +996,9 @@ export default function ClientDetails({
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <input value={newProponent.name} onChange={e => setNewProponent(prev => ({ ...prev, name: e.target.value }))} className="w-full h-11 px-3 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary" placeholder="Nome" />
-                  <input value={newProponent.cpf} onChange={e => setNewProponent(prev => ({ ...prev, cpf: e.target.value }))} className="w-full h-11 px-3 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary" placeholder="CPF" />
+                  <CpfInput value={newProponent.cpf} onChange={cpf => setNewProponent(prev => ({ ...prev, cpf }))} className="w-full h-11 px-3 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary" />
                   <input value={newProponent.email} onChange={e => setNewProponent(prev => ({ ...prev, email: e.target.value }))} className="w-full h-11 px-3 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary" placeholder="Email" />
-                  <input value={newProponent.phone} onChange={e => setNewProponent(prev => ({ ...prev, phone: e.target.value }))} className="w-full h-11 px-3 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary" placeholder="Telefone" />
+                  <PhoneInput value={newProponent.phone} onChange={phone => setNewProponent(prev => ({ ...prev, phone }))} className="w-full h-11 px-3 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary" />
                   <input value={newProponent.address} onChange={e => setNewProponent(prev => ({ ...prev, address: e.target.value }))} className="w-full h-11 px-3 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary" placeholder="Endereço" />
                   <input value={newProponent.profession} onChange={e => setNewProponent(prev => ({ ...prev, profession: e.target.value }))} className="w-full h-11 px-3 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary" placeholder="Profissão" />
                   <input value={newProponent.grossIncome} onChange={e => setNewProponent(prev => ({ ...prev, grossIncome: e.target.value }))} className="w-full h-11 px-3 bg-surface-50 rounded-lg border-none focus:ring-2 focus:ring-gold-400 text-sm text-text-primary" placeholder="Renda Bruta" />
@@ -1183,6 +1198,7 @@ export default function ClientDetails({
                           let value = e.target.value;
                           if (key === 'vgv' || key === 'valorAto') value = formatCurrencyInput(value);
                           if (key === 'dataAto' || key === 'dataContrato') value = formatDateInput(value);
+                          if (key === 'cpf1' || key === 'cpf2') value = formatCpf(value);
                           setSalesMirrorForm((prev) => ({ ...prev, [key]: value }));
                         }}
                         className="w-full h-10 px-3 bg-surface-50 rounded-md border border-surface-200 focus:ring-2 focus:ring-gold-400/70 focus:border-gold-300 text-sm text-text-primary"

@@ -17,6 +17,7 @@ import { logAuditEvent } from '@/services/auditLogger';
 import { supabase } from '@/lib/supabase';
 import { parseApiResponse } from '@/lib/http/parseApiResponse';
 import { inferDocumentContentType } from '@/lib/client-document-upload';
+import { CpfInput } from '@/components/ui/MaskedInputs';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
@@ -528,16 +529,6 @@ export default function IncomeAnalysis() {
     return grupos;
   }, [resultado, totalPorMesAtivo]);
 
-  // ── CPF mask ──────────────────────────────────────────────────────────────
-  const handleCpf = (v: string) => {
-    const d = v.replace(/\D/g, '').slice(0, 11);
-    const masked = d
-      .replace(/(\d{3})(\d)/, '$1.$2')
-      .replace(/(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
-      .replace(/(\d{3})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3-$4');
-    setCpf(masked);
-  };
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []).filter(f => inferDocumentContentType(f) === 'application/pdf');
     if (files.length === 0) { setErro('Apenas arquivos PDF são aceitos.'); }
@@ -940,9 +931,8 @@ export default function IncomeAnalysis() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-text-secondary mb-1">CPF <span className="text-text-secondary font-normal ml-1">(opcional — melhora detecção)</span></label>
-                <input type="text" value={cpf} onChange={e => handleCpf(e.target.value)}
-                  className="w-full p-3 bg-surface-50 rounded-xl border-none focus:ring-2 focus:ring-gold-200 text-text-primary text-sm"
-                  placeholder="000.000.000-00" />
+                <CpfInput value={cpf} onChange={setCpf}
+                  className="w-full p-3 bg-surface-50 rounded-xl border-none focus:ring-2 focus:ring-gold-200 text-text-primary text-sm" />
               </div>
 
               {/* Vincular cliente */}

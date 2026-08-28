@@ -3,31 +3,10 @@ import { useApp } from '@/context/AppContext';
 import { useAuthorization } from '@/hooks/useAuthorization';
 import { getDashboardSaleDate, isSaleInCurrentMonth } from '@/lib/sales/salePeriod';
 import { supabase } from '@/lib/supabase';
+import { COMMISSION_CONFIG, TAX_DEDUCTION, formatBRL, parseCurrency } from '@/lib/sales/commission';
 import { AlertTriangle, TrendingUp, DollarSign, Users, User, Pencil } from 'lucide-react';
 
-const COMMISSION_CONFIG: Record<string, { ownRate: number; teamRate: number }> = {
-  CORRETOR:    { ownRate: 0.018, teamRate: 0     },
-  COORDENADOR: { ownRate: 0.020, teamRate: 0.001 },
-  GERENTE:     { ownRate: 0.024, teamRate: 0.004 },
-  DIRETOR:     { ownRate: 0.024, teamRate: 0.001 },
-};
-
-const TAX_DEDUCTION = 0.86;
 const GOAL_MET_COPY = 'Parabéns — você bateu a meta do mês. Continue nesse ritmo.';
-
-function parseCurrency(value: any): number {
-  if (value == null) return 0;
-  if (typeof value === 'number') return isNaN(value) ? 0 : value;
-  const cleaned = String(value)
-    .replace(/R\$\s*/g, '')
-    .replace(/\./g, '')
-    .replace(',', '.');
-  return parseFloat(cleaned) || 0;
-}
-
-function formatBRL(value: number): string {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-}
 
 function formatCurrencyInput(raw: string) {
   const digits = raw.replace(/\D/g, '').slice(0, 12);
