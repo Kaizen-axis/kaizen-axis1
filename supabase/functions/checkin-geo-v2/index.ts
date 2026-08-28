@@ -176,7 +176,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: unitRow, error: unitError } = await supabase
     .from('checkin_units')
-    .select('code, name, latitude, longitude, max_radius_meters, max_accuracy_meters, active')
+    .select('code, name, latitude, longitude, max_radius_meters, max_accuracy_meters, start_minutes, end_minutes, active')
     .eq('code', profileRow.checkin_unit_code)
     .eq('active', true)
     .maybeSingle();
@@ -187,21 +187,11 @@ Deno.serve(async (req: Request) => {
       message: 'A unidade vinculada está indisponível. Fale com o administrador.',
     }, 403, responseHeaders);
   }
-  const unit = unitRow as CheckinUnitPolicy;
-
-  let startMinutes = DEFAULT_START_MINUTES;
-  let endMinutes = DEFAULT_END_MINUTES;
-  const { data: settings, error: settingsError } = await supabase
-    .from('checkin_settings')
-    .select('start_minutes, end_minutes')
-    .eq('id', 1)
-    .maybeSingle();
-  if (settingsError) {
-    console.warn('[checkin-geo-v2] settings unavailable, using defaults:', settingsError.message);
-  } else if (settings) {
-    startMinutes = settings.start_minutes ?? startMinutes;
-    endMinutes = settings.end_minutes ?? endMinutes;
-  }
+  const unit = {
+    ...unitRow,
+    start_minutes: unitRow.start_minutes ?? DEFAULT_START_MINUTES,
+    end_minutes: unitRow.end_minutes ?? DEFAULT_END_MINUTES,
+  } as CheckinUnitPolicy;
 
   if (typeof qrToken !== 'string' || qrToken.trim().length === 0) {
     return json({
@@ -232,8 +222,6 @@ Deno.serve(async (req: Request) => {
     longitude,
     accuracy,
     currentMinutes: getBRTMinutes(),
-    startMinutes,
-    endMinutes,
   });
 
   if (!policyResult.ok && policyResult.error === 'gps_impreciso') {
@@ -247,7 +235,7 @@ Deno.serve(async (req: Request) => {
   if (!policyResult.ok && policyResult.error === 'fora_do_horario') {
     return json({
       error: 'fora_do_horario',
-      message: `Check-in permitido apenas entre ${formatMinutes(startMinutes)} e ${formatMinutes(endMinutes)}.`,
+      message: `Check-in na unidade ${unit.name} permitido apenas entre ${formatMinutes(unit.start_minutes)} e ${formatMinutes(unit.end_minutes)}.`,
     }, 403, responseHeaders);
   }
 

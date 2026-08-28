@@ -56,7 +56,7 @@ function normalizeRole(role?: string | null) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CheckIn() {
-  const { user, profile, signOut, checkinUnits, checkinSettings } = useApp();
+  const { user, profile, signOut, checkinUnits } = useApp();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const qrToken = searchParams.get('token'); // token vindo do QR scan
@@ -221,12 +221,12 @@ export default function CheckIn() {
     }
   };
 
-  // A tela e a Edge usam a mesma janela persistida, com fallback seguro.
-  const startMinutes = checkinSettings?.start_minutes ?? (8 * 60);
-  const endMinutes = checkinSettings?.end_minutes ?? (13 * 60 + 30);
+  // A tela e a Edge usam a janela persistida da unidade atribuída.
+  const assignedUnit = getAssignedUnit(profile?.checkin_unit_code, checkinUnits);
+  const startMinutes = assignedUnit?.start_minutes ?? (8 * 60);
+  const endMinutes = assignedUnit?.end_minutes ?? (13 * 60 + 30);
   const windowLabel = getCheckinWindowLabel(startMinutes, endMinutes);
   const isOpen = isCheckinOpen(brtMinutes, startMinutes, endMinutes);
-  const assignedUnit = getAssignedUnit(profile?.checkin_unit_code, checkinUnits);
 
   // ── Fila do dia ───────────────────────────────────────────────────────────
   const fetchQueue = useCallback(async () => {
