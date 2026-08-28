@@ -34,7 +34,7 @@ Antes do primeiro build, cada repositório recebe uma tag protegida de baseline.
 ### 3.1 Aplicações
 
 - O site é Next.js 16.2.7, usa SSR/middleware, Supabase Auth e a tabela/bucket dos imóveis.
-- O Axis é uma PWA Vite/React, usa Supabase Auth, PostgREST, RLS/RPC, Realtime, Storage e 16 Edge Functions.
+- O Axis é uma PWA Vite/React, usa Supabase Auth, PostgREST, RLS/RPC, Realtime, Storage e 17 Edge Functions.
 - O Axis também possui a função Node `/api/apuracao`, hoje executada como função Vercel com até 2 GB de memória e 300 segundos.
 - Os projetos Supabase gerenciados são distintos:
   - Axis: `pwvpxxrvlywlneuijmmd`;
@@ -177,7 +177,8 @@ Haverá uma única instalação Mailcow com dois domínios de e-mail. Duas insta
 
 - preservar `MAILCOW_HOSTNAME=mail.hokmatech.com`;
 - adicionar `imobkaizen.com.br` como domínio;
-- adicionar `mail.imobkaizen.com.br` a `ADDITIONAL_SAN` e `ADDITIONAL_SERVER_NAMES`;
+- adicionar `webmail.imobkaizen.com.br` a `ADDITIONAL_SERVER_NAMES`;
+- emitir por DNS-01 um certificado que cubra `mail.hokmatech.com` e `mail.imobkaizen.com.br`, instalá-lo como certificado customizado do Mailcow e validar SMTP/IMAP antes de anunciar o nome adicional aos clientes;
 - manter MX de `imobkaizen.com.br` apontando para `mail.hokmatech.com`;
 - publicar `autodiscover` e `autoconfig`;
 - gerar DKIM próprio para `imobkaizen.com.br`;
