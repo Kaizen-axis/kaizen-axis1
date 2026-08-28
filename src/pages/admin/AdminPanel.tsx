@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { PageHeader, PremiumCard, RoundedButton } from '@/components/ui/PremiumComponents';
 import { Users, Shield, Target, Megaphone, BarChart3, Plus, Search, Trophy, Download, FileSpreadsheet, FileText, Trash2, Edit2, ChevronDown, ChevronLeft, Calendar, Loader2, Building2, TrendingUp, Printer, Star, Award, Zap, Flame, MoreHorizontal, FileDown, MapPin, Ban, Lock, UserCircle, DollarSign, Clock } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
@@ -41,9 +41,12 @@ import { CardActionsMenu, type CardActionItem } from '@/components/ui/CardAction
 import { CommissionManagement } from '@/pages/admin/CommissionManagement';
 import { UserProfileModal } from '@/components/admin/UserProfileModal';
 import { ScrollTabBar } from '@/components/ui/ScrollTabBar';
+import {
+  FloatingToast,
+  type FloatingToastFeedback,
+} from '@/components/ui/FloatingToast';
 
 type Tab = 'users' | 'teams' | 'goals' | 'announcements' | 'reports' | 'commissions' | 'directorates' | 'gamification' | 'checkin';
-type UnitScheduleFeedback = { type: 'success' | 'error'; message: string };
 
 export default function AdminPanel() {
   // ── Hard role guard: only ADMIN and DIRETOR can access this page ────────────
@@ -100,7 +103,8 @@ export default function AdminPanel() {
   // Check-in settings by unit
   const [unitScheduleForms, setUnitScheduleForms] = useState<Record<string, { start: string; end: string }>>({});
   const [savingUnitCode, setSavingUnitCode] = useState<string | null>(null);
-  const [unitScheduleFeedback, setUnitScheduleFeedback] = useState<Record<string, UnitScheduleFeedback>>({});
+  const [unitScheduleFeedback, setUnitScheduleFeedback] = useState<FloatingToastFeedback | null>(null);
+  const closeUnitScheduleFeedback = useCallback(() => setUnitScheduleFeedback(null), []);
 
   useEffect(() => {
     setUnitScheduleForms(Object.fromEntries(checkinUnits.map(unit => [
@@ -117,38 +121,31 @@ export default function AdminPanel() {
     const startMinutes = hhmmToMinutes(form?.start ?? '');
     const endMinutes = hhmmToMinutes(form?.end ?? '');
     if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes)) {
-      setUnitScheduleFeedback(current => ({
-        ...current,
-        [unitCode]: { type: 'error', message: 'Informe horários válidos.' },
-      }));
+      setUnitScheduleFeedback({ type: 'error', message: 'Informe horários válidos.' });
       return;
     }
     if (endMinutes <= startMinutes) {
-      setUnitScheduleFeedback(current => ({
-        ...current,
-        [unitCode]: { type: 'error', message: 'O horário final deve ser posterior ao horário inicial.' },
-      }));
+      setUnitScheduleFeedback({
+        type: 'error',
+        message: 'O horário final deve ser posterior ao horário inicial.',
+      });
       return;
     }
 
     setSavingUnitCode(unitCode);
-    setUnitScheduleFeedback(current => {
-      const next = { ...current };
-      delete next[unitCode];
-      return next;
-    });
+    setUnitScheduleFeedback(null);
     try {
       await updateCheckinUnitSchedule(unitCode, startMinutes, endMinutes);
-      setUnitScheduleFeedback(current => ({
-        ...current,
-        [unitCode]: { type: 'success', message: `Horário de ${unitName} salvo com sucesso.` },
-      }));
+      setUnitScheduleFeedback({
+        type: 'success',
+        message: `Horário de ${unitName} salvo com sucesso.`,
+      });
     } catch (error: any) {
       console.error(`Erro ao salvar horário de ${unitName}:`, error);
-      setUnitScheduleFeedback(current => ({
-        ...current,
-        [unitCode]: { type: 'error', message: 'Não foi possível salvar. Tente novamente.' },
-      }));
+      setUnitScheduleFeedback({
+        type: 'error',
+        message: 'Não foi possível salvar. Tente novamente.',
+      });
     } finally {
       setSavingUnitCode(null);
     }
@@ -2133,7 +2130,6 @@ export default function AdminPanel() {
                   start: minutesToHHMM(unit.start_minutes),
                   end: minutesToHHMM(unit.end_minutes),
                 };
-                const feedback = unitScheduleFeedback[unit.code];
                 const isSaving = savingUnitCode === unit.code;
 
                 return (
@@ -2173,16 +2169,6 @@ export default function AdminPanel() {
                         />
                       </div>
                     </div>
-
-                    {feedback && (
-                      <p
-                        className={`text-xs ${feedback.type === 'success' ? 'text-emerald-500' : 'text-red-400'}`}
-                        role="status"
-                        aria-live="polite"
-                      >
-                        {feedback.message}
-                      </p>
-                    )}
 
                     <RoundedButton
                       fullWidth
@@ -2529,6 +2515,11 @@ export default function AdminPanel() {
 
   return (
     <div className="w-full max-w-full px-3 sm:px-6 pt-6 pb-24 min-h-screen bg-surface-50 print:p-0 print:bg-white">
+      <FloatingToast
+        feedback={unitScheduleFeedback}
+        onClose={closeUnitScheduleFeedback}
+      />
+
       <div className="print:hidden">
         <PageHeader title="Painel Administrativo" subtitle="Governança, equipes e estratégia da operação." />
       </div>
