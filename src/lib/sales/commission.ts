@@ -34,6 +34,24 @@ export function calcBrokerCommission(vgv: number): number {
   return roundMoney(vgv * BROKER_OWN_RATE * TAX_DEDUCTION);
 }
 
+/** Comissão desta venda: corretor (própria) + coordenador/gerente (taxa de equipe). */
+export function calcSaleCommissionSplit(vgv: number): {
+  corretor: number;
+  coordenador: number;
+  gerente: number;
+  total: number;
+} {
+  const corretor = calcBrokerCommission(vgv);
+  const coordenador = calcRoleCommission(0, vgv, 'COORDENADOR').teamCommission;
+  const gerente = calcRoleCommission(0, vgv, 'GERENTE').teamCommission;
+  return {
+    corretor,
+    coordenador,
+    gerente,
+    total: roundMoney(corretor + coordenador + gerente),
+  };
+}
+
 export function calcRoleCommission(vgvOwn: number, vgvTeam: number, role: string): {
   ownCommission: number;
   teamCommission: number;

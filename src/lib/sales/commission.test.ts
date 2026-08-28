@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   calcBrokerCommission,
   calcRoleCommission,
+  calcSaleCommissionSplit,
   deriveCommissionDisplayStatus,
   isSoldInYearMonth,
   parseCurrency,
@@ -38,6 +39,14 @@ runTest('calcRoleCommission applies own and team rates', () => {
   assert.equal(result.ownCommission, 2064);
   assert.equal(result.teamCommission, 688);
   assert.equal(result.totalCommission, 2752);
+});
+
+runTest('calcSaleCommissionSplit splits one sale across corretor, coordenador and gerente', () => {
+  const split = calcSaleCommissionSplit(1_000_000);
+  assert.equal(split.corretor, 15480);
+  assert.equal(split.coordenador, 860);
+  assert.equal(split.gerente, 3440);
+  assert.equal(split.total, 19780);
 });
 
 runTest('paid always displays as Pago even with overdue due date', () => {

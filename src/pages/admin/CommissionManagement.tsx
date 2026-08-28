@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { Calendar, CheckCircle2, DollarSign, Loader2, Search, Undo2 } from 'lucide-react';
+import { Calendar, CheckCircle2, ChevronDown, DollarSign, Loader2, Search, Undo2 } from 'lucide-react';
 import { PremiumCard, RoundedButton, StatusBadge } from '@/components/ui/PremiumComponents';
 import { MetricCard } from '@/components/reports/MetricCard';
 import { supabase } from '@/lib/supabase';
 import { useApp } from '@/context/AppContext';
 import {
+  calcSaleCommissionSplit,
   deriveCommissionDisplayStatus,
   formatBRL,
   isSoldInYearMonth,
@@ -73,6 +74,7 @@ export function CommissionManagement() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
   const userPickedMonth = useRef(false);
   const didAutoJump = useRef(false);
 
@@ -351,6 +353,8 @@ export function CommissionManagement() {
           {filteredCards.map(entry => {
             const display = deriveCommissionDisplayStatus(entry.payment_status, entry.due_date);
             const busy = savingId === entry.id;
+            const open = !!expandedIds[entry.id];
+            const split = calcSaleCommissionSplit(toNumber(entry.vgv_numeric));
             return (
               <PremiumCard key={entry.id} className="p-4">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -373,7 +377,39 @@ export function CommissionManagement() {
                   </div>
                 </div>
 
-                <div className="mt-3 pt-3 border-t border-surface-200 flex flex-col sm:flex-row sm:items-center gap-3">
+                <button
+                  type="button"
+                  aria-expanded={open}
+                  aria-label={open ? 'Ocultar detalhe da comissão' : 'Ver detalhe da comissão'}
+                  onClick={() => setExpandedIds(prev => ({ ...prev, [entry.id]: !prev[entry.id] }))}
+                  className="mt-2 w-full min-h-11 flex items-center justify-center rounded-xl text-text-secondary hover:bg-surface-100 transition-colors"
+                >
+                  <ChevronDown size={18} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+                </button>
+
+                {open && (
+                  <div className="mb-2 rounded-xl bg-surface-50 border border-surface-200 p-3 space-y-2">
+                    {[
+                      { label: 'Corretor', name: entry.corretor_nome, amount: split.corretor },
+                      { label: 'Coordenador', name: entry.coordenador_nome, amount: split.coordenador },
+                      { label: 'Gerente', name: entry.gerente_nome, amount: split.gerente },
+                    ].map(row => (
+                      <div key={row.label} className="flex items-baseline justify-between gap-3 text-sm">
+                        <div className="min-w-0">
+                          <p className="font-medium text-text-primary">{row.label}</p>
+                          <p className="text-[11px] text-text-secondary truncate">{row.name || '—'}</p>
+                        </div>
+                        <p className="shrink-0 font-semibold text-text-primary">{formatBRL(row.amount)}</p>
+                      </div>
+                    ))}
+                    <div className="pt-2 border-t border-surface-200 flex items-baseline justify-between gap-3">
+                      <p className="text-sm font-bold text-text-primary">Total da venda</p>
+                      <p className="text-sm font-bold text-text-primary">{formatBRL(split.total)}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="pt-3 border-t border-surface-200 flex flex-col sm:flex-row sm:items-center gap-3">
                   <p className="text-[11px] text-text-secondary">Venda em {formatSoldDate(entry.sold_at)}</p>
                   <label className="flex items-center gap-2 text-[11px] text-text-secondary sm:ml-auto">
                     Vencimento
