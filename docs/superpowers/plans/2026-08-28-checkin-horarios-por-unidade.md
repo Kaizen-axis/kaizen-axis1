@@ -274,7 +274,7 @@ estreitas.
 Run:
 
 ```powershell
-deno eval --no-config "import ts from 'npm:typescript'; for (const f of ['src/context/AppContext.tsx','src/pages/admin/AdminPanel.tsx']) { const s=await Deno.readTextFile(f); const r=ts.transpileModule(s,{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022},reportDiagnostics:true,fileName:f}); if(r.diagnostics?.length) throw new Error(f); } console.log('TSX syntax OK');"
+deno eval --no-config "import ts from 'npm:typescript@5.8.3'; for (const f of ['src/context/AppContext.tsx','src/pages/admin/AdminPanel.tsx']) { const s=await Deno.readTextFile(f); const r=ts.transpileModule(s,{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022},reportDiagnostics:true,fileName:f}); if(r.diagnostics?.length) throw new Error(f); } console.log('TSX syntax OK');"
 ```
 
 Expected: `TSX syntax OK`.
@@ -317,7 +317,7 @@ Run:
 
 ```powershell
 deno test --no-config src/lib/checkin/checkinUi.test.ts supabase/functions/_shared/checkin-policy.test.ts supabase/functions/_shared/checkin-cors.test.ts
-deno eval --no-config "import ts from 'npm:typescript'; for (const f of ['src/context/AppContext.tsx','src/pages/admin/AdminPanel.tsx','src/pages/CheckIn.tsx']) { const s=await Deno.readTextFile(f); const r=ts.transpileModule(s,{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022},reportDiagnostics:true,fileName:f}); if(r.diagnostics?.length) throw new Error(f); } console.log('TSX syntax OK');"
+deno eval --no-config "import ts from 'npm:typescript@5.8.3'; for (const f of ['src/context/AppContext.tsx','src/pages/admin/AdminPanel.tsx','src/pages/CheckIn.tsx']) { const s=await Deno.readTextFile(f); const r=ts.transpileModule(s,{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022},reportDiagnostics:true,fileName:f}); if(r.diagnostics?.length) throw new Error(f); } console.log('TSX syntax OK');"
 git diff --check
 ```
 

@@ -25,15 +25,9 @@ export interface CheckinUnit {
   longitude: number;
   max_radius_meters: number;
   max_accuracy_meters: number;
-  active: boolean;
-}
-
-export interface CheckinSettings {
-  id: number;
   start_minutes: number;
   end_minutes: number;
-  updated_at?: string;
-  updated_by?: string | null;
+  active: boolean;
 }
 
 export interface Profile {
@@ -267,9 +261,12 @@ interface AppContextValue {
 
   // Check-in multiunidade
   checkinUnits: CheckinUnit[];
-  checkinSettings: CheckinSettings | null;
   refreshCheckinConfig: () => Promise<void>;
-  updateCheckinSettings: (startMinutes: number, endMinutes: number) => Promise<void>;
+  updateCheckinUnitSchedule: (
+    unitCode: string,
+    startMinutes: number,
+    endMinutes: number,
+  ) => Promise<void>;
 
   // Portals
   portals: Portal[];
@@ -308,7 +305,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [directorates, setDirectorates] = useState<Directorate[]>([]);
   const [checkinUnits, setCheckinUnits] = useState<CheckinUnit[]>([]);
-  const [checkinSettings, setCheckinSettings] = useState<CheckinSettings | null>(null);
   const [portals, setPortals] = useState<Portal[]>([]);
   const [trainings, setTrainings] = useState<TrainingItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1912,42 +1908,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const refreshCheckinConfig = useCallback(async () => {
     try {
-      const [unitsResult, settingsResult] = await Promise.all([
-        supabase
-          .from('checkin_units')
-          .select('code, name, latitude, longitude, max_radius_meters, max_accuracy_meters, active')
-          .eq('active', true)
-          .order('name'),
-        supabase
-          .from('checkin_settings')
-          .select('id, start_minutes, end_minutes, updated_at, updated_by')
-          .eq('id', 1)
-          .maybeSingle(),
-      ]);
+      const { data, error } = await supabase
+        .from('checkin_units')
+        .select('code, name, latitude, longitude, max_radius_meters, max_accuracy_meters, start_minutes, end_minutes, active')
+        .eq('active', true)
+        .order('name');
 
-      if (unitsResult.error) throw unitsResult.error;
-      if (settingsResult.error) throw settingsResult.error;
-
-      setCheckinUnits((unitsResult.data as CheckinUnit[]) ?? []);
-      setCheckinSettings((settingsResult.data as CheckinSettings | null) ?? null);
+      if (error) throw error;
+      setCheckinUnits((data as CheckinUnit[]) ?? []);
     } catch (error) {
       console.error('Erro ao carregar configuração de check-in:', error);
     }
   }, []);
 
-  const updateCheckinSettings = useCallback(async (
+  const updateCheckinUnitSchedule = useCallback(async (
+    unitCode: string,
     startMinutes: number,
     endMinutes: number,
   ) => {
     const { error } = await supabase
-      .from('checkin_settings')
+      .from('checkin_units')
       .update({
         start_minutes: startMinutes,
         end_minutes: endMinutes,
         updated_at: new Date().toISOString(),
-        updated_by: userRef.current?.id ?? null,
       })
-      .eq('id', 1);
+      .eq('code', unitCode);
 
     if (error) throw error;
     await refreshCheckinConfig();
@@ -2185,9 +2171,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       updateDirectorate,
       deleteDirectorate,
       checkinUnits,
-      checkinSettings,
       refreshCheckinConfig,
-      updateCheckinSettings,
+      updateCheckinUnitSchedule,
       portals,
       refreshPortals,
       addPortal,

@@ -38,6 +38,7 @@ import { UserProfileModal } from '@/components/admin/UserProfileModal';
 import { ScrollTabBar } from '@/components/ui/ScrollTabBar';
 
 type Tab = 'users' | 'teams' | 'goals' | 'announcements' | 'reports' | 'commissions' | 'directorates' | 'gamification' | 'checkin';
+type UnitScheduleFeedback = { type: 'success' | 'error'; message: string };
 
 export default function AdminPanel() {
   // ── Hard role guard: only ADMIN and DIRETOR can access this page ────────────
@@ -50,7 +51,7 @@ export default function AdminPanel() {
     goals, addGoal, updateGoal, deleteGoal,
     announcements, addAnnouncement, updateAnnouncement, deleteAnnouncement,
     directorates, addDirectorate, updateDirectorate, deleteDirectorate,
-    checkinUnits, checkinSettings, updateCheckinSettings,
+    checkinUnits, updateCheckinUnitSchedule,
     clients, leads, appointments,
     developments,
     loading, user
@@ -91,41 +92,60 @@ export default function AdminPanel() {
   const [dirForm, setDirForm] = useState<Partial<Directorate>>({ name: '', description: '' });
   const [isSavingDir, setIsSavingDir] = useState(false);
 
-  // Check-in settings
-  const [checkinForm, setCheckinForm] = useState({ start: '08:00', end: '13:30' });
-  const [isSavingCheckin, setIsSavingCheckin] = useState(false);
-  const [checkinFeedback, setCheckinFeedback] = useState('');
+  // Check-in settings by unit
+  const [unitScheduleForms, setUnitScheduleForms] = useState<Record<string, { start: string; end: string }>>({});
+  const [savingUnitCode, setSavingUnitCode] = useState<string | null>(null);
+  const [unitScheduleFeedback, setUnitScheduleFeedback] = useState<Record<string, UnitScheduleFeedback>>({});
 
   useEffect(() => {
-    if (!checkinSettings) return;
-    setCheckinForm({
-      start: minutesToHHMM(checkinSettings.start_minutes),
-      end: minutesToHHMM(checkinSettings.end_minutes),
-    });
-  }, [checkinSettings]);
+    setUnitScheduleForms(Object.fromEntries(checkinUnits.map(unit => [
+      unit.code,
+      {
+        start: minutesToHHMM(unit.start_minutes),
+        end: minutesToHHMM(unit.end_minutes),
+      },
+    ])));
+  }, [checkinUnits]);
 
-  const handleSaveCheckinSettings = async () => {
-    const startMinutes = hhmmToMinutes(checkinForm.start);
-    const endMinutes = hhmmToMinutes(checkinForm.end);
+  const handleSaveCheckinUnitSchedule = async (unitCode: string, unitName: string) => {
+    const form = unitScheduleForms[unitCode];
+    const startMinutes = hhmmToMinutes(form?.start ?? '');
+    const endMinutes = hhmmToMinutes(form?.end ?? '');
     if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes)) {
-      setCheckinFeedback('Informe horários válidos.');
+      setUnitScheduleFeedback(current => ({
+        ...current,
+        [unitCode]: { type: 'error', message: 'Informe horários válidos.' },
+      }));
       return;
     }
     if (endMinutes <= startMinutes) {
-      setCheckinFeedback('O horário final deve ser posterior ao horário inicial.');
+      setUnitScheduleFeedback(current => ({
+        ...current,
+        [unitCode]: { type: 'error', message: 'O horário final deve ser posterior ao horário inicial.' },
+      }));
       return;
     }
 
-    setIsSavingCheckin(true);
-    setCheckinFeedback('');
+    setSavingUnitCode(unitCode);
+    setUnitScheduleFeedback(current => {
+      const next = { ...current };
+      delete next[unitCode];
+      return next;
+    });
     try {
-      await updateCheckinSettings(startMinutes, endMinutes);
-      setCheckinFeedback('Horário salvo com sucesso.');
+      await updateCheckinUnitSchedule(unitCode, startMinutes, endMinutes);
+      setUnitScheduleFeedback(current => ({
+        ...current,
+        [unitCode]: { type: 'success', message: `Horário de ${unitName} salvo com sucesso.` },
+      }));
     } catch (error: any) {
-      console.error('Erro ao salvar horário de check-in:', error);
-      setCheckinFeedback(`Não foi possível salvar o horário. ${error?.message || ''}`.trim());
+      console.error(`Erro ao salvar horário de ${unitName}:`, error);
+      setUnitScheduleFeedback(current => ({
+        ...current,
+        [unitCode]: { type: 'error', message: 'Não foi possível salvar. Tente novamente.' },
+      }));
     } finally {
-      setIsSavingCheckin(false);
+      setSavingUnitCode(null);
     }
   };
 
@@ -1405,21 +1425,21 @@ export default function AdminPanel() {
                       </div>
 
                       {/* Dropdowns */}
-                      <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:justify-between">
-                        <div className="flex flex-col gap-1.5 md:flex-row md:flex-wrap md:gap-2 md:items-center">
+                      <div className="w-full">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2 items-center">
                           <select value={u.role} onChange={e => handleRoleChange(u.id, e.target.value)}
-                            className="w-full md:w-40 min-h-11 text-xs bg-surface-50 border border-surface-200 rounded-lg px-2 py-2 focus:outline-none focus:border-gold-400">
+                            className="w-full min-w-0 h-9 text-[11px] bg-surface-50 border border-surface-200 rounded-lg px-2 py-1 focus:outline-none focus:border-gold-400">
                             {['CORRETOR', 'COORDENADOR', 'GERENTE', 'DIRETOR', 'ADMIN', 'RECEPCAO', 'ANALISTA'].map(r => <option key={r} value={r}>{r}</option>)}
                           </select>
                           <select value={(u as any).directorate_id ?? ''} onChange={e => handleDirectorateChange(u.id, e.target.value || null)}
-                            className="w-full md:w-40 min-h-11 text-xs bg-surface-50 border border-surface-200 rounded-lg px-2 py-2 focus:outline-none focus:border-gold-400">
+                            className="w-full min-w-0 h-9 text-[11px] bg-surface-50 border border-surface-200 rounded-lg px-2 py-1 focus:outline-none focus:border-gold-400">
                             <option value="">Sem Diretoria</option>
                             {directorates.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                           </select>
                           <select
                             value={(u as any).team_id || (u as any).team || ''}
                             onChange={e => handleTeamChange(u.id, e.target.value || null)}
-                            className="w-full md:w-40 min-h-11 text-xs bg-surface-50 border border-surface-200 rounded-lg px-2 py-2 focus:outline-none focus:border-gold-400"
+                            className="w-full min-w-0 h-9 text-[11px] bg-surface-50 border border-surface-200 rounded-lg px-2 py-1 focus:outline-none focus:border-gold-400"
                           >
                             <option value="">Sem Equipe</option>
                             {teams
@@ -1427,14 +1447,14 @@ export default function AdminPanel() {
                               .map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                           </select>
                           <select value={(u as any).manager_id ?? ''} onChange={e => handleManagerChange(u.id, e.target.value || null)}
-                            className="w-full md:w-40 min-h-11 text-xs bg-surface-50 border border-surface-200 rounded-lg px-2 py-2 focus:outline-none focus:border-gold-400">
+                            className="w-full min-w-0 h-9 text-[11px] bg-surface-50 border border-surface-200 rounded-lg px-2 py-1 focus:outline-none focus:border-gold-400">
                             <option value="">Sem Gestor</option>
                             {allProfiles
                               .filter(p => p.id !== u.id && p.role?.toUpperCase() === 'GERENTE' && isProfileActive((p as any).status))
                               .map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                           </select>
                           <select value={(u as any).coordinator_id ?? ''} onChange={e => handleCoordinatorChange(u.id, e.target.value || null)}
-                            className="w-full md:w-40 min-h-11 text-xs bg-surface-50 border border-surface-200 rounded-lg px-2 py-2 focus:outline-none focus:border-gold-400">
+                            className="w-full min-w-0 h-9 text-[11px] bg-surface-50 border border-surface-200 rounded-lg px-2 py-1 focus:outline-none focus:border-gold-400">
                             <option value="">Sem Coordenador</option>
                             {allProfiles
                               .filter(p => p.id !== u.id && p.role?.toUpperCase() === 'COORDENADOR' && isProfileActive((p as any).status))
@@ -1445,7 +1465,7 @@ export default function AdminPanel() {
                               value={u.checkin_unit_code ?? 'zona_oeste'}
                               onChange={e => handleCheckinUnitChange(u.id, e.target.value)}
                               aria-label={`Unidade de check-in de ${u.name}`}
-                              className="w-full md:w-40 min-h-11 text-xs bg-surface-50 border border-surface-200 rounded-lg px-2 py-2 focus:outline-none focus:border-gold-400"
+                              className="w-full min-w-0 h-9 text-[11px] bg-surface-50 border border-surface-200 rounded-lg px-2 py-1 focus:outline-none focus:border-gold-400"
                             >
                               {checkinUnits.map(unit => (
                                 <option key={unit.code} value={unit.code}>{unit.name}</option>
@@ -2081,65 +2101,85 @@ export default function AdminPanel() {
       case 'checkin':
         if (!isAdmin) return null;
         return (
-          <div className="max-w-2xl space-y-4">
-            <PremiumCard className="p-4 sm:p-5 space-y-5">
-              <div>
-                <h3 className="text-base sm:text-lg font-bold text-text-primary flex items-center gap-2">
-                  <Clock size={18} className="text-gold-500" /> Horário do check-in
-                </h3>
-                <p className="text-xs text-text-secondary mt-1">
-                  Janela diária no fuso de Brasília, válida para as duas unidades.
-                </p>
-              </div>
+          <div className="max-w-4xl space-y-4">
+            <div>
+              <h3 className="text-base sm:text-lg font-bold text-text-primary flex items-center gap-2">
+                <Clock size={18} className="text-gold-500" /> Horário do check-in
+              </h3>
+              <p className="text-xs text-text-secondary mt-1">
+                Defina uma janela diária independente para cada unidade, no fuso de Brasília.
+              </p>
+            </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary block mb-1">Início</label>
-                  <input
-                    type="time"
-                    value={checkinForm.start}
-                    onChange={event => setCheckinForm(current => ({ ...current, start: event.target.value }))}
-                    className="w-full min-h-11 px-3 bg-surface-50 rounded-lg border border-surface-200 text-sm text-text-primary focus:outline-none focus:border-gold-400"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary block mb-1">Fim</label>
-                  <input
-                    type="time"
-                    value={checkinForm.end}
-                    onChange={event => setCheckinForm(current => ({ ...current, end: event.target.value }))}
-                    className="w-full min-h-11 px-3 bg-surface-50 rounded-lg border border-surface-200 text-sm text-text-primary focus:outline-none focus:border-gold-400"
-                  />
-                </div>
-              </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {checkinUnits.map(unit => {
+                const form = unitScheduleForms[unit.code] ?? {
+                  start: minutesToHHMM(unit.start_minutes),
+                  end: minutesToHHMM(unit.end_minutes),
+                };
+                const feedback = unitScheduleFeedback[unit.code];
+                const isSaving = savingUnitCode === unit.code;
 
-              <div className="border-t border-surface-200 pt-4">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary mb-2">Unidades protegidas</p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {checkinUnits.map(unit => (
-                    <div key={unit.code} className="rounded-xl border border-surface-200 bg-surface-50 p-3">
+                return (
+                  <PremiumCard key={unit.code} className="p-4 sm:p-5 space-y-4">
+                    <div>
                       <p className="text-sm font-bold text-text-primary flex items-center gap-1.5">
-                        <MapPin size={14} className="text-gold-500" /> {unit.name}
+                        <MapPin size={15} className="text-gold-500" /> {unit.name}
                       </p>
                       <p className="text-[11px] text-text-secondary mt-1">
                         Raio de {unit.max_radius_meters.toLocaleString('pt-BR')} m · precisão máxima de {unit.max_accuracy_meters} m
                       </p>
                     </div>
-                  ))}
-                </div>
-              </div>
 
-              {checkinFeedback && (
-                <p className={`text-xs ${checkinFeedback.includes('sucesso') ? 'text-emerald-500' : 'text-red-400'}`} role="status">
-                  {checkinFeedback}
-                </p>
-              )}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary block mb-1">Início</label>
+                        <input
+                          type="time"
+                          value={form.start}
+                          onChange={event => setUnitScheduleForms(current => ({
+                            ...current,
+                            [unit.code]: { ...form, start: event.target.value },
+                          }))}
+                          className="w-full min-h-10 px-3 bg-surface-50 rounded-lg border border-surface-200 text-sm text-text-primary focus:outline-none focus:border-gold-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary block mb-1">Fim</label>
+                        <input
+                          type="time"
+                          value={form.end}
+                          onChange={event => setUnitScheduleForms(current => ({
+                            ...current,
+                            [unit.code]: { ...form, end: event.target.value },
+                          }))}
+                          className="w-full min-h-10 px-3 bg-surface-50 rounded-lg border border-surface-200 text-sm text-text-primary focus:outline-none focus:border-gold-400"
+                        />
+                      </div>
+                    </div>
 
-              <RoundedButton fullWidth onClick={handleSaveCheckinSettings} disabled={isSavingCheckin}>
-                {isSavingCheckin ? <Loader2 size={15} className="animate-spin" /> : <Clock size={15} />}
-                {isSavingCheckin ? 'Salvando...' : 'Salvar horário'}
-              </RoundedButton>
-            </PremiumCard>
+                    {feedback && (
+                      <p
+                        className={`text-xs ${feedback.type === 'success' ? 'text-emerald-500' : 'text-red-400'}`}
+                        role="status"
+                        aria-live="polite"
+                      >
+                        {feedback.message}
+                      </p>
+                    )}
+
+                    <RoundedButton
+                      fullWidth
+                      onClick={() => handleSaveCheckinUnitSchedule(unit.code, unit.name)}
+                      disabled={isSaving}
+                    >
+                      {isSaving ? <Loader2 size={15} className="animate-spin" /> : <Clock size={15} />}
+                      {isSaving ? 'Salvando...' : 'Salvar horário'}
+                    </RoundedButton>
+                  </PremiumCard>
+                );
+              })}
+            </div>
           </div>
         );
 
