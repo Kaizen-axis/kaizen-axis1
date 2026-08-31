@@ -43,15 +43,24 @@ export default function Login() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaErrorCode, setCaptchaErrorCode] = useState('');
+  const [captchaRetryKey, setCaptchaRetryKey] = useState(0);
   const captchaContainerRef = useRef<HTMLDivElement | null>(null);
   const captchaWidgetIdRef = useRef<string | null>(null);
 
   const resetCaptcha = () => {
     setCaptchaToken('');
+    setCaptchaErrorCode('');
     if (!TURNSTILE_SITE_KEY) return;
     if (captchaWidgetIdRef.current && window.turnstile) {
       window.turnstile.reset(captchaWidgetIdRef.current);
     }
+  };
+
+  const retryCaptcha = () => {
+    setCaptchaToken('');
+    setCaptchaErrorCode('');
+    setCaptchaRetryKey((current) => current + 1);
   };
 
   const getCaptchaTokenIfRequired = () => {
@@ -87,9 +96,27 @@ export default function Login() {
       captchaWidgetIdRef.current = window.turnstile.render(captchaContainerRef.current, {
         sitekey: TURNSTILE_SITE_KEY,
         theme: 'auto',
-        callback: (token: string) => setCaptchaToken(token || ''),
-        'expired-callback': () => setCaptchaToken(''),
-        'error-callback': () => setCaptchaToken(''),
+        callback: (token: string) => {
+          setCaptchaErrorCode('');
+          setCaptchaToken(token || '');
+        },
+        'expired-callback': () => {
+          setCaptchaToken('');
+          setCaptchaErrorCode('expirado');
+        },
+        'error-callback': (code: string) => {
+          setCaptchaToken('');
+          setCaptchaErrorCode(String(code || 'desconhecido'));
+          return true;
+        },
+        'timeout-callback': () => {
+          setCaptchaToken('');
+          setCaptchaErrorCode('timeout');
+        },
+        'retry': 'auto',
+        'retry-interval': 3000,
+        'refresh-expired': 'auto',
+        'refresh-timeout': 'auto',
       });
     };
 
@@ -104,14 +131,9 @@ export default function Login() {
     const existingScript = document.querySelector('script[data-turnstile="true"]') as HTMLScriptElement | null;
     const onLoad = () => renderCaptcha();
 
-    if (existingScript) {
-      existingScript.addEventListener('load', onLoad);
-      return () => {
-        isCancelled = true;
-        existingScript.removeEventListener('load', onLoad);
-        removeExistingWidget();
-      };
-    }
+    // Um script que existe sem expor window.turnstile pode ter falhado antes do
+    // listener atual ser registrado. Substituí-lo garante um novo evento load.
+    existingScript?.remove();
 
     const script = document.createElement('script');
     script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
@@ -119,6 +141,7 @@ export default function Login() {
     script.defer = true;
     script.dataset.turnstile = 'true';
     script.addEventListener('load', onLoad);
+    script.addEventListener('error', () => setCaptchaErrorCode('script-load'));
     document.head.appendChild(script);
 
     return () => {
@@ -126,7 +149,7 @@ export default function Login() {
       script.removeEventListener('load', onLoad);
       removeExistingWidget();
     };
-  }, [showMfaInput, showResetPassword, isLogin]);
+  }, [showMfaInput, showResetPassword, isLogin, captchaRetryKey]);
 
   // Detecta evento PASSWORD_RECOVERY do Supabase
   useEffect(() => {
@@ -604,12 +627,31 @@ export default function Login() {
             )}
 
             {TURNSTILE_SITE_KEY && (
-              <div className="pt-1">
+              <div className="space-y-3 pt-1">
                 <div ref={captchaContainerRef} className="flex justify-center" />
+                {!captchaToken && !captchaErrorCode && (
+                  <p className="text-center text-xs text-text-secondary" role="status">
+                    Carregando verificação de segurança...
+                  </p>
+                )}
+                {captchaErrorCode && (
+                  <div className="text-center" role="alert">
+                    <p className="text-sm text-red-500">
+                      Falha na verificação de segurança. Código: {captchaErrorCode}
+                    </p>
+                    <button
+                      type="button"
+                      className="mt-2 text-sm font-medium text-primary-500 hover:underline"
+                      onClick={retryCaptcha}
+                    >
+                      Tentar novamente
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
-            <RoundedButton type="submit" fullWidth className="mt-8 py-4 text-base font-semibold shadow-gold-500/20 shadow-lg" disabled={loading}>
+            <RoundedButton type="submit" fullWidth className="mt-8 py-4 text-base font-semibold shadow-gold-500/20 shadow-lg" disabled={loading || (Boolean(TURNSTILE_SITE_KEY) && !captchaToken)}>
               {loading ? <Loader2 size={20} className="animate-spin" /> : (isLogin ? 'Entrar na Plataforma' : 'Cadastrar Conta')}
             </RoundedButton>
           </form>
