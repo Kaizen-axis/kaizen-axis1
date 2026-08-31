@@ -11,7 +11,7 @@ import { ChatUnreadProvider } from './context/ChatUnreadContext.tsx'
 // portanto uploads de arquivos e real-time continuam funcionando normalmente.
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((err) => {
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch((err) => {
       console.warn('[PWA] Falha ao registrar Service Worker:', err);
     });
   });

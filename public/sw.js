@@ -1,4 +1,4 @@
-// ─── Kaizen Axis — Service Worker v4 ────────────────────────────────────────
+// ─── Kaizen Axis — Service Worker v6 ────────────────────────────────────────
 // Estratégia cirúrgica:
 //   • Nunca intercepta POST/PUT/DELETE/PATCH  →  uploads de arquivo seguros
 //   • Nunca intercepta domínios Supabase      →  real-time e auth seguros
@@ -7,7 +7,7 @@
 //   • Limpa caches de versões antigas         →  sem conflito entre deploys
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CACHE_VERSION = 'v5';
+const CACHE_VERSION = 'v6';
 const CACHE_NAME = `kaizen-axis-${CACHE_VERSION}`;
 const MAX_CACHE_ENTRIES = 60;
 
@@ -26,21 +26,25 @@ function shouldBypass(request) {
   // 2. Apenas http/https — ignora chrome-extension://, data:, etc.
   if (!url.protocol.startsWith('http')) return true;
 
-  // 3. Supabase: API, Auth, Storage, Realtime — tudo direto ao servidor
+  // 3. Recursos de terceiros nunca passam pelo cache do PWA. Em especial,
+  // desafios do Turnstile são temporais e reutilizá-los causa o erro 200100.
+  if (url.origin !== self.location.origin) return true;
+
+  // 4. Supabase: API, Auth, Storage, Realtime — tudo direto ao servidor
   if (
     url.hostname.includes('supabase.co') ||
     url.hostname.includes('supabase.io') ||
     url.hostname.includes('supabase.in')
   ) return true;
 
-  // 4. Vite HMR e endpoints de dev
+  // 5. Vite HMR e endpoints de dev
   if (
     url.pathname.startsWith('/@') ||
     url.pathname.startsWith('/__vite') ||
     url.pathname.startsWith('/node_modules')
   ) return true;
 
-  // 5. Source maps
+  // 6. Source maps
   if (url.pathname.endsWith('.map')) return true;
 
   return false;
