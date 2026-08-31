@@ -8,6 +8,7 @@ import gsap from 'gsap';
 import { prefersReducedMotion } from '@/lib/motion';
 
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || '';
+const TURNSTILE_ACTION = 'axis_auth';
 
 declare global {
   interface Window {
@@ -95,6 +96,7 @@ export default function Login() {
       if (isCancelled) return;
       captchaWidgetIdRef.current = window.turnstile.render(captchaContainerRef.current, {
         sitekey: TURNSTILE_SITE_KEY,
+        action: TURNSTILE_ACTION,
         theme: 'auto',
         callback: (token: string) => {
           setCaptchaErrorCode('');

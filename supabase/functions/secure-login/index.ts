@@ -1,6 +1,7 @@
 // @ts-nocheck
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { verifyTurnstile } from '../_shared/turnstile.mjs';
 
 type SecureLoginBody = {
   email?: string;
@@ -78,25 +79,21 @@ Deno.serve(async (req: Request) => {
   // Sem REQUIRE_CAPTCHA, comportamento legacy: verifica quando a secret existe.
   const requireCaptcha = Deno.env.get('REQUIRE_CAPTCHA') === 'true';
   const turnstileSecret = Deno.env.get('TURNSTILE_SECRET_KEY');
-  if (requireCaptcha && !turnstileSecret) {
-    console.error('[secure-login] REQUIRE_CAPTCHA=true mas TURNSTILE_SECRET_KEY ausente');
+  const turnstileHostnames = Deno.env.get('TURNSTILE_HOSTNAMES');
+  if (requireCaptcha && (!turnstileSecret || !turnstileHostnames)) {
+    console.error('[secure-login] configuracao obrigatoria do Turnstile ausente');
     return jsonResponse({ message: 'Serviço temporariamente indisponível. Tente novamente em instantes.' }, 503);
   }
   if (turnstileSecret) {
-    if (!captchaToken) {
-      return jsonResponse({ message: 'Verificação de segurança obrigatória.' }, 400);
-    }
     const ip = resolveIp(req);
-    const formData = new FormData();
-    formData.append('secret', turnstileSecret);
-    formData.append('response', captchaToken);
-    formData.append('remoteip', ip);
-    const verifyRes = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-      method: 'POST',
-      body: formData,
-    }).catch(() => null);
-    const verifyJson = verifyRes ? await verifyRes.json().catch(() => null) : null;
-    if (!verifyJson?.success) {
+    const verified = await verifyTurnstile({
+      secret: turnstileSecret,
+      token: captchaToken,
+      remoteIp: ip,
+      expectedAction: 'axis_auth',
+      expectedHostnames: turnstileHostnames,
+    });
+    if (!verified) {
       console.warn('[secure-login] CAPTCHA verification failed', { ip });
       return jsonResponse({ message: 'Verificação de segurança inválida ou expirada. Tente novamente.' }, 400);
     }
