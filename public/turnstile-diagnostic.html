@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Diagnóstico Turnstile — Kaizen Axis</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, system-ui, sans-serif;
+        background: #07101f;
+        color: #f7f9fc;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+
+      main {
+        width: min(880px, 100%);
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: clamp(28px, 5vw, 44px);
+      }
+
+      .intro {
+        margin: 0 0 28px;
+        color: #aab9d0;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 18px;
+      }
+
+      section {
+        min-height: 220px;
+        padding: 22px;
+        border: 1px solid #29446c;
+        border-radius: 18px;
+        background: #0d182a;
+      }
+
+      h2 {
+        margin: 0 0 8px;
+        font-size: 20px;
+      }
+
+      p {
+        color: #aab9d0;
+      }
+
+      .status {
+        display: inline-block;
+        margin: 12px 0 18px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: #172743;
+        color: #d7e6ff;
+        font: 600 14px ui-monospace, SFMono-Regular, Consolas, monospace;
+      }
+
+      .status.success {
+        background: #123c2a;
+        color: #8ff0ba;
+      }
+
+      .status.error {
+        background: #4a1e29;
+        color: #ffb7c4;
+      }
+    </style>
+    <script
+      src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
+      async
+      defer
+    ></script>
+  </head>
+  <body>
+    <main>
+      <h1>Diagnóstico Turnstile</h1>
+      <p class="intro">
+        Esta página testa o runtime da Cloudflare sem carregar o aplicativo Axis.
+      </p>
+
+      <div class="grid">
+        <section>
+          <h2>Chave oficial de teste</h2>
+          <p>Deve sempre permitir a verificação.</p>
+          <output id="test-status" class="status">carregando</output>
+          <div id="test-widget"></div>
+        </section>
+
+        <section>
+          <h2>Chave de produção Axis</h2>
+          <p>Valida a configuração e o domínio reais.</p>
+          <output id="production-status" class="status">carregando</output>
+          <div id="production-widget"></div>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const widgets = [
+        {
+          container: '#test-widget',
+          status: 'test-status',
+          sitekey: '1x00000000000000000000AA',
+        },
+        {
+          container: '#production-widget',
+          status: 'production-status',
+          sitekey: '0x4AAAAAAEij91K9KZKNmIxo',
+        },
+      ];
+
+      function report(statusId, message, kind = '') {
+        const output = document.getElementById(statusId);
+        output.textContent = message;
+        output.className = `status ${kind}`.trim();
+      }
+
+      function renderWidgets() {
+        if (!window.turnstile) {
+          window.setTimeout(renderWidgets, 100);
+          return;
+        }
+
+        for (const widget of widgets) {
+          window.turnstile.render(widget.container, {
+            sitekey: widget.sitekey,
+            callback: () => report(widget.status, 'token recebido', 'success'),
+            'error-callback': (code) => {
+              report(widget.status, `erro ${code ?? 'desconhecido'}`, 'error');
+              return true;
+            },
+            'expired-callback': () => report(widget.status, 'expirado', 'error'),
+            'timeout-callback': () => report(widget.status, 'timeout', 'error'),
+            retry: 'auto',
+            'retry-interval': 3000,
+            'refresh-expired': 'auto',
+            'refresh-timeout': 'auto',
+          });
+        }
+      }
+
+      window.addEventListener('DOMContentLoaded', renderWidgets);
+    </script>
+  </body>
+</html>
