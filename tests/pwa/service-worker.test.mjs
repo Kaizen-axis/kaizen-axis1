@@ -11,4 +11,6 @@ test('service worker bypasses every cross-origin request', () => {
 
 test('service worker updates bypassing the browser HTTP cache', () => {
   assert.match(appEntry, /updateViaCache:\s*['"]none['"]/);
+  assert.match(appEntry, /controllerchange/);
+  assert.match(appEntry, /window\.location\.reload\(\)/);
 });

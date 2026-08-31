@@ -10,10 +10,15 @@ import { ChatUnreadProvider } from './context/ChatUnreadContext.tsx'
 // O SW usa estratégia cirúrgica: nunca intercepta Supabase nem métodos não-GET,
 // portanto uploads de arquivos e real-time continuam funcionando normalmente.
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch((err) => {
-      console.warn('[PWA] Falha ao registrar Service Worker:', err);
-    });
+  let reloadingForServiceWorker = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloadingForServiceWorker) return;
+    reloadingForServiceWorker = true;
+    window.location.reload();
+  });
+
+  navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch((err) => {
+    console.warn('[PWA] Falha ao registrar Service Worker:', err);
   });
 }
 
