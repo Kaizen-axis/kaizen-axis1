@@ -7,14 +7,17 @@ const source = readFileSync(
   'utf8',
 );
 
-test('login gate exposes Turnstile errors and a recovery path', () => {
-  assert.match(source, /setCaptchaErrorCode/);
-  assert.match(source, /['"]retry['"]:\s*['"]auto['"]/);
-  assert.match(source, /Tentar novamente/);
-  assert.match(
+test('login stays fail-closed without an indefinite loading gate', () => {
+  assert.doesNotMatch(source, /Carregando verificação de segurança/);
+  assert.doesNotMatch(
     source,
     /disabled=\{loading \|\| \(Boolean\(TURNSTILE_SITE_KEY\) && !captchaToken\)\}/,
   );
+  assert.match(source, /disabled=\{loading\}/);
+  assert.match(source, /const getCaptchaTokenIfRequired/);
+  assert.match(source, /if \(!captchaToken\)/);
+  assert.match(source, /Confirme a verificacao de seguranca antes de continuar/);
+  assert.match(source, /action:\s*TURNSTILE_ACTION/);
   assert.match(source, /appearance:\s*['"]always['"]/);
-  assert.match(source, /size:\s*['"]flexible['"]/);
+  assert.match(source, /Tentar novamente/);
 });
