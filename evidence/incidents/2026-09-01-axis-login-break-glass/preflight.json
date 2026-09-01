@@ -1,0 +1,76 @@
+{
+  "schema": 1,
+  "captured_at_utc": "2026-09-01T16:34:09.9088212Z",
+  "git": {
+    "branch": "hotfix/axis-login-break-glass-20260901",
+    "head": "9beee0ed536dec7bc4b4734b5a0b48f48684fb03",
+    "production_source_commit": "81ad216596b8cf0794fc62a1ea6144f42b677a20"
+  },
+  "vercel": {
+    "deployment_id": "dpl_DPudFscaojnvaymCuvfP8sJpjgX9",
+    "url": "kaizen-axis1-71hlhvdax-hokma-tech.vercel.app",
+    "ready_state": "READY",
+    "target": "production",
+    "source_branch": "main",
+    "aliases": [
+      "www.kaizen-axis.space",
+      "kaizen-axis1.vercel.app",
+      "kaizen-axis.space",
+      "kaizen-axis1-hokma-tech.vercel.app",
+      "kaizen-axis1-git-main-hokma-tech.vercel.app"
+    ],
+    "asset": "/assets/index-tgovRYJC.js",
+    "public_sitekeys": [
+      "0x4AAAAAADOmmf-tlgTOstXw"
+    ]
+  },
+  "supabase": {
+    "project_ref": "pwvpxxrvlywlneuijmmd",
+    "functions": [
+      {
+        "slug": "secure-login",
+        "status": "ACTIVE",
+        "version": 48,
+        "verify_jwt": true
+      },
+      {
+        "slug": "send-password-reset",
+        "status": "ACTIVE",
+        "version": 13,
+        "verify_jwt": true
+      }
+    ],
+    "secrets": [
+      {
+        "name": "REQUIRE_CAPTCHA",
+        "updated_at": "2026-09-01T14:24:53.323Z",
+        "present": true
+      },
+      {
+        "name": "TURNSTILE_SECRET_KEY",
+        "updated_at": "2026-09-01T14:24:53.323Z",
+        "present": true
+      },
+      {
+        "name": "TURNSTILE_HOSTNAMES",
+        "updated_at": "2026-09-01T14:59:03.678Z",
+        "present": true
+      }
+    ],
+    "login_require_captcha_present": false,
+    "disable_signup": false,
+    "native_captcha_enabled": false
+  },
+  "baseline": {
+    "focused_tests": {
+      "passed": 12,
+      "failed": 0
+    },
+    "typecheck": {
+      "status": "timeout",
+      "timeout_seconds": 900,
+      "diagnostic": "No compiler error was emitted; the process remained I/O-bound and was terminated after the bound."
+    }
+  },
+  "credentials_included": false
+}
