@@ -117,7 +117,7 @@
         {
           container: '#production-widget',
           status: 'production-status',
-          sitekey: '0x4AAAAAAEij91K9KZKNmIxo',
+          sitekey: '0x4AAAAAAEjcC8jM74vJaB7u',
         },
       ];
 
@@ -136,6 +136,9 @@
         for (const widget of widgets) {
           window.turnstile.render(widget.container, {
             sitekey: widget.sitekey,
+            action: 'axis_auth',
+            appearance: 'always',
+            size: 'flexible',
             callback: () => report(widget.status, 'token recebido', 'success'),
             'error-callback': (code) => {
               report(widget.status, `erro ${code ?? 'desconhecido'}`, 'error');
