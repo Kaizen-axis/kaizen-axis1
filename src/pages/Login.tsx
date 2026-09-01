@@ -97,6 +97,8 @@ export default function Login() {
       captchaWidgetIdRef.current = window.turnstile.render(captchaContainerRef.current, {
         sitekey: TURNSTILE_SITE_KEY,
         action: TURNSTILE_ACTION,
+        appearance: 'always',
+        size: 'flexible',
         theme: 'auto',
         callback: (token: string) => {
           setCaptchaErrorCode('');

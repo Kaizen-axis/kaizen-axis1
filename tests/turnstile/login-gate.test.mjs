@@ -15,4 +15,6 @@ test('login gate exposes Turnstile errors and a recovery path', () => {
     source,
     /disabled=\{loading \|\| \(Boolean\(TURNSTILE_SITE_KEY\) && !captchaToken\)\}/,
   );
+  assert.match(source, /appearance:\s*['"]always['"]/);
+  assert.match(source, /size:\s*['"]flexible['"]/);
 });
