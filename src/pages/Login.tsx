@@ -9,6 +9,7 @@ import { prefersReducedMotion } from '@/lib/motion';
 
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY || '';
 const TURNSTILE_ACTION = 'axis_auth';
+const LOGIN_CAPTCHA_REQUIRED = import.meta.env.VITE_LOGIN_REQUIRE_CAPTCHA !== 'false';
 
 declare global {
   interface Window {
@@ -24,6 +25,7 @@ export default function Login() {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
+  const shouldRenderCaptcha = LOGIN_CAPTCHA_REQUIRED || !isLogin;
 
   // Dados de formulário básico
   const [formData, setFormData] = useState({
@@ -64,8 +66,11 @@ export default function Login() {
     setCaptchaRetryKey((current) => current + 1);
   };
 
-  const getCaptchaTokenIfRequired = () => {
-    if (!TURNSTILE_SITE_KEY) return null;
+  const getCaptchaTokenIfRequired = (required: boolean) => {
+    if (!required) return null;
+    if (!TURNSTILE_SITE_KEY) {
+      throw new Error('Verificacao de seguranca indisponivel. Tente novamente em instantes.');
+    }
     if (!captchaToken) {
       throw new Error('Confirme a verificacao de seguranca antes de continuar.');
     }
@@ -73,7 +78,7 @@ export default function Login() {
   };
 
   useEffect(() => {
-    if (!TURNSTILE_SITE_KEY || showMfaInput || showResetPassword) return;
+    if (!TURNSTILE_SITE_KEY || !shouldRenderCaptcha || showMfaInput || showResetPassword) return;
 
     let isCancelled = false;
 
@@ -153,7 +158,7 @@ export default function Login() {
       script.removeEventListener('load', onLoad);
       removeExistingWidget();
     };
-  }, [showMfaInput, showResetPassword, isLogin, captchaRetryKey]);
+  }, [showMfaInput, showResetPassword, shouldRenderCaptcha, captchaRetryKey]);
 
   // Detecta evento PASSWORD_RECOVERY do Supabase
   useEffect(() => {
@@ -207,7 +212,46 @@ export default function Login() {
     }
   };
 
+  const handlePasswordResetRequest = async () => {
+    if (!LOGIN_CAPTCHA_REQUIRED) {
+      alert('Recuperacao de senha temporariamente indisponivel. Contate o administrador.');
+      return;
+    }
 
+    try {
+      const email = formData.email.trim();
+      if (!email) {
+        alert('Digite seu e-mail no campo acima antes de clicar em "Esqueceu a senha?".');
+        return;
+      }
+
+      const captchaTokenValue = getCaptchaTokenIfRequired(true);
+      setLoading(true);
+      const { data, error } = await supabase.functions.invoke('send-password-reset', {
+        body: { email, captchaToken: captchaTokenValue },
+      });
+      resetCaptcha();
+
+      if (error) {
+        let message = 'Não foi possível enviar o e-mail agora. Tente novamente em instantes.';
+        try {
+          const response = (error as any).context;
+          if (response) {
+            const errData = await response.json().catch(() => ({}));
+            message = errData?.message || message;
+          }
+        } catch { /* mantém mensagem genérica */ }
+        alert(message);
+      } else {
+        alert(data?.message || 'Se o e-mail estiver cadastrado, você receberá o link de redefinição em instantes.');
+      }
+    } catch (error: any) {
+      alert(error?.message || 'Falha ao iniciar redefinicao de senha.');
+      resetCaptcha();
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -215,7 +259,7 @@ export default function Login() {
 
     try {
       if (!isLogin) {
-        const captchaTokenValue = getCaptchaTokenIfRequired();
+        const captchaTokenValue = getCaptchaTokenIfRequired(true);
 
         // Cadastro
         if (formData.password !== formData.confirmPassword) {
@@ -241,7 +285,7 @@ export default function Login() {
         resetCaptcha();
         setLoading(false);
       } else {
-        const captchaTokenValue = getCaptchaTokenIfRequired();
+        const captchaTokenValue = getCaptchaTokenIfRequired(LOGIN_CAPTCHA_REQUIRED);
 
         // Login protegido no backend: secure-login aplica rate limit por IP antes de autenticar.
         const { data: loginData, error: loginError } = await supabase.functions.invoke('secure-login', {
@@ -584,53 +628,23 @@ export default function Login() {
 
             {isLogin && (
               <div className="flex justify-end items-center px-1">
-                <button
-                  type="button"
-                  className="text-xs font-semibold text-gold-600 hover:text-gold-500 transition-colors"
-                  onClick={async () => {
-                    try {
-                      const email = formData.email.trim();
-                      if (!email) {
-                        alert('Digite seu e-mail no campo acima antes de clicar em "Esqueceu a senha?".');
-                        return;
-                      }
-
-                      const captchaTokenValue = getCaptchaTokenIfRequired();
-
-                      setLoading(true);
-                      // Reset entregue pela edge function via Resend (e-mail nativo do
-                      // Supabase Auth não estava entregando os links de recuperação).
-                      const { data, error } = await supabase.functions.invoke('send-password-reset', {
-                        body: { email, captchaToken: captchaTokenValue },
-                      });
-                      resetCaptcha();
-                      if (error) {
-                        let message = 'Não foi possível enviar o e-mail agora. Tente novamente em instantes.';
-                        try {
-                          const response = (error as any).context;
-                          if (response) {
-                            const errData = await response.json().catch(() => ({}));
-                            message = errData?.message || message;
-                          }
-                        } catch { /* mantém mensagem genérica */ }
-                        alert(message);
-                      } else {
-                        alert(data?.message || 'Se o e-mail estiver cadastrado, você receberá o link de redefinição em instantes.');
-                      }
-                    } catch (error: any) {
-                      alert(error?.message || 'Falha ao iniciar redefinicao de senha.');
-                      resetCaptcha();
-                    } finally {
-                      setLoading(false);
-                    }
-                  }}
-                >
-                  Esqueceu a senha?
-                </button>
+                {LOGIN_CAPTCHA_REQUIRED ? (
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-gold-600 hover:text-gold-500 transition-colors"
+                    onClick={handlePasswordResetRequest}
+                  >
+                    Esqueceu a senha?
+                  </button>
+                ) : (
+                  <p className="text-xs text-text-secondary" role="status">
+                    Recuperacao de senha temporariamente indisponivel. Contate o administrador.
+                  </p>
+                )}
               </div>
             )}
 
-            {TURNSTILE_SITE_KEY && (
+            {TURNSTILE_SITE_KEY && shouldRenderCaptcha && (
               <div className="space-y-3 pt-1">
                 <div ref={captchaContainerRef} className="flex justify-center" />
                 {captchaErrorCode && (
@@ -656,7 +670,7 @@ export default function Login() {
           </form>
         )}
 
-        {!showMfaInput && !showResetPassword && (
+        {!showMfaInput && !showResetPassword && LOGIN_CAPTCHA_REQUIRED && (
           <div className="mt-8 text-center border-t border-surface-100 dark:border-surface-800 pt-6">
             <p className="text-sm text-text-secondary">
               {isLogin ? 'Novo por aqui?' : 'Já faz parte da equipe?'}
