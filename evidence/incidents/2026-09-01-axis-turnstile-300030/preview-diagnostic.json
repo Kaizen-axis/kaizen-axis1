@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "captured_at_utc": "2026-09-01T18:28:00.0000000Z",
+  "credentials_included": false,
+  "branch": "fix/axis-turnstile-300030",
+  "commit": "43d34f4b66feafbb71c661a5a121a59ff9778519",
+  "preview": {
+    "deployment_id": "dpl_B6GGGSaLgdXw9XLWrScQMfT7XpHq",
+    "url": "kaizen-axis1-git-fix-axis-turnstile-300030-hokma-tech.vercel.app",
+    "path": "/turnstile-diagnostic.html",
+    "browser": "Chrome via Cursor browser",
+    "test_widget_sitekey": "1x00000000000000000000AA",
+    "test_widget_result": "token recebido",
+    "live_widget_sitekey": "0x4AAAAAADOmmf-tlgTOstXw",
+    "live_widget_result": "erro 110200",
+    "live_widget_meaning": "Domain not authorized. Preview vercel.app hostname is not in the Kaizen-axis widget allowlist."
+  },
+  "interpretation": {
+    "decision_matrix_cell": "test_passes_live_fails_on_preview_hostname",
+    "does_not_yet_explain_production_300030": true,
+    "production_300030_requires": "repeat this page on kaizen-axis.space after a non-login static publish of the updated diagnostic, without enabling CAPTCHA on login",
+    "next_safe_steps": [
+      "Keep production login break-glass.",
+      "Do not alias this branch to production.",
+      "Owner: open the diagnostic on Chrome/Edge/InPrivate/Safari. Preview 110200 is expected until vercel.app is allowlisted or the test runs on kaizen-axis.space.",
+      "If kaizen-axis.space diagnostic still returns 300030 for the live sitekey while the test sitekey passes, treat it as Cloudflare widget/runtime on the authorized domain, not an Axis Login.tsx mount bug."
+    ]
+  },
+  "production_break_glass_untouched": true
+}
