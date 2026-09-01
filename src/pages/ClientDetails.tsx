@@ -1,4 +1,4 @@
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { PremiumCard, StatusBadge, SectionHeader, RoundedButton } from '@/components/ui/PremiumComponents';
 import { ChevronLeft, Mail, Calendar, Edit2, Building2, Wallet, History, Trash2, FileText, Save, X, UploadCloud, Plus, ChevronDown, ChevronUp, FileDown, MessageCircle, Video } from 'lucide-react';
@@ -146,6 +146,10 @@ export default function ClientDetails({
     cotista: 'Não',
     socialFactor: 'Não',
   });
+  const [addingProponent, setAddingProponent] = useState(false);
+  const [savingEditProponent, setSavingEditProponent] = useState(false);
+  const addingProponentRef = useRef(false);
+  const savingEditProponentRef = useRef(false);
   const [editingProponentId, setEditingProponentId] = useState<string | null>(null);
   const [openProponentIndex, setOpenProponentIndex] = useState<number | null>(null);
   const [showAddProponentForm, setShowAddProponentForm] = useState(false);
@@ -372,39 +376,47 @@ export default function ClientDetails({
       alert('Informe o nome do proponente.');
       return;
     }
+    if (addingProponentRef.current) return;
 
-    const result = await addClientProponent(id, {
-      name: newProponent.name.trim(),
-      cpf: newProponent.cpf.trim() || undefined,
-      email: newProponent.email.trim() || undefined,
-      phone: newProponent.phone.trim() || undefined,
-      address: newProponent.address.trim() || undefined,
-      profession: newProponent.profession.trim() || undefined,
-      grossIncome: newProponent.grossIncome.trim() || undefined,
-      incomeType: newProponent.incomeType,
-      cotista: newProponent.cotista,
-      socialFactor: newProponent.socialFactor,
-      isPrimary: false,
-    });
+    addingProponentRef.current = true;
+    setAddingProponent(true);
+    try {
+      const result = await addClientProponent(id, {
+        name: newProponent.name.trim(),
+        cpf: newProponent.cpf.trim() || undefined,
+        email: newProponent.email.trim() || undefined,
+        phone: newProponent.phone.trim() || undefined,
+        address: newProponent.address.trim() || undefined,
+        profession: newProponent.profession.trim() || undefined,
+        grossIncome: newProponent.grossIncome.trim() || undefined,
+        incomeType: newProponent.incomeType,
+        cotista: newProponent.cotista,
+        socialFactor: newProponent.socialFactor,
+        isPrimary: false,
+      });
 
-    if (!result.success) {
-      alert(`Erro ao adicionar proponente: ${result.error || 'erro desconhecido'}`);
-      return;
+      if (!result.success) {
+        alert(`Erro ao adicionar proponente: ${result.error || 'erro desconhecido'}`);
+        return;
+      }
+
+      setNewProponent({
+        name: '',
+        cpf: '',
+        email: '',
+        phone: '',
+        address: '',
+        profession: '',
+        grossIncome: '',
+        incomeType: 'Formal',
+        cotista: 'Não',
+        socialFactor: 'Não',
+      });
+      setShowAddProponentForm(false);
+    } finally {
+      addingProponentRef.current = false;
+      setAddingProponent(false);
     }
-
-    setNewProponent({
-      name: '',
-      cpf: '',
-      email: '',
-      phone: '',
-      address: '',
-      profession: '',
-      grossIncome: '',
-      incomeType: 'Formal',
-      cotista: 'Não',
-      socialFactor: 'Não',
-    });
-    setShowAddProponentForm(false);
   };
 
   const startEditProponent = (proponent: any) => {
@@ -445,26 +457,34 @@ export default function ClientDetails({
       alert('Informe o nome do proponente.');
       return;
     }
+    if (savingEditProponentRef.current) return;
 
-    const result = await updateClientProponent(editingProponentId, {
-      name: editingProponent.name.trim(),
-      cpf: editingProponent.cpf.trim() || undefined,
-      email: editingProponent.email.trim() || undefined,
-      phone: editingProponent.phone.trim() || undefined,
-      address: editingProponent.address.trim() || undefined,
-      profession: editingProponent.profession.trim() || undefined,
-      grossIncome: editingProponent.grossIncome.trim() || undefined,
-      incomeType: editingProponent.incomeType,
-      cotista: editingProponent.cotista,
-      socialFactor: editingProponent.socialFactor,
-    });
+    savingEditProponentRef.current = true;
+    setSavingEditProponent(true);
+    try {
+      const result = await updateClientProponent(editingProponentId, {
+        name: editingProponent.name.trim(),
+        cpf: editingProponent.cpf.trim() || undefined,
+        email: editingProponent.email.trim() || undefined,
+        phone: editingProponent.phone.trim() || undefined,
+        address: editingProponent.address.trim() || undefined,
+        profession: editingProponent.profession.trim() || undefined,
+        grossIncome: editingProponent.grossIncome.trim() || undefined,
+        incomeType: editingProponent.incomeType,
+        cotista: editingProponent.cotista,
+        socialFactor: editingProponent.socialFactor,
+      });
 
-    if (!result.success) {
-      alert(`Erro ao atualizar proponente: ${result.error || 'erro desconhecido'}`);
-      return;
+      if (!result.success) {
+        alert(`Erro ao atualizar proponente: ${result.error || 'erro desconhecido'}`);
+        return;
+      }
+
+      cancelEditProponent();
+    } finally {
+      savingEditProponentRef.current = false;
+      setSavingEditProponent(false);
     }
-
-    cancelEditProponent();
   };
 
   const handleDeleteProponent = (proponentId: string) => {
@@ -913,8 +933,8 @@ export default function ClientDetails({
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-semibold text-text-primary">Proponente {index + 2}</p>
                       <div className="flex gap-2">
-                        <button onClick={cancelEditProponent} className="h-7 w-7 flex items-center justify-center rounded-md text-text-secondary hover:bg-surface-100"><X size={13} /></button>
-                        <button onClick={saveEditProponent} className="h-7 w-7 flex items-center justify-center rounded-md text-green-600 hover:bg-success-subtle"><Save size={13} /></button>
+                        <button onClick={cancelEditProponent} disabled={savingEditProponent} className="h-7 w-7 flex items-center justify-center rounded-md text-text-secondary hover:bg-surface-100 disabled:opacity-50"><X size={13} /></button>
+                        <button onClick={saveEditProponent} disabled={savingEditProponent} className="h-7 w-7 flex items-center justify-center rounded-md text-green-600 hover:bg-success-subtle disabled:opacity-50"><Save size={13} /></button>
                       </div>
                     </div>
 
@@ -1019,8 +1039,12 @@ export default function ClientDetails({
                   </select>
                 </div>
                 <div className="flex gap-2">
-                  <RoundedButton size="sm" onClick={handleAddProponent}>Salvar Proponente</RoundedButton>
-                  <RoundedButton size="sm" variant="secondary" onClick={() => setShowAddProponentForm(false)}>Cancelar</RoundedButton>
+                  <RoundedButton size="sm" onClick={handleAddProponent} disabled={addingProponent}>
+                    {addingProponent ? 'Salvando...' : 'Salvar Proponente'}
+                  </RoundedButton>
+                  <RoundedButton size="sm" variant="secondary" onClick={() => setShowAddProponentForm(false)} disabled={addingProponent}>
+                    Cancelar
+                  </RoundedButton>
                 </div>
               </PremiumCard>
             )}
