@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "captured_at_utc": "2026-09-01T13:31:35.9618958Z",
+  "git": {
+    "branch": "hotfix/axis-production-turnstile",
+    "head": "3bbfce414e93c40117b67c2214c38037a05c5261",
+    "production_source_commit": "eb6a71d68fe0d61abf05332d5c70c03de7ff81b1"
+  },
+  "vercel": {
+    "deployment_id": "dpl_913G8mrshao7Eyuh4cAHzM1Hy215",
+    "url": "kaizen-axis1-8rh69zwx6-hokma-tech.vercel.app",
+    "target": "production",
+    "ready_state": "READY",
+    "aliases": [
+      "www.kaizen-axis.space",
+      "kaizen-axis1.vercel.app",
+      "kaizen-axis.space",
+      "kaizen-axis1-hokma-tech.vercel.app",
+      "kaizen-axis1-git-hotfix-axis-production-turnstile-hokma-tech.vercel.app"
+    ],
+    "asset": "/assets/index-u93cG3iC.js",
+    "public_sitekeys": [
+      "0x4AAAAAAEjcC8jM74vJaB7u"
+    ]
+  },
+  "cloudflare": {
+    "widgets": [
+      {
+        "sitekey": "0x4AAAAAADOmmf-tlgTOstXw",
+        "name": "Kaizen-axis",
+        "mode": "managed",
+        "domains": [
+          "kaizen-axis.space",
+          "kaizen-axis1.vercel.app",
+          "www.kaizen-axis.space"
+        ],
+        "modified_on": "2026-05-13T17:16:38.627619Z"
+      },
+      {
+        "sitekey": "0x4AAAAAAEij91K9KZKNmIxo",
+        "name": "imobkaizen-axis-auth",
+        "mode": "non-interactive",
+        "domains": [
+          "127.0.0.1",
+          "app.imobkaizen.com.br",
+          "kaizen-axis.space",
+          "kaizen-axis1.vercel.app",
+          "localhost",
+          "rehearsal-app.imobkaizen.com.br",
+          "staging-app.imobkaizen.com.br",
+          "www.kaizen-axis.space"
+        ],
+        "modified_on": "2026-08-31T17:03:04.326328Z"
+      },
+      {
+        "sitekey": "0x4AAAAAAEjcC8jM74vJaB7u",
+        "name": "imobkaizen-axis-auth-managed-20260831",
+        "mode": "managed",
+        "domains": [
+          "127.0.0.1",
+          "app.imobkaizen.com.br",
+          "kaizen-axis.space",
+          "kaizen-axis1.vercel.app",
+          "localhost",
+          "rehearsal-app.imobkaizen.com.br",
+          "staging-app.imobkaizen.com.br",
+          "www.kaizen-axis.space"
+        ],
+        "modified_on": "2026-09-01T02:04:31.370298Z"
+      }
+    ]
+  },
+  "supabase": {
+    "project_ref": "pwvpxxrvlywlneuijmmd",
+    "functions": [
+      {
+        "slug": "secure-login",
+        "status": "ACTIVE",
+        "version": 46,
+        "updated_at": 1788228153345,
+        "verify_jwt": true
+      },
+      {
+        "slug": "send-password-reset",
+        "status": "ACTIVE",
+        "version": 11,
+        "updated_at": 1788228160965,
+        "verify_jwt": true
+      }
+    ],
+    "secrets": [
+      {
+        "name": "REQUIRE_CAPTCHA",
+        "updated_at": "2026-09-01T02:05:20.852Z",
+        "present": true
+      },
+      {
+        "name": "TURNSTILE_SECRET_KEY",
+        "updated_at": "2026-09-01T02:53:01.647Z",
+        "present": true
+      },
+      {
+        "name": "TURNSTILE_HOSTNAMES",
+        "updated_at": "2026-09-01T02:05:20.852Z",
+        "present": true
+      }
+    ]
+  },
+  "credentials_included": false
+}
