@@ -123,3 +123,34 @@ for (const functionName of ['secure-login', 'send-password-reset']) {
     assert.doesNotMatch(source, /challenges\.cloudflare\.com\/turnstile\/v0\/siteverify/);
   });
 }
+
+test('secure-login uses a login-only fail-closed CAPTCHA flag', () => {
+  const source = readFileSync(
+    new URL('../supabase/functions/secure-login/index.ts', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /Deno\.env\.get\(['"]LOGIN_REQUIRE_CAPTCHA['"]\)/);
+  assert.match(source, /isLoginCaptchaRequired\(/);
+  assert.doesNotMatch(source, /if \(turnstileSecret\) \{/);
+});
+
+test('secure-login rate-limits before password grant', () => {
+  const source = readFileSync(
+    new URL('../supabase/functions/secure-login/index.ts', import.meta.url),
+    'utf8',
+  );
+  const rateLimitAt = source.indexOf('checkLoginRateLimit(');
+  const passwordGrantAt = source.indexOf('/auth/v1/token?grant_type=password');
+  assert.ok(rateLimitAt >= 0 && rateLimitAt < passwordGrantAt);
+});
+
+test('secure-login gates active status before returning tokens', () => {
+  const source = readFileSync(
+    new URL('../supabase/functions/secure-login/index.ts', import.meta.url),
+    'utf8',
+  );
+  const passwordGrantAt = source.indexOf('/auth/v1/token?grant_type=password');
+  const activeProfileAt = source.indexOf('enforceActiveProfile(');
+  const returnTokensAt = source.lastIndexOf('return jsonResponse(authData || {}, 200)');
+  assert.ok(activeProfileAt > passwordGrantAt && activeProfileAt < returnTokensAt);
+});

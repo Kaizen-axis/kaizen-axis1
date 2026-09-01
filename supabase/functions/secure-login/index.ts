@@ -1,6 +1,11 @@
 // @ts-nocheck
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import {
+  checkLoginRateLimit,
+  enforceActiveProfile,
+  isLoginCaptchaRequired,
+} from '../_shared/login-security.mjs';
 import { verifyTurnstile } from '../_shared/turnstile.mjs';
 
 type SecureLoginBody = {
@@ -8,8 +13,6 @@ type SecureLoginBody = {
   password?: string;
   captchaToken?: string;
 };
-
-const LOGIN_LIMIT = { limit: 10, windowSeconds: 60 };
 
 const CORS_ORIGIN = Deno.env.get('APP_ORIGIN') ?? '';
 const corsHeaders = {
@@ -30,11 +33,6 @@ function resolveIp(req: Request) {
   const forwarded = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip');
   if (!forwarded) return '0.0.0.0';
   return forwarded.split(',')[0]?.trim() || '0.0.0.0';
-}
-
-function truncateToWindow(date: Date, windowSeconds: number): string {
-  const ms = Math.floor(date.getTime() / (windowSeconds * 1000)) * windowSeconds * 1000;
-  return new Date(ms).toISOString();
 }
 
 Deno.serve(async (req: Request) => {
@@ -74,18 +72,22 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ message: 'E-mail e senha são obrigatórios' }, 400);
   }
 
+  const ip = resolveIp(req);
+  const adminClient = createClient(supabaseUrl, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
   // ── Verificação server-side do Turnstile CAPTCHA ──────────────────────────
-  // REQUIRE_CAPTCHA=true → falha fechado se TURNSTILE_SECRET_KEY não estiver configurada.
-  // Sem REQUIRE_CAPTCHA, comportamento legacy: verifica quando a secret existe.
-  const requireCaptcha = Deno.env.get('REQUIRE_CAPTCHA') === 'true';
+  // A flag é exclusiva do login e falha fechado por padrão. Apenas o valor
+  // literal "false" ativa o break-glass; os demais fluxos preservam REQUIRE_CAPTCHA.
+  const requireCaptcha = isLoginCaptchaRequired(Deno.env.get('LOGIN_REQUIRE_CAPTCHA'));
   const turnstileSecret = Deno.env.get('TURNSTILE_SECRET_KEY');
   const turnstileHostnames = Deno.env.get('TURNSTILE_HOSTNAMES');
   if (requireCaptcha && (!turnstileSecret || !turnstileHostnames)) {
     console.error('[secure-login] configuracao obrigatoria do Turnstile ausente');
     return jsonResponse({ message: 'Serviço temporariamente indisponível. Tente novamente em instantes.' }, 503);
   }
-  if (turnstileSecret) {
-    const ip = resolveIp(req);
+  if (requireCaptcha) {
     const verified = await verifyTurnstile({
       secret: turnstileSecret,
       token: captchaToken,
@@ -99,36 +101,18 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  const ip = resolveIp(req);
-  const windowStart = truncateToWindow(new Date(), LOGIN_LIMIT.windowSeconds);
-
-  const adminClient = createClient(supabaseUrl, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  const { data: counter, error: counterError } = await adminClient.rpc('increment_request_counter', {
-    _scope: 'login',
-    _identifier: ip,
-    _window_start: windowStart,
-  });
-
-  if (counterError) {
-    console.error('[secure-login] Rate limit RPC error', {
-      code: counterError.code,
-      message: counterError.message,
-      ip,
-    });
+  const rateLimit = await checkLoginRateLimit({ adminClient, ip });
+  if (!rateLimit.ok) {
+    if (rateLimit.status === 429) {
+      console.warn('[secure-login] Login blocked by rate limit', { ip, count: rateLimit.count });
+      return jsonResponse({ message: 'Muitas tentativas. Aguarde antes de tentar novamente.' }, 429);
+    }
+    console.error('[secure-login] Rate limit RPC error', { ip });
     return jsonResponse({ message: 'Falha ao aplicar limite de segurança' }, 500);
   }
 
-  const count = typeof counter === 'number' ? counter : (counter?.count ?? 0);
-  if (count >= LOGIN_LIMIT.limit) {
-    console.warn('[secure-login] Login blocked by rate limit', { ip, count });
-    return jsonResponse({ message: 'Muitas tentativas. Aguarde antes de tentar novamente.' }, 429);
-  }
-
-  // CAPTCHA already verified above by this function — do NOT forward the token
-  // to Supabase Auth, which would try to verify it a second time (tokens are single-use).
+  // CAPTCHA was either verified above or explicitly bypassed by the login-only
+  // break-glass flag. Never forward a token to GoTrue because tokens are single-use.
   const authPayload: Record<string, unknown> = { email, password };
 
   const authHeaders: Record<string, string> = {
@@ -185,6 +169,28 @@ Deno.serve(async (req: Request) => {
       error: authData?.error || authData?.msg || 'unknown',
     });
     return jsonResponse({ message: 'Não foi possível processar o login agora' }, 500);
+  }
+
+  const activeProfile = await enforceActiveProfile({
+    adminClient,
+    userId: authData?.user?.id,
+    accessToken: authData?.access_token,
+  });
+  if (!activeProfile.ok) {
+    if (activeProfile.revocationError) {
+      console.error('[secure-login] issued session revocation failed', {
+        reason: activeProfile.reason,
+      });
+    }
+    if (activeProfile.status === 403) {
+      console.warn('[secure-login] Inactive account blocked', { ip });
+      return jsonResponse({ message: 'Sua conta está inativa. Fale com o administrador.' }, 403);
+    }
+    console.error('[secure-login] Active profile validation failed', {
+      ip,
+      reason: activeProfile.reason,
+    });
+    return jsonResponse({ message: 'Não foi possível validar o status da conta.' }, 500);
   }
 
   // Return Supabase auth payload so frontend can keep session + MFA flow compatible.
