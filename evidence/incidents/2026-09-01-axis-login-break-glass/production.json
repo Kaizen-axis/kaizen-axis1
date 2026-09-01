@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "captured_at_utc": "2026-09-01T18:20:00.0000000Z",
+  "credentials_included": false,
+  "result": "PASS",
+  "git": {
+    "branch": "hotfix/axis-login-break-glass-20260901",
+    "head_at_promotion": "f1e6ac17f38b2fd2201ed730000c7f15bcf18101",
+    "evidence_commit": "12bd63deae940e7e5951259a45bb9bac81100b3b"
+  },
+  "production": {
+    "deployment_id": "dpl_4gThFp8BuzZGpM6CQeozmwFhekTh",
+    "ready_state": "READY",
+    "source_commit": "f1e6ac17f38b2fd2201ed730000c7f15bcf18101",
+    "aliases_assigned": [
+      "kaizen-axis.space",
+      "www.kaizen-axis.space",
+      "kaizen-axis1.vercel.app",
+      "kaizen-axis1-hokma-tech.vercel.app"
+    ],
+    "asset": "/assets/index-BIqEwunf.js",
+    "login_http": 200,
+    "turnstile_widget_visible": false,
+    "signup_visible": false,
+    "reset_unavailable_visible": true,
+    "invalid_credentials_browser_alert": "Credenciais invalidas",
+    "invalid_credentials_http": 401
+  },
+  "backend": {
+    "secure_login_version": 49,
+    "disable_signup": true,
+    "login_require_captcha": false,
+    "require_captcha_still_true_for_reset": true,
+    "turnstile_secrets_retained": true
+  },
+  "browser_matrix": {
+    "chrome_cursor_browser": "PASS_UI_AND_INVALID_LOGIN",
+    "edge": "OWNER_PENDING",
+    "edge_inprivate": "OWNER_PENDING",
+    "safari_mobile": "OWNER_PENDING",
+    "mfa_aal2": "OWNER_PENDING"
+  },
+  "rollback": {
+    "previous_production_deployment": "dpl_DPudFscaojnvaymCuvfP8sJpjgX9",
+    "previous_production_commit": "81ad216596b8cf0794fc62a1ea6144f42b677a20",
+    "backend_flag": "LOGIN_REQUIRE_CAPTCHA=true or remove the secret",
+    "frontend": "re-alias dpl_DPudFscaojnvaymCuvfP8sJpjgX9 and/or set VITE_LOGIN_REQUIRE_CAPTCHA=true then redeploy",
+    "do_not_delete_turnstile_keys": true,
+    "keep_signup_disabled": true
+  },
+  "warnings": [
+    "Do not redeploy git main until this hotfix is merged; main Login.tsx still requires a Turnstile token whenever the sitekey is present.",
+    "Password reset remains unavailable in the UI while break-glass is active.",
+    "Public signup remains disabled server-side."
+  ]
+}
