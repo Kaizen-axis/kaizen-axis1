@@ -1,0 +1,69 @@
+{
+  "schema": 1,
+  "captured_at_utc": "2026-09-01T18:12:00.0000000Z",
+  "credentials_included": false,
+  "git": {
+    "branch": "hotfix/axis-login-break-glass-20260901",
+    "head": "f1e6ac17f38b2fd2201ed730000c7f15bcf18101"
+  },
+  "backend": {
+    "project_ref": "pwvpxxrvlywlneuijmmd",
+    "secure_login_version_before": 48,
+    "secure_login_version_after": 49,
+    "verify_jwt": true,
+    "fail_closed_empty_token": {
+      "http": 400,
+      "message": "Verificacao de seguranca invalida ou expirada"
+    },
+    "disable_signup": true,
+    "signup_probe": {
+      "http": 422,
+      "error_code": "signup_disabled"
+    },
+    "login_require_captcha_present": true,
+    "require_captcha_present": true,
+    "turnstile_secret_present": true,
+    "turnstile_hostnames_present": true,
+    "malformed_body_http": 400,
+    "invalid_credentials_without_captcha": {
+      "http": 401,
+      "message": "Credenciais invalidas"
+    },
+    "password_reset_without_captcha": {
+      "http": 400,
+      "message": "Verificacao de seguranca invalida ou expirada"
+    },
+    "rate_limit": {
+      "loop_statuses": [401, 401, 401, 401, 401, 401, 401, 401, 401, 429],
+      "blocked_at_loop": 10
+    }
+  },
+  "vercel_preview": {
+    "deployment_id": "dpl_4gThFp8BuzZGpM6CQeozmwFhekTh",
+    "source_commit": "f1e6ac17f38b2fd2201ed730000c7f15bcf18101",
+    "ready_state": "READY",
+    "url": "kaizen-axis1-9fobwcka9-hokma-tech.vercel.app",
+    "git_alias": "kaizen-axis1-git-hotfix-axis-login-break-glas-8a668d-hokma-tech.vercel.app",
+    "asset": "/assets/index-BIqEwunf.js",
+    "bundle": {
+      "reset_unavailable_copy": true,
+      "signup_cta_solicite_acesso": false,
+      "login_submit_copy": true
+    },
+    "ui_chrome": {
+      "turnstile_iframes": 0,
+      "turnstile_script": false,
+      "signup_visible": false,
+      "reset_unavailable_visible": true,
+      "submit_without_widget": true
+    },
+    "preview_origin_login_note": "secure-login CORS is bound to APP_ORIGIN, so a Preview host cannot complete a real session. Invalid-credential 401 was proven against the production function origin. Production custom-domain smoke is the user-facing gate."
+  },
+  "rollback": {
+    "previous_production_deployment": "dpl_DPudFscaojnvaymCuvfP8sJpjgX9",
+    "previous_production_commit": "81ad216596b8cf0794fc62a1ea6144f42b677a20",
+    "backend_flag": "set LOGIN_REQUIRE_CAPTCHA=true or remove the secret",
+    "keep_turnstile_secrets": true,
+    "keep_signup_disabled": true
+  }
+}
