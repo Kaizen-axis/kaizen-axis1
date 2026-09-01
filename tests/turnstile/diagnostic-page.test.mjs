@@ -9,7 +9,8 @@ test('diagnostic reports test and production widget outcomes', () => {
   );
 
   assert.match(html, /1x00000000000000000000AA/);
-  assert.match(html, /0x4AAAAAAEjcC8jM74vJaB7u/);
+  assert.match(html, /0x4AAAAAADOmmf-tlgTOstXw/);
+  assert.doesNotMatch(html, /0x4AAAAAAEjcC8jM74vJaB7u/);
   assert.doesNotMatch(html, /0x4AAAAAAEij91K9KZKNmIxo/);
   assert.match(html, /action:\s*['"]axis_auth['"]/);
   assert.match(html, /appearance:\s*['"]always['"]/);
