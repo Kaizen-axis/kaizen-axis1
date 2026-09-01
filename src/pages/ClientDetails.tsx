@@ -4,6 +4,7 @@ import { PremiumCard, StatusBadge, SectionHeader, RoundedButton } from '@/compon
 import { ChevronLeft, Mail, Calendar, Edit2, Building2, Wallet, History, Trash2, FileText, Save, X, UploadCloud, Plus, ChevronDown, ChevronUp, FileDown, MessageCircle, Video } from 'lucide-react';
 import { Client, ClientDocument } from '@/data/clients';
 import { formatCpf, formatPhone } from '@/lib/masks';
+import { CpfInput, PhoneInput } from '@/components/ui/MaskedInputs';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
