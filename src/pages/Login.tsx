@@ -633,11 +633,6 @@ export default function Login() {
             {TURNSTILE_SITE_KEY && (
               <div className="space-y-3 pt-1">
                 <div ref={captchaContainerRef} className="flex justify-center" />
-                {!captchaToken && !captchaErrorCode && (
-                  <p className="text-center text-xs text-text-secondary" role="status">
-                    Carregando verificação de segurança...
-                  </p>
-                )}
                 {captchaErrorCode && (
                   <div className="text-center" role="alert">
                     <p className="text-sm text-red-500">
@@ -655,7 +650,7 @@ export default function Login() {
               </div>
             )}
 
-            <RoundedButton type="submit" fullWidth className="mt-8 py-4 text-base font-semibold shadow-gold-500/20 shadow-lg" disabled={loading || (Boolean(TURNSTILE_SITE_KEY) && !captchaToken)}>
+            <RoundedButton type="submit" fullWidth className="mt-8 py-4 text-base font-semibold shadow-gold-500/20 shadow-lg" disabled={loading}>
               {loading ? <Loader2 size={20} className="animate-spin" /> : (isLogin ? 'Entrar na Plataforma' : 'Cadastrar Conta')}
             </RoundedButton>
           </form>
