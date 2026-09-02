@@ -1,11 +1,12 @@
 // @ts-nocheck — Deno types are not available in the local TS checker; valid at runtime.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 function allowedOrigin(req: Request): string {
   const origin = req.headers.get('Origin') ?? '';
-  const configured = (Deno.env.get('APP_ORIGIN') ?? '')
-    .split(',')
+  const configured = [
+    ...(Deno.env.get('APP_ORIGIN') ?? '').split(','),
+    ...(Deno.env.get('APP_ORIGINS') ?? '').split(','),
+  ]
     .map((value) => value.trim())
     .filter(Boolean);
   if (!origin) return configured[0] ?? '';
@@ -24,9 +25,47 @@ function corsHeadersFor(req: Request) {
   return {
     'Access-Control-Allow-Origin': allowedOrigin(req),
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey, x-client-info',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey, x-client-info, x-supabase-api-version',
     'Vary': 'Origin',
   };
+}
+
+function b64urlToBytes(s: string): Uint8Array {
+  const pad = '='.repeat((4 - (s.length % 4)) % 4);
+  const b64 = (s + pad).replace(/-/g, '+').replace(/_/g, '/');
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+async function accessTokenIsValid(token: string): Promise<boolean> {
+  const secret = Deno.env.get('JWT_SECRET') ?? '';
+  if (!secret) return false;
+  const parts = token.split('.');
+  if (parts.length !== 3) return false;
+  try {
+    const key = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['verify'],
+    );
+    const ok = await crypto.subtle.verify(
+      'HMAC',
+      key,
+      b64urlToBytes(parts[2]),
+      new TextEncoder().encode(`${parts[0]}.${parts[1]}`),
+    );
+    if (!ok) return false;
+    const payload = JSON.parse(new TextDecoder().decode(b64urlToBytes(parts[1])));
+    if (typeof payload.exp === 'number' && payload.exp * 1000 < Date.now() - 5000) return false;
+    const role = payload.role ?? payload.app_metadata?.role;
+    return role === 'authenticated' || role === 'service_role';
+  } catch {
+    return false;
+  }
 }
 
 const cache = new Map<string, { at: number; payload: unknown }>();
@@ -47,19 +86,9 @@ Deno.serve(async (req: Request) => {
   if (!authHeader?.startsWith('Bearer ')) return json(req, { error: 'unauthorized' }, 401);
 
   const rawToken = authHeader.slice(7);
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
   const apiKey = Deno.env.get('BRASIL_ABERTO_API_KEY');
-  if (!supabaseUrl || !anonKey) return json(req, { error: 'server_misconfigured' }, 500);
   if (!apiKey) return json(req, { error: 'brasil_aberto_unconfigured' }, 500);
-
-  const userClient = createClient(
-    supabaseUrl,
-    anonKey,
-    { auth: { persistSession: false }, global: { headers: { Authorization: `Bearer ${rawToken}` } } },
-  );
-  const { data: { user }, error: authError } = await userClient.auth.getUser();
-  if (authError || !user) return json(req, { error: 'unauthorized' }, 401);
+  if (!(await accessTokenIsValid(rawToken))) return json(req, { error: 'unauthorized' }, 401);
 
   let body: { kind?: string; state?: string; cityId?: number; ibgeId?: number } = {};
   try {

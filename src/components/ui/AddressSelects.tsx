@@ -93,7 +93,7 @@ export function AddressSelects({
       })
       .finally(() => { if (!cancelled) setLoadingDistricts(false); });
     return () => { cancelled = true; };
-  }, [selectedCity?.id, selectedCity?.ibgeId, selectedCity?.source]);
+  }, [selectedCity?.id, selectedCity?.ibgeId]);
 
   const stateOptions = states.map(s => `${s.shortName} — ${s.name}`);
   const stateDisplay = states.find(s => s.shortName === value.state.trim().toUpperCase());
