@@ -5,6 +5,7 @@ import { isAllowedCheckinOrigin } from '../_shared/checkin-cors.ts';
 import {
   evaluateCheckinPolicy,
   formatMinutes,
+  formatOutOfRadiusMessage,
   type CheckinUnitPolicy,
 } from '../_shared/checkin-policy.ts';
 
@@ -245,7 +246,7 @@ Deno.serve(async (req: Request) => {
   if (!policyResult.ok && policyResult.error === 'fora_do_raio') {
     return json({
       error: 'fora_do_raio',
-      message: `Você está a ${Math.round(policyResult.distance)}m da unidade ${unit.name}. Máximo permitido: ${unit.max_radius_meters}m.`,
+      message: formatOutOfRadiusMessage(policyResult.distance, unit.name),
       unit: { code: unit.code, name: unit.name },
       distance: Math.round(policyResult.distance),
     }, 403, responseHeaders);

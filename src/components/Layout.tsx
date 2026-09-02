@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, Calendar, MessageSquare, Menu, Calculator, Settings } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, MessageSquare, Menu, Calculator, Settings, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'motion/react';
 import { useAuthorization } from '@/hooks/useAuthorization';
@@ -26,7 +26,7 @@ export const BottomNav = () => {
   const keyboardOpen = useKeyboardOpen();
   const { totalUnread } = useChatUnread();
 
-  const navItems = isAnalyst
+  const navItems: { icon: React.ElementType; label: string; path: string; locked?: boolean }[] = isAnalyst
     ? [
       { icon: Calculator, label: 'Apuração', path: '/income' },
       { icon: Settings, label: 'Config.', path: '/settings' },
@@ -35,7 +35,7 @@ export const BottomNav = () => {
       { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
       { icon: Users, label: 'Clientes', path: '/clients' },
       { icon: Calendar, label: 'Agenda', path: '/schedule' },
-      { icon: MessageSquare, label: 'Chat', path: '/chat' },
+      { icon: MessageSquare, label: 'Chat', path: '/chat', locked: true },
       { icon: Menu, label: 'Mais', path: '/more' },
     ];
 
@@ -46,6 +46,22 @@ export const BottomNav = () => {
           const isActive = item.path === '/'
             ? location.pathname === '/'
             : location.pathname.startsWith(item.path);
+
+          if (item.locked) {
+            return (
+              <div
+                key={item.path}
+                title="Chat indisponível"
+                className="flex flex-col items-center justify-center p-2 rounded-xl w-16 text-text-secondary/50 cursor-not-allowed"
+              >
+                <div className="relative">
+                  <item.icon size={24} strokeWidth={2} />
+                  <Lock size={10} className="absolute -top-1 -right-1" />
+                </div>
+                <span className="text-[10px] font-medium mt-1">{item.label}</span>
+              </div>
+            );
+          }
 
           return (
             <NavLink

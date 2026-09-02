@@ -162,7 +162,7 @@ Deno.serve(async (req: Request) => {
   if (distance > MAX_RADIUS) {
     return json({
       error:    'fora_do_raio',
-      message:  `Você está a ${Math.round(distance)}m da imobiliária. Máximo permitido: ${MAX_RADIUS}m.`,
+      message:  `Você está a ${Math.round(distance)}m da imobiliária. Aproxime-se para fazer o check-in.`,
       distance: Math.round(distance),
     }, 403);
   }

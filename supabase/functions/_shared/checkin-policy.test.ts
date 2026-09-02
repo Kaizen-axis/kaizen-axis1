@@ -1,8 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import {
   evaluateCheckinPolicy,
   formatMinutes,
+  formatOutOfRadiusMessage,
   haversineMeters,
 } from './checkin-policy.ts';
 
@@ -113,6 +115,22 @@ describe('check-in policy helpers', () => {
   it('formats minutes as HH:MM', () => {
     assert.equal(formatMinutes(480), '08:00');
     assert.equal(formatMinutes(810), '13:30');
+  });
+
+  it('tells the user the distance without revealing the allowed radius', () => {
+    const message = formatOutOfRadiusMessage(2500, 'Zona Norte');
+    assert.match(message, /2500m/);
+    assert.match(message, /Zona Norte/);
+    assert.doesNotMatch(message, /Máximo permitido/i);
+    assert.doesNotMatch(message, /\b1000m\b/);
+  });
+
+  it('does not leak the radius in checkin-geo-v2 or legacy checkin-geo', () => {
+    const v2 = readFileSync(new URL('../checkin-geo-v2/index.ts', import.meta.url), 'utf8');
+    const legacy = readFileSync(new URL('../checkin-geo/index.ts', import.meta.url), 'utf8');
+    assert.match(v2, /formatOutOfRadiusMessage/);
+    assert.doesNotMatch(v2, /Máximo permitido/);
+    assert.doesNotMatch(legacy, /Máximo permitido/);
   });
 
   it('calculates the two offices as farther apart than either allowed radius', () => {

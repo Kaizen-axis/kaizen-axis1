@@ -8,6 +8,7 @@ import {
 import { useNotifications, Notification } from '@/context/NotificationContext';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
+import { CHAT_FEATURE_LOCKED, isChatPath } from '@/lib/chatAccess';
 
 // Helper to calculate relative time
 const timeAgo = (dateStr: string) => {
@@ -50,7 +51,9 @@ const NotificationItem = ({
             markAsRead(notification.id);
         }
         if (notification.reference_route) {
-            navigate(notification.reference_route);
+            if (!(CHAT_FEATURE_LOCKED && isChatPath(notification.reference_route))) {
+                navigate(notification.reference_route);
+            }
         }
         onCloseDropdown();
     };

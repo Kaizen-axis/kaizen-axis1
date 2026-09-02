@@ -4,6 +4,7 @@ import {
     normalizeUserRole,
     type UserRole,
 } from '@/lib/auth/userRoles';
+import { CHAT_FEATURE_LOCKED, isChatPath } from '@/lib/chatAccess';
 
 export type { UserRole } from '@/lib/auth/userRoles';
 
@@ -39,6 +40,10 @@ export function useAuthorization() {
      * Used by ProtectedRoute and nav rendering.
      */
     const canAccess = (path: string): boolean => {
+        if (CHAT_FEATURE_LOCKED && isChatPath(path)) {
+            return false;
+        }
+
         // Analyst has access only to income analysis and settings
         if (isAnalyst) {
             return path === '/income' || path === '/settings';

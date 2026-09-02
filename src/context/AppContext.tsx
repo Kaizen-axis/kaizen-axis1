@@ -7,6 +7,7 @@ import { rateLimiter } from '@/services/rateLimiter';
 import { inferDocumentContentType, isUnknownMimeType } from '@/lib/client-document-upload';
 import { Session, User } from '@supabase/supabase-js';
 import confetti from 'canvas-confetti';
+import { authEventRequiresProfileReload } from '@/lib/auth/sessionIdentity';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -314,10 +315,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const userRef = React.useRef(user);
   const userRoleRef = React.useRef('Corretor');
   const allProfilesRef = React.useRef<Profile[]>([]);
+  const sessionUserIdRef = React.useRef<string | null>(null);
+  const sessionEpochRef = React.useRef(0);
   React.useEffect(() => { profileRef.current = profile; }, [profile]);
   React.useEffect(() => { userRef.current = user; }, [user]);
   React.useEffect(() => { userRoleRef.current = profile?.role || 'Corretor'; }, [profile]);
   React.useEffect(() => { allProfilesRef.current = allProfiles; }, [allProfiles]);
+
+  const clearUserScopedState = () => {
+    setProfile(null);
+    setAllProfiles([]);
+    setClients([]);
+    setLeads([]);
+    setAppointments([]);
+    setTasks([]);
+    setDevelopments([]);
+    setTeams([]);
+    setGoals([]);
+    setAnnouncements([]);
+    setDirectorates([]);
+    setCheckinUnits([]);
+    setPortals([]);
+    setTrainings([]);
+    profileRef.current = null;
+    userRoleRef.current = 'Corretor';
+    allProfilesRef.current = [];
+  };
 
   const userName = profile?.name || user?.email || 'Usuário';
   const userRole = profile?.role || 'Corretor';
@@ -395,9 +418,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // ─── Auth ─────────────────────────────────────────────────────────────────
 
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = async (userId: string, epoch: number) => {
     try {
       const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+      if (epoch !== sessionEpochRef.current) return null;
       if (data) {
         setProfile(data);
         return data as Profile;
@@ -837,6 +861,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     const uid = userRef.current?.id || null;
+    sessionEpochRef.current += 1;
+    sessionUserIdRef.current = null;
+    setSession(null);
+    setUser(null);
+    userRef.current = null;
+    clearUserScopedState();
+    setLoading(false);
     await supabase.auth.signOut();
     localStorage.removeItem('isAuthenticated');
     logAuditEvent({ action: 'logout', entity: 'auth', userId: uid });
@@ -2068,7 +2099,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // ─── Init ─────────────────────────────────────────────────────────────────
 
-  const loadAllData = useCallback(async (forcedProfile?: Profile) => {
+  const loadAllData = useCallback(async (forcedProfile?: Profile, epoch?: number) => {
+    const capturedEpoch = epoch ?? sessionEpochRef.current;
+    if (capturedEpoch !== sessionEpochRef.current) return;
     if (forcedProfile) {
       profileRef.current = forcedProfile;
       userRoleRef.current = forcedProfile.role || 'Corretor';
@@ -2092,40 +2125,59 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } finally {
       // loading controla somente a inicialização de sessão/tela protegida.
       // Atualizações em background não devem desmontar a UI inteira.
-      setLoading(false);
+      if (capturedEpoch === sessionEpochRef.current) {
+        setLoading(false);
+      }
     }
   }, [refreshClients, refreshLeads, refreshAppointments, refreshTasks, refreshDevelopments, refreshTeams, refreshGoals, refreshAnnouncements, refreshProfiles, refreshDirectorates, refreshCheckinConfig]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
+    const applyAuthenticatedSession = (nextUserId: string, prevUserId: string | null) => {
+      sessionEpochRef.current += 1;
+      const epoch = sessionEpochRef.current;
+      if (prevUserId !== nextUserId) {
+        clearUserScopedState();
+        setLoading(true);
+      }
+      fetchProfile(nextUserId, epoch).then(profileData => {
+        if (epoch !== sessionEpochRef.current) return;
+        loadAllData(profileData || undefined, epoch);
+      });
+    };
+
     supabase.auth.getSession().then(({ data: { session } }) => {
+      const nextUserId = session?.user?.id ?? null;
+      sessionUserIdRef.current = nextUserId;
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id).then(profileData => {
-          loadAllData(profileData || undefined);
-        });
+      userRef.current = session?.user ?? null;
+      if (nextUserId) {
+        applyAuthenticatedSession(nextUserId, null);
       } else {
         setLoading(false);
       }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      const prevUserId = sessionUserIdRef.current;
+      const nextUserId = session?.user?.id ?? null;
       setSession(session);
       setUser(session?.user ?? null);
+      userRef.current = session?.user ?? null;
 
-      // TOKEN_REFRESHED: apenas atualiza tokens, não recarrega dados
-      // (evita setLoading(true) que desmontaria componentes em uso)
-      if (event === 'TOKEN_REFRESHED') return;
+      if (!authEventRequiresProfileReload(event, prevUserId, nextUserId)) {
+        sessionUserIdRef.current = nextUserId;
+        return;
+      }
 
-      if (session?.user) {
-        fetchProfile(session.user.id).then(profileData => {
-          loadAllData(profileData || undefined);
-        });
+      sessionUserIdRef.current = nextUserId;
+
+      if (nextUserId) {
+        applyAuthenticatedSession(nextUserId, prevUserId);
       } else {
-        setProfile(null); setClients([]); setLeads([]);
-        setAppointments([]); setTasks([]); setDevelopments([]);
-        setTeams([]); setGoals([]); setAnnouncements([]);
+        sessionEpochRef.current += 1;
+        clearUserScopedState();
         setLoading(false);
       }
     });

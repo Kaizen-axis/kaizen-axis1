@@ -4,6 +4,7 @@ import { ResponsiveLayout } from '@/components/layout/ResponsiveLayout';
 import { useAuthorization, type UserRole } from '@/hooks/useAuthorization';
 import { useApp } from '@/context/AppContext';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { hasStaleProfile } from '@/lib/auth/sessionIdentity';
 
 import Dashboard from '@/pages/Dashboard';
 import Clients from '@/pages/Clients';
@@ -14,8 +15,6 @@ import SendEmail from '@/pages/SendEmail';
 import IncomeAnalysis from '@/pages/IncomeAnalysis';
 import Amortization from '@/pages/Amortization';
 import Schedule from '@/pages/Schedule';
-import Chat from '@/pages/Chat';
-import ChatDetail from '@/pages/ChatDetail';
 import More from '@/pages/More';
 import Developments from '@/pages/Developments';
 import DevelopmentDetails from '@/pages/DevelopmentDetails';
@@ -53,7 +52,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const location = useLocation();
 
   // Show a blank loading screen (or simple spinner) while Auth context initializes
-  if (loading) {
+  if (loading || hasStaleProfile(profile, session)) {
     return (
       <div className="min-h-screen bg-surface-50 flex flex-col justify-center items-center">
         <div className="w-8 h-8 rounded-full border-4 border-surface-200 border-t-gold-500 animate-spin" />
@@ -104,7 +103,7 @@ function RoleRoute({
   const { profile, loading, session } = useApp();
   const location = useLocation();
 
-  if (loading) {
+  if (loading || hasStaleProfile(profile, session)) {
     return (
       <div className="min-h-screen bg-surface-50 flex flex-col justify-center items-center">
         <div className="w-8 h-8 rounded-full border-4 border-surface-200 border-t-gold-500 animate-spin" />
@@ -171,8 +170,8 @@ export default function App() {
         } />
         <Route path="/amortization" element={<ProtectedRoute><Amortization /></ProtectedRoute>} />
         <Route path="/schedule" element={<ProtectedRoute><Schedule /></ProtectedRoute>} />
-        <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
-        <Route path="/chat/:id" element={<ProtectedRoute><ChatDetail /></ProtectedRoute>} />
+        <Route path="/chat" element={<Navigate to="/" replace />} />
+        <Route path="/chat/:id" element={<Navigate to="/" replace />} />
         <Route path="/more" element={<ProtectedRoute><More /></ProtectedRoute>} />
 
         <Route path="/developments" element={<ProtectedRoute><Developments /></ProtectedRoute>} />

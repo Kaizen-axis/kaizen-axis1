@@ -11,6 +11,12 @@ import { useApp } from '@/context/AppContext';
 import { cn } from '@/lib/utils';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import {
+  extractCheckinToken,
+  QR_SCAN_TIMEOUT_MS,
+  shouldFallbackToJsQR,
+  waitForVideoElement,
+} from '@/lib/checkin/qrScanner';
+import {
   getAssignedUnit,
   getCheckinWindowLabel,
   isCheckinOpen,
@@ -74,11 +80,18 @@ export default function CheckIn() {
   const scanCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const scanIntervalRef = useRef<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const scanTimeoutRef = useRef<number | null>(null);
+  const frameErrorCountRef = useRef(0);
 
   const stopScanner = useCallback(() => {
     if (scanIntervalRef.current !== null) {
       window.clearInterval(scanIntervalRef.current);
       scanIntervalRef.current = null;
+    }
+
+    if (scanTimeoutRef.current !== null) {
+      window.clearTimeout(scanTimeoutRef.current);
+      scanTimeoutRef.current = null;
     }
 
     if (streamRef.current) {
@@ -93,18 +106,11 @@ export default function CheckIn() {
   }, []);
 
   const applyScannedValue = useCallback((rawValue: string) => {
-    const raw = rawValue.trim();
-    if (!raw) return false;
-
-    let token = '';
-    try {
-      const url = new URL(raw);
-      token = (url.searchParams.get('token') || '').trim();
-    } catch {
-      token = raw;
+    const token = extractCheckinToken(rawValue);
+    if (!token) {
+      setScannerError('Este QR não é o da recepção.');
+      return false;
     }
-
-    if (!token) return false;
 
     setScannerOpen(false);
     setScannerError(null);
@@ -115,6 +121,7 @@ export default function CheckIn() {
 
   const startScanner = useCallback(async () => {
     setScannerError(null);
+    frameErrorCountRef.current = 0;
     stopScanner();
 
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -140,58 +147,84 @@ export default function CheckIn() {
 
       streamRef.current = stream;
 
-      if (!videoRef.current) return;
-      videoRef.current.srcObject = stream;
-      videoRef.current.setAttribute('playsinline', 'true');
-      await videoRef.current.play();
+      const video = await waitForVideoElement(() => videoRef.current);
+      video.srcObject = stream;
+      video.setAttribute('playsinline', 'true');
+      await video.play();
 
       const detector = NativeBarcodeDetector ? new NativeBarcodeDetector({ formats: ['qr_code'] }) : null;
 
+      const readJsQR = (source: HTMLVideoElement) => {
+        if (source.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+        const width = source.videoWidth;
+        const height = source.videoHeight;
+        if (!width || !height) return;
+
+        if (!scanCanvasRef.current) {
+          scanCanvasRef.current = document.createElement('canvas');
+        }
+
+        const canvas = scanCanvasRef.current;
+        if (!canvas) return;
+
+        if (canvas.width !== width || canvas.height !== height) {
+          canvas.width = width;
+          canvas.height = height;
+        }
+
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return;
+
+        ctx.drawImage(source, 0, 0, width, height);
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const qr = jsQR(imageData.data, width, height, { inversionAttempts: 'attemptBoth' });
+        if (qr?.data) {
+          applyScannedValue(qr.data);
+        }
+      };
+
       scanIntervalRef.current = window.setInterval(async () => {
-        const video = videoRef.current;
-        if (!video) return;
+        const liveVideo = videoRef.current;
+        if (!liveVideo) return;
 
         try {
+          let nativeCount = 0;
           if (detector) {
-            const barcodes = await detector.detect(video);
-            if (!barcodes.length) return;
+            const barcodes = await detector.detect(liveVideo);
+            nativeCount = barcodes.length;
             const rawValue = (barcodes[0]?.rawValue || '').trim();
-            if (rawValue) applyScannedValue(rawValue);
-            return;
+            if (rawValue) {
+              applyScannedValue(rawValue);
+              return;
+            }
           }
 
-          if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
-          const width = video.videoWidth;
-          const height = video.videoHeight;
-          if (!width || !height) return;
-
-          if (!scanCanvasRef.current) {
-            scanCanvasRef.current = document.createElement('canvas');
+          if (shouldFallbackToJsQR(Boolean(detector), nativeCount)) {
+            readJsQR(liveVideo);
           }
 
-          const canvas = scanCanvasRef.current;
-          if (!canvas) return;
-
-          if (canvas.width !== width || canvas.height !== height) {
-            canvas.width = width;
-            canvas.height = height;
-          }
-
-          const ctx = canvas.getContext('2d', { willReadFrequently: true });
-          if (!ctx) return;
-
-          ctx.drawImage(video, 0, 0, width, height);
-          const imageData = ctx.getImageData(0, 0, width, height);
-          const qr = jsQR(imageData.data, width, height, { inversionAttempts: 'attemptBoth' });
-          if (qr?.data) {
-            applyScannedValue(qr.data);
-          }
+          frameErrorCountRef.current = 0;
         } catch {
-          // Ignora erro intermitente de frame e mantém scanner ativo.
+          frameErrorCountRef.current += 1;
+          if (frameErrorCountRef.current >= 8) {
+            setScannerError('Falha ao ler a câmera. Feche e tente novamente.');
+            stopScanner();
+          }
         }
       }, 300);
-    } catch {
-      setScannerError('Não foi possível acessar a câmera. Verifique a permissão e tente novamente.');
+
+      scanTimeoutRef.current = window.setTimeout(() => {
+        setScannerError('Não foi possível ler o QR. Aproxime a câmera ou feche e tente de novo.');
+      }, QR_SCAN_TIMEOUT_MS);
+    } catch (error) {
+      const message = error instanceof Error && error.message.includes('iniciar a câmera')
+        ? error.message
+        : 'Não foi possível acessar a câmera. Verifique a permissão e tente novamente.';
+      setScannerError(message);
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
     }
   }, [applyScannedValue, stopScanner]);
 

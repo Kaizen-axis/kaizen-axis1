@@ -4,6 +4,7 @@ import { RoundedButton } from '@/components/ui/PremiumComponents';
 import { Building2, Mail, Lock, User, Users, ShieldCheck, Loader2, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { logAuditEvent } from '@/services/auditLogger';
+import { assertSessionEmail } from '@/lib/auth/sessionIdentity';
 import gsap from 'gsap';
 import { prefersReducedMotion } from '@/lib/motion';
 
@@ -43,6 +44,7 @@ export default function Login() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaHint, setCaptchaHint] = useState('');
   const captchaContainerRef = useRef<HTMLDivElement | null>(null);
   const captchaWidgetIdRef = useRef<string | null>(null);
 
@@ -60,6 +62,12 @@ export default function Login() {
       throw new Error('Confirme a verificacao de seguranca antes de continuar.');
     }
     return captchaToken;
+  };
+
+  const consumeCaptchaTokenIfRequired = () => {
+    const token = getCaptchaTokenIfRequired();
+    resetCaptcha();
+    return token;
   };
 
   useEffect(() => {
@@ -87,9 +95,18 @@ export default function Login() {
       captchaWidgetIdRef.current = window.turnstile.render(captchaContainerRef.current, {
         sitekey: TURNSTILE_SITE_KEY,
         theme: 'auto',
-        callback: (token: string) => setCaptchaToken(token || ''),
-        'expired-callback': () => setCaptchaToken(''),
-        'error-callback': () => setCaptchaToken(''),
+        callback: (token: string) => {
+          setCaptchaToken(token || '');
+          if (token) setCaptchaHint('');
+        },
+        'expired-callback': () => {
+          setCaptchaToken('');
+          setCaptchaHint('A verificação expirou. Complete de novo e tente novamente.');
+        },
+        'error-callback': () => {
+          setCaptchaToken('');
+          setCaptchaHint('Não foi possível validar a verificação. Tente novamente.');
+        },
       });
     };
 
@@ -188,39 +205,51 @@ export default function Login() {
 
     try {
       if (!isLogin) {
-        const captchaTokenValue = getCaptchaTokenIfRequired();
-
-        // Cadastro
         if (formData.password !== formData.confirmPassword) {
           alert('As senhas não coincidem.');
           setLoading(false);
           return;
         }
 
-        const { error } = await supabase.auth.signUp({
-          email: formData.email,
-          password: formData.password,
-          options: {
-            ...(captchaTokenValue ? { captchaToken: captchaTokenValue } : {}),
-            data: {
-              name: formData.name
-            }
-          }
+        const captchaTokenValue = consumeCaptchaTokenIfRequired();
+
+        const { data, error } = await supabase.functions.invoke('send-signup-confirmation', {
+          body: {
+            email: formData.email,
+            password: formData.password,
+            name: formData.name,
+            captchaToken: captchaTokenValue,
+          },
         });
 
-        if (error) throw error;
-        alert('Cadastro realizado com sucesso! Verifique seu e-mail ou faça login.');
+        if (error) {
+          let message = 'Não foi possível enviar o e-mail agora. Tente novamente em instantes.';
+          try {
+            const response = (error as any).context;
+            if (response) {
+              const errData = await response.json().catch(() => ({}));
+              message = errData?.message || message;
+            }
+          } catch { /* mantém mensagem genérica */ }
+          throw new Error(message);
+        }
+
+        alert(data?.message || 'Cadastro realizado com sucesso! Verifique seu e-mail ou faça login.');
         setIsLogin(true);
-        resetCaptcha();
         setLoading(false);
       } else {
-        const captchaTokenValue = getCaptchaTokenIfRequired();
+        const captchaTokenValue = consumeCaptchaTokenIfRequired();
+
+        const { data: existingSessionData } = await supabase.auth.getSession();
+        const existingEmail = existingSessionData.session?.user?.email;
+        if (existingEmail && existingEmail.trim().toLowerCase() !== formData.email.trim().toLowerCase()) {
+          await supabase.auth.signOut();
+        }
 
         // Login protegido no backend: secure-login aplica rate limit por IP antes de autenticar.
         const { data: loginData, error: loginError } = await supabase.functions.invoke('secure-login', {
           body: { email: formData.email, password: formData.password, captchaToken: captchaTokenValue },
         });
-        resetCaptcha();
 
         if (loginError) {
           let status = 500;
@@ -255,6 +284,12 @@ export default function Login() {
         if (sessionSetError) throw sessionSetError;
 
         const session = sessionSetData?.session;
+        try {
+          assertSessionEmail(session, formData.email);
+        } catch (identityError) {
+          await supabase.auth.signOut();
+          throw identityError;
+        }
         setPendingUserId(session?.user?.id || loginData?.user?.id || null);
 
         await ensureUserIsActive(session?.user?.id || loginData?.user?.id || null);
@@ -295,6 +330,9 @@ export default function Login() {
         metadata: { reason: error.message }
       });
       alert(error.message);
+      if (/verificação de segurança/i.test(String(error.message || ''))) {
+        setCaptchaHint('Verificação inválida ou expirada. Complete de novo e tente novamente.');
+      }
       resetCaptcha();
       setLoading(false);
     }
@@ -559,7 +597,8 @@ export default function Login() {
               <div className="flex justify-end items-center px-1">
                 <button
                   type="button"
-                  className="text-xs font-semibold text-gold-600 hover:text-gold-500 transition-colors"
+                  className="text-xs font-semibold text-gold-600 hover:text-gold-500 transition-colors disabled:opacity-50"
+                  disabled={loading}
                   onClick={async () => {
                     try {
                       const email = formData.email.trim();
@@ -568,7 +607,7 @@ export default function Login() {
                         return;
                       }
 
-                      const captchaTokenValue = getCaptchaTokenIfRequired();
+                      const captchaTokenValue = consumeCaptchaTokenIfRequired();
 
                       setLoading(true);
                       // Reset entregue pela edge function via Resend (e-mail nativo do
@@ -576,7 +615,6 @@ export default function Login() {
                       const { data, error } = await supabase.functions.invoke('send-password-reset', {
                         body: { email, captchaToken: captchaTokenValue },
                       });
-                      resetCaptcha();
                       if (error) {
                         let message = 'Não foi possível enviar o e-mail agora. Tente novamente em instantes.';
                         try {
@@ -586,6 +624,9 @@ export default function Login() {
                             message = errData?.message || message;
                           }
                         } catch { /* mantém mensagem genérica */ }
+                        if (/verificação de segurança/i.test(message)) {
+                          setCaptchaHint('Verificação inválida ou expirada. Complete de novo e tente novamente.');
+                        }
                         alert(message);
                       } else {
                         alert(data?.message || 'Se o e-mail estiver cadastrado, você receberá o link de redefinição em instantes.');
@@ -606,6 +647,9 @@ export default function Login() {
             {TURNSTILE_SITE_KEY && (
               <div className="pt-1">
                 <div ref={captchaContainerRef} className="flex justify-center" />
+                {captchaHint && (
+                  <p className="mt-2 text-xs text-center text-red-500">{captchaHint}</p>
+                )}
               </div>
             )}
 

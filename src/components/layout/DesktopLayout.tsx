@@ -29,7 +29,7 @@ const NAV_CORE: NavItem[] = [
   { icon: LayoutDashboard, label: 'Dashboard',  path: '/' },
   { icon: Users,           label: 'Clientes',   path: '/clients' },
   { icon: Calendar,        label: 'Agenda',     path: '/schedule' },
-  { icon: MessageSquare,   label: 'Chat',       path: '/chat' },
+  { icon: MessageSquare,   label: 'Chat',       path: '/chat', locked: true },
 ];
 
 const NAV_TOOLS: NavItem[] = [

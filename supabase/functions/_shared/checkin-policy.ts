@@ -18,6 +18,10 @@ export interface CheckinPolicyResult {
   distance: number;
 }
 
+export function formatOutOfRadiusMessage(distanceMeters: number, unitName: string): string {
+  return `Você está a ${Math.round(distanceMeters)}m da unidade ${unitName}. Aproxime-se para fazer o check-in.`;
+}
+
 export function formatMinutes(minutes: number): string {
   const hour = Math.floor(minutes / 60);
   const minute = minutes % 60;
